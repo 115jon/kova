@@ -3,6 +3,7 @@ import { createRootRoute, Link, Outlet, useLocation, useNavigate } from "@tansta
 import {
   Activity,
   BarChart3,
+  Building2,
   Globe,
   Key,
   LogOut,
@@ -15,6 +16,7 @@ const NAV = [
   { to: "/", label: "Overview", icon: BarChart3, exact: true },
   { to: "/users", label: "Users", icon: Users, exact: false },
   { to: "/sessions", label: "Sessions", icon: Activity, exact: false },
+  { to: "/organizations", label: "Organizations", icon: Building2, exact: false },
   { to: "/oauth-apps", label: "OAuth Apps", icon: Globe, exact: false },
   { to: "/api-keys", label: "API Keys", icon: Key, exact: false },
 ];
@@ -187,7 +189,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const location = useLocation();
-  const isPublic = location.pathname === "/sign-in" || location.pathname === "/auth-error";
+  const isPublic = ["/sign-in", "/auth-error"].some(p => location.pathname === p)
+    || location.pathname.startsWith("/accept-invitation");
 
   if (isPublic) {
     return <Outlet />;

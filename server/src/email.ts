@@ -99,3 +99,43 @@ export function twoFactorOtpEmail(otp: string) {
       </div>`,
   };
 }
+
+export function invitationEmail({
+  inviterName,
+  inviterEmail,
+  orgName,
+  inviteLink,
+  role,
+}: {
+  inviterName: string;
+  inviterEmail: string;
+  orgName: string;
+  inviteLink: string;
+  role: string;
+}) {
+  return {
+    subject: `You've been invited to join ${orgName} on ralph-auth`,
+    html: `
+      <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#0f172a;color:#e2e8f0;border-radius:12px">
+        <div style="margin-bottom:24px">
+          <span style="font-weight:700;font-size:18px">ralph<span style="color:#818cf8">auth</span></span>
+        </div>
+        <h1 style="font-size:20px;font-weight:700;margin-bottom:8px">You're invited to ${orgName}</h1>
+        <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:8px">
+          <strong style="color:#e2e8f0">${inviterName}</strong>
+          <span style="color:#64748b">(${inviterEmail})</span>
+          has invited you to join <strong style="color:#e2e8f0">${orgName}</strong>
+          as a <strong style="color:#818cf8">${role}</strong>.
+        </p>
+        <p style="color:#94a3b8;font-size:14px;margin-bottom:28px">
+          Click the button below to accept the invitation. This link expires in 48 hours.
+        </p>
+        <a href="${inviteLink}" style="display:inline-block;background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">
+          Accept invitation
+        </a>
+        <p style="color:#475569;font-size:12px;margin-top:24px">
+          If you weren't expecting this invitation you can safely ignore this email.
+        </p>
+      </div>`,
+  };
+}

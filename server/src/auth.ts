@@ -1,8 +1,8 @@
 import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
-import { admin, twoFactor } from "better-auth/plugins";
-import { resetPasswordEmail, sendEmail, twoFactorOtpEmail, verificationEmail } from "./email";
+import { admin, organization, twoFactor } from "better-auth/plugins";
+import { invitationEmail, resetPasswordEmail, sendEmail, twoFactorOtpEmail, verificationEmail } from "./email";
 
 /**
  * Factory — called once per request inside the fetch() handler.
@@ -134,6 +134,21 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
                 const { subject, html } = twoFactorOtpEmail(otp);
                 await sendEmail({ to: user.email, subject, html, apiKey: env.RESEND_API_KEY });
               },
+            },
+          }),
+
+          // Organizations — multi-tenancy (orgs = apps, members, invites, roles)
+          organization({
+            async sendInvitationEmail(data) {
+              const inviteLink = `${env.DASHBOARD_URL}/accept-invitation/${data.id}`;
+              const { subject, html } = invitationEmail({
+                inviterName: data.inviter.user.name,
+                inviterEmail: data.inviter.user.email,
+                orgName: data.organization.name,
+                inviteLink,
+                role: data.role,
+              });
+              await sendEmail({ to: data.email, subject, html, apiKey: env.RESEND_API_KEY });
             },
           }),
         ],
