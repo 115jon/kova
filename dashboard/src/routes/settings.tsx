@@ -17,21 +17,22 @@ type LinkedAccount = { id: string; providerId: string; accountId: string; };
 function useLinkedAccounts() {
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [ready, setReady] = useState(false);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
+    setReady(false);
     (authClient as any).listAccounts()
-      .then((res: any) => {
-        setAccounts(res.data ?? []);
-      })
+      .then((res: any) => { setAccounts(res.data ?? []); })
       .catch(() => setAccounts([]))
       .finally(() => setReady(true));
-  }, []);
+  }, [tick]);
 
-  // "credential" = email+password account exists
+  const refetch = () => setTick(t => t + 1);
+
   const hasCredential = accounts.some(a => a.providerId === "credential");
   const oauthProviders = accounts.filter(a => a.providerId !== "credential");
 
-  return { accounts, hasCredential, oauthProviders, ready };
+  return { accounts, hasCredential, oauthProviders, ready, refetch };
 }
 
 export const Route = createFileRoute("/settings")({
@@ -358,7 +359,11 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
  * hasCredential = true (email+password account exists):
  *   → Standard Change Password form calling changePassword().
  */
-function CredentialsSection({ hasCredential, userId }: { hasCredential: boolean; userId: string }) {
+function CredentialsSection({ hasCredential, userId, onPasswordSet }: {
+  hasCredential: boolean;
+  userId: string;
+  onPasswordSet?: () => void;
+}) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -392,6 +397,8 @@ function CredentialsSection({ hasCredential, userId }: { hasCredential: boolean;
       setSuccess(true);
       setCurrent(""); setNext(""); setConfirm("");
       setTimeout(() => setSuccess(false), 5000);
+      // Re-query linked accounts so hasCredential flips → 2FA unlocks
+      onPasswordSet?.();
     } catch (e: any) {
       setError(e?.message ?? "Failed to save password");
     } finally {
@@ -468,7 +475,7 @@ function CredentialsSection({ hasCredential, userId }: { hasCredential: boolean;
 function SettingsPage() {
   const { data: session } = useSession();
   const navigate = useNavigate();
-  const { hasCredential, oauthProviders, ready } = useLinkedAccounts();
+  const { hasCredential, oauthProviders, ready, refetch } = useLinkedAccounts();
 
   const handleSignOut = async () => {
     await signOut();
@@ -540,6 +547,7 @@ function SettingsPage() {
           <CredentialsSection
             hasCredential={ready ? hasCredential : true}
             userId={session?.user.id ?? ""}
+            onPasswordSet={refetch}
           />
         </SectionCard>
 
