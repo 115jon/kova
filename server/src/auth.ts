@@ -63,6 +63,37 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
           requireEmailVerification: false, // flip to true once email is wired
         },
 
+        // ── Auto-promote admin email ──────────────────────────────
+        // Runs BEFORE the user row is inserted in D1. Any account
+        // (Google, Discord, or email/password) whose email matches
+        // DASHBOARD_ADMIN_EMAIL gets role:"admin" at creation time.
+        //
+        // Why not hooks.after? Better Auth 1.6.x has a runtime bug
+        // where top-level hooks.after expects a plain middleware fn,
+        // not the { matcher, handler } plugin pattern — it throws
+        // "hook.handler is not a function". databaseHooks are a
+        // separate, stable API that don't have this issue.
+        //
+        // Spread order: { ...user, role: "admin" } — we always put
+        // our override last so it wins over the admin plugin's
+        // defaultRole: "user" which was spread before ours.
+        databaseHooks: {
+          user: {
+            create: {
+              before: async (user) => {
+                // Support comma-separated list: "a@x.com,b@y.com"
+                const adminEmails = (env.DASHBOARD_ADMIN_EMAIL ?? "")
+                  .split(",")
+                  .map((e) => e.trim().toLowerCase())
+                  .filter(Boolean);
+                if (adminEmails.length && adminEmails.includes(user.email?.toLowerCase())) {
+                  return { data: { ...user, role: "admin" } };
+                }
+              },
+            },
+          },
+        },
+
         // ── Social providers ──────────────────────────────────────
         socialProviders: {
           google: {

@@ -105,9 +105,58 @@ function Sidebar() {
   );
 }
 
+function AccessRestricted({ name, email, onSignOut }: { name: string; email: string; onSignOut: () => void }) {
+  return (
+    <div style={{
+      height: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+      background: "var(--color-surface-900)", padding: 24,
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 420,
+        background: "var(--color-surface-800)",
+        borderRadius: 16, border: "1px solid var(--color-border)",
+        padding: 36, textAlign: "center",
+        boxShadow: "0 24px 48px rgba(0,0,0,0.4)",
+      }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: 14, margin: "0 auto 20px",
+          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Shield size={22} color="#f87171" strokeWidth={2} />
+        </div>
+        <h1 style={{ fontSize: "1.2rem", fontWeight: 700, color: "#e2e8f0", marginBottom: 10 }}>
+          Admin access required
+        </h1>
+        <p style={{ fontSize: "0.875rem", color: "#64748b", lineHeight: 1.65, marginBottom: 24 }}>
+          This dashboard is restricted to administrators. You're signed in as{" "}
+          <strong style={{ color: "#94a3b8" }}>{email}</strong>, which doesn't have admin privileges.
+        </p>
+        <button
+          className="btn btn-danger"
+          style={{ width: "100%", justifyContent: "center" }}
+          onClick={onSignOut}
+        >
+          <LogOut size={14} /> Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function isAdmin(role: string | undefined | null) {
+  // roles can be comma-separated for multi-role support
+  return role?.split(",").map(r => r.trim()).includes("admin") ?? false;
+}
+
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = useSession();
   const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate({ to: "/sign-in" });
+  };
 
   if (isPending) {
     return (
@@ -118,9 +167,19 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) {
-    // Use setTimeout to avoid calling navigate during render
     setTimeout(() => navigate({ to: "/sign-in" }), 0);
     return null;
+  }
+
+  // Signed in but not an admin — show access restricted page
+  if (!isAdmin(session.user.role)) {
+    return (
+      <AccessRestricted
+        name={session.user.name ?? ""}
+        email={session.user.email}
+        onSignOut={handleSignOut}
+      />
+    );
   }
 
   return <>{children}</>;

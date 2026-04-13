@@ -1,3 +1,4 @@
+import { ProviderIconBadge } from "@/components/BrandIcons";
 import { createFileRoute } from "@tanstack/react-router";
 import { CheckCircle, ExternalLink, Globe } from "lucide-react";
 
@@ -6,9 +7,8 @@ export const Route = createFileRoute("/oauth-apps")({
 });
 
 type Provider = {
-  id: string;
+  id: "google" | "discord";
   name: string;
-  logo: string;
   color: string;
   configured: boolean;
   callbackUrl: string;
@@ -22,9 +22,8 @@ const AUTH_SERVER = import.meta.env.VITE_AUTH_URL || "http://localhost:8787";
 
 const PROVIDERS: Provider[] = [
   {
-    id: "google",
+    id: "google" as const,
     name: "Google",
-    logo: "https://www.google.com/favicon.ico",
     color: "#4285f4",
     configured: true,
     callbackUrl: `${AUTH_SERVER}/api/auth/callback/google`,
@@ -32,11 +31,10 @@ const PROVIDERS: Provider[] = [
     docsUrl: "https://console.cloud.google.com/apis/credentials",
   },
   {
-    id: "discord",
+    id: "discord" as const,
     name: "Discord",
-    logo: "https://discord.com/favicon.ico",
     color: "#5865f2",
-    configured: false,
+    configured: true,
     callbackUrl: `${AUTH_SERVER}/api/auth/callback/discord`,
     scopes: ["identify", "email"],
     docsUrl: "https://discord.com/developers/applications",
@@ -57,7 +55,7 @@ function OAuthAppsPage() {
         {PROVIDERS.map(p => (
           <div key={p.id} className="card" style={{ padding: 20 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-              <img src={p.logo} alt={p.name} width={28} height={28} style={{ borderRadius: 6 }} />
+              <ProviderIconBadge provider={p.id} size={40} />
               <div style={{ flex: 1 }}>
                 <p style={{ fontWeight: 600, color: "#e2e8f0" }}>{p.name}</p>
                 <p style={{ fontSize: "0.75rem", color: "#64748b" }}>OAuth 2.0 / OIDC</p>
