@@ -1,7 +1,7 @@
 import { ProviderIcon } from "@/components/BrandIcons";
 import { authClient, signIn } from "@/lib/auth-client";
 import { CONFIGURED_PROVIDERS } from "@/lib/providers";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { AlertCircle, KeyRound, Shield, Smartphone } from "lucide-react";
 import { useState } from "react";
 
@@ -12,7 +12,6 @@ export const Route = createFileRoute("/sign-in")({
 // ── 2FA challenge screen ──────────────────────────────────────────────────────
 
 function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
-  const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [method, setMethod] = useState<"totp" | "otp">("totp");
   const [loading, setLoading] = useState(false);
@@ -31,7 +30,10 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
         result = await (authClient as any).twoFactor.verifyOtp({ code });
       }
       if (result?.error) throw new Error(result.error.message ?? "Invalid code");
-      navigate({ to: "/" });
+      // Use hard navigation to clear React Query session cache.
+      // TanStack Router's navigate() keeps the old unauthenticated
+      // session in cache → AuthGuard sees session=null → bounces to sign-in.
+      window.location.href = "/";
     } catch (e: any) {
       setError(e?.message ?? "Invalid code. Please try again.");
       setCode("");
@@ -80,18 +82,17 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
         </div>
       )}
 
-      {/* Method tabs */}
+      {/* Method tabs — Email OTP hidden: Resend sandbox sender (onboarding@resend.dev)
+          only delivers to the account owner's email. OTP requires a verified domain.
+          TOTP (authenticator app) always works. */}
       <div style={{ display: "flex", gap: 4, background: "var(--color-surface-700)", borderRadius: 8, padding: 4 }}>
-        {([["totp", "Authenticator app", Smartphone], ["otp", "Email code", KeyRound]] as const).map(([m, label, Icon]) => (
-          <button
-            key={m}
-            className={method === m ? "btn btn-primary" : "btn btn-ghost"}
-            style={{ flex: 1, justifyContent: "center", fontSize: "0.78rem", padding: "6px 10px" }}
-            onClick={() => { setMethod(m as "totp" | "otp"); setCode(""); setError(""); }}
-          >
-            <Icon size={13} /> {label}
-          </button>
-        ))}
+        <button
+          className="btn btn-primary"
+          style={{ flex: 1, justifyContent: "center", fontSize: "0.78rem", padding: "6px 10px" }}
+          disabled
+        >
+          <Smartphone size={13} /> Authenticator app
+        </button>
       </div>
 
       {method === "otp" && !otpSent ? (
@@ -138,7 +139,6 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
 // ── Main sign-in page ─────────────────────────────────────────────────────────
 
 function SignInPage() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -162,7 +162,7 @@ function SignInPage() {
       } else if ((res as any).data?.twoFactorRedirect) {
         setTwoFactorRequired(true);
       } else {
-        navigate({ to: "/" });
+        window.location.href = "/";
       }
     } catch {
       setError("Something went wrong. Check the server is running.");
