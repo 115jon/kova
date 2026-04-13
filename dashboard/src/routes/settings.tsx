@@ -379,21 +379,28 @@ function CredentialsSection({ hasCredential, userId, onPasswordSet }: {
     try {
       let res: any;
       if (hasCredential) {
-        // Existing credential: changePassword requires currentPassword (Zod enforced)
+        // Existing credential account — changePassword requires currentPassword (Zod-enforced)
         res = await (authClient as any).changePassword({
           currentPassword: current,
           newPassword: next,
           revokeOtherSessions: true,
         });
+        if (res.error) throw new Error(res.error.message);
       } else {
-        // OAuth-only: use admin.setUserPassword — no currentPassword needed.
-        // All dashboard users are admins, so this endpoint is authorized.
-        res = await (authClient as any).admin.setUserPassword({
-          userId,
-          newPassword: next,
+        // OAuth-only: POST to our custom endpoint which creates a real
+        // credential account row in D1 using Better Auth's hashPassword().
+        // admin.setUserPassword() returns 200 but doesn't create the row.
+        const r = await fetch("/api/user/set-initial-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ newPassword: next }),
         });
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({ error: "Failed to set password" })) as { error?: string };
+          throw new Error(err.error ?? "Failed to set password");
+        }
       }
-      if (res.error) throw new Error(res.error.message);
       setSuccess(true);
       setCurrent(""); setNext(""); setConfirm("");
       setTimeout(() => setSuccess(false), 5000);
@@ -477,15 +484,7 @@ function SettingsPage() {
   const navigate = useNavigate();
   const { hasCredential, oauthProviders, ready, refetch } = useLinkedAccounts();
 
-  // Optimistic override: flip to true immediately when password is set,
-  // regardless of whether listAccounts() has re-fetched yet.
-  const [passwordJustSet, setPasswordJustSet] = useState(false);
-  const effectiveHasCredential = hasCredential || passwordJustSet;
-
-  const handlePasswordSet = () => {
-    setPasswordJustSet(true);
-    refetch(); // also re-sync with server in background
-  };
+  const handlePasswordSet = () => refetch();
 
   const handleSignOut = async () => {
     await signOut();
@@ -545,17 +544,17 @@ function SettingsPage() {
 
         {/* 2FA */}
         <SectionCard icon={<KeyRound size={14} />} color="#818cf8" title="Two-Factor Authentication">
-          <TwoFactorSection hasCredential={ready ? effectiveHasCredential : true} />
+          <TwoFactorSection hasCredential={ready ? hasCredential : true} />
         </SectionCard>
 
         {/* Password / Set password */}
         <SectionCard
           icon={<Lock size={14} />}
           color="#34d399"
-          title={effectiveHasCredential ? "Change Password" : "Set a Password"}
+          title={hasCredential ? "Change Password" : "Set a Password"}
         >
           <CredentialsSection
-            hasCredential={ready ? effectiveHasCredential : true}
+            hasCredential={ready ? hasCredential : true}
             userId={session?.user.id ?? ""}
             onPasswordSet={handlePasswordSet}
           />
