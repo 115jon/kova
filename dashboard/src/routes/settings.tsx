@@ -88,12 +88,11 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
   };
 
   const handleEnable = async (pwd?: string) => {
+    // Password is required by Better Auth's Zod schema — always a string
+    if (!pwd) { setError("Password is required"); return; }
     setError(""); setLoading(true);
     try {
-      // OAuth-only users: session is proof of identity, no password needed.
-      // Credential users: password is passed to verify before issuing secret.
-      const body = hasCredential && pwd ? { password: pwd } : {};
-      const res = await (authClient as any).twoFactor.enable(body);
+      const res = await (authClient as any).twoFactor.enable({ password: pwd });
       if (res.error) throw new Error(res.error.message);
       const uri: string = res.data?.totpURI ?? "";
       setTotpUri(uri);
@@ -182,18 +181,34 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
         </div>
       )}
 
-      {/* ── States ── */}
-      {step === "idle" && !enabled && (
+      {/* ── Idle state ── */}
+
+      {/* OAuth-only: must set a password first — Better Auth validates it as required string at the API/Zod level */}
+      {step === "idle" && !hasCredential && (
+        <div style={{
+          display: "flex", alignItems: "flex-start", gap: 10,
+          background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.2)",
+          borderRadius: 8, padding: "10px 14px", fontSize: "0.82rem", color: "#94a3b8",
+        }}>
+          <AlertCircle size={14} color="#facc15" style={{ flexShrink: 0, marginTop: 2 }} />
+          <p style={{ lineHeight: 1.6 }}>
+            To enable two-factor authentication, you need a password on your account first.
+            Use the{" "}
+            <strong style={{ color: "#e2e8f0" }}>Set a Password</strong>{" "}
+            section below, then come back here.
+          </p>
+        </div>
+      )}
+
+      {step === "idle" && hasCredential && !enabled && (
         <button className="btn btn-primary"
-          // OAuth users: skip password step entirely
-          onClick={() => hasCredential ? setStep("password") : handleEnable()}>
+          onClick={() => setStep("password")}>
           <Smartphone size={14} /> Set up authenticator app
         </button>
       )}
 
-      {step === "idle" && enabled && (
-        <button className="btn btn-danger"
-          onClick={() => hasCredential ? setStep("password") : handleDisable()}>
+      {step === "idle" && hasCredential && enabled && (
+        <button className="btn btn-danger" onClick={() => setStep("password")}>
           <X size={14} /> Disable 2FA
         </button>
       )}

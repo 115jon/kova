@@ -92,7 +92,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
                   .split(",")
                   .map((e) => e.trim().toLowerCase())
                   .filter(Boolean);
-                if (adminEmails.length && adminEmails.includes(user.email?.toLowerCase())) {
+                if (adminEmails.length && adminEmails.includes((user.email ?? "").toLowerCase())) {
                   return { data: { ...user, role: "admin" } };
                 }
               },
