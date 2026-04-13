@@ -1,45 +1,11 @@
 import { ProviderIconBadge } from "@/components/BrandIcons";
+import { SOCIAL_PROVIDERS } from "@/lib/providers";
 import { createFileRoute } from "@tanstack/react-router";
 import { CheckCircle, ExternalLink, Globe } from "lucide-react";
 
 export const Route = createFileRoute("/oauth-apps")({
   component: OAuthAppsPage,
 });
-
-type Provider = {
-  id: "google" | "discord";
-  name: string;
-  color: string;
-  configured: boolean;
-  callbackUrl: string;
-  scopes: string[];
-  docsUrl: string;
-};
-
-// Callback URLs always point at the real auth server (not the Vite proxy),
-// because Google/Discord redirect back to the server directly.
-const AUTH_SERVER = import.meta.env.VITE_AUTH_URL || "http://localhost:8787";
-
-const PROVIDERS: Provider[] = [
-  {
-    id: "google" as const,
-    name: "Google",
-    color: "#4285f4",
-    configured: true,
-    callbackUrl: `${AUTH_SERVER}/api/auth/callback/google`,
-    scopes: ["openid", "email", "profile"],
-    docsUrl: "https://console.cloud.google.com/apis/credentials",
-  },
-  {
-    id: "discord" as const,
-    name: "Discord",
-    color: "#5865f2",
-    configured: true,
-    callbackUrl: `${AUTH_SERVER}/api/auth/callback/discord`,
-    scopes: ["identify", "email"],
-    docsUrl: "https://discord.com/developers/applications",
-  },
-];
 
 function OAuthAppsPage() {
   return (
@@ -52,7 +18,7 @@ function OAuthAppsPage() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
-        {PROVIDERS.map(p => (
+        {SOCIAL_PROVIDERS.map(p => (
           <div key={p.id} className="card" style={{ padding: 20 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
               <ProviderIconBadge provider={p.id} size={40} />

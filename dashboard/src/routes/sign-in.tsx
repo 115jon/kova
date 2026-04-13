@@ -1,5 +1,6 @@
-import { DiscordIcon, GoogleIcon } from "@/components/BrandIcons";
+import { ProviderIcon } from "@/components/BrandIcons";
 import { signIn } from "@/lib/auth-client";
+import { CONFIGURED_PROVIDERS } from "@/lib/providers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertCircle, Shield } from "lucide-react";
 import { useState } from "react";
@@ -14,8 +15,8 @@ function SignInPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [discordLoading, setDiscordLoading] = useState(false);
+  // Track which social provider is in-flight by id (null = none)
+  const [socialLoading, setSocialLoading] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,44 +36,22 @@ function SignInPage() {
     }
   };
 
-  const handleGoogle = async () => {
+  const handleSocial = async (providerId: string) => {
     setError("");
-    setGoogleLoading(true);
+    setSocialLoading(providerId);
     try {
       const result = await signIn.social({
-        provider: "google",
-        callbackURL: `${window.location.origin}/`,
-      });
-      // signIn.social resolves with { url } — manually navigate so the
-      // browser hits Google's OAuth page (Vite proxy can't forward that).
-      if (result?.data?.url) {
-        window.location.href = result.data.url;
-        return;
-      }
-      // If no url in response, error out
-      throw new Error(result?.error?.message ?? "No redirect URL returned");
-    } catch (e: any) {
-      setGoogleLoading(false);
-      setError(e?.message ?? "Google sign-in failed. Please try again.");
-    }
-  };
-
-  const handleDiscord = async () => {
-    setError("");
-    setDiscordLoading(true);
-    try {
-      const result = await signIn.social({
-        provider: "discord",
+        provider: providerId as any,
         callbackURL: `${window.location.origin}/`,
       });
       if (result?.data?.url) {
         window.location.href = result.data.url;
-        return;
+        return; // page navigates away — don't clear loading state
       }
       throw new Error(result?.error?.message ?? "No redirect URL returned");
     } catch (e: any) {
-      setDiscordLoading(false);
-      setError(e?.message ?? "Discord sign-in failed. Please try again.");
+      setError(e?.message ?? `${providerId} sign-in failed. Please try again.`);
+      setSocialLoading(null);
     }
   };
 
@@ -163,36 +142,32 @@ function SignInPage() {
           </button>
         </form>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "16px 0" }}>
-          <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
-          <span style={{ fontSize: "0.75rem", color: "#475569" }}>or</span>
-          <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
-        </div>
+        {/* Social providers — driven by CONFIGURED_PROVIDERS in src/lib/providers.ts */}
+        {CONFIGURED_PROVIDERS.length > 0 && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "16px 0" }}>
+              <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
+              <span style={{ fontSize: "0.75rem", color: "#475569" }}>or</span>
+              <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
+            </div>
 
-        {/* Social providers — gap scales as more are added */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <button
-            id="google-sign-in-btn"
-            className="btn btn-ghost"
-            style={{ width: "100%", justifyContent: "center" }}
-            disabled={googleLoading}
-            onClick={handleGoogle}
-          >
-            <GoogleIcon size={16} />
-            Continue with Google{googleLoading ? "…" : ""}
-          </button>
-
-          <button
-            id="discord-sign-in-btn"
-            className="btn btn-ghost"
-            style={{ width: "100%", justifyContent: "center" }}
-            disabled={discordLoading}
-            onClick={handleDiscord}
-          >
-            <DiscordIcon size={16} />
-            Continue with Discord{discordLoading ? "…" : ""}
-          </button>
-        </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {CONFIGURED_PROVIDERS.map(p => (
+                <button
+                  key={p.id}
+                  id={`${p.id}-sign-in-btn`}
+                  className="btn btn-ghost"
+                  style={{ width: "100%", justifyContent: "center" }}
+                  disabled={socialLoading === p.id}
+                  onClick={() => handleSocial(p.id)}
+                >
+                  <ProviderIcon id={p.id} size={16} />
+                  {p.label}{socialLoading === p.id ? "…" : ""}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
