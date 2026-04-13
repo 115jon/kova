@@ -1,7 +1,7 @@
 import { ProviderIcon } from "@/components/BrandIcons";
-import { authClient, signIn } from "@/lib/auth-client";
+import { authClient, getSession, signIn } from "@/lib/auth-client";
 import { CONFIGURED_PROVIDERS } from "@/lib/providers";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertCircle, KeyRound, Shield, Smartphone } from "lucide-react";
 import { useState } from "react";
 
@@ -12,6 +12,7 @@ export const Route = createFileRoute("/sign-in")({
 // ── 2FA challenge screen ──────────────────────────────────────────────────────
 
 function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
+  const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [method, setMethod] = useState<"totp" | "otp">("totp");
   const [loading, setLoading] = useState(false);
@@ -30,10 +31,10 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
         result = await (authClient as any).twoFactor.verifyOtp({ code });
       }
       if (result?.error) throw new Error(result.error.message ?? "Invalid code");
-      // Use hard navigation to clear React Query session cache.
-      // TanStack Router's navigate() keeps the old unauthenticated
-      // session in cache → AuthGuard sees session=null → bounces to sign-in.
-      window.location.href = "/";
+      // Refresh the Better Auth session store so AuthGuard.useSession()
+      // sees the authenticated session immediately (avoids stale-cache bounce).
+      await getSession();
+      navigate({ to: "/" });
     } catch (e: any) {
       setError(e?.message ?? "Invalid code. Please try again.");
       setCode("");
@@ -139,6 +140,7 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
 // ── Main sign-in page ─────────────────────────────────────────────────────────
 
 function SignInPage() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -162,7 +164,8 @@ function SignInPage() {
       } else if ((res as any).data?.twoFactorRedirect) {
         setTwoFactorRequired(true);
       } else {
-        window.location.href = "/";
+        await getSession(); // refresh session store before navigating
+        navigate({ to: "/" });
       }
     } catch {
       setError("Something went wrong. Check the server is running.");

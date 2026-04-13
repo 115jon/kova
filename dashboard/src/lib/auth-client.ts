@@ -27,7 +27,9 @@ export const {
   signIn,
   signOut,
   useSession,
+  getSession,  // imperative fetch — call after TOTP to refresh the session store
 } = authClient;
 
 // Exported for direct use in components (e.g. building OAuth redirect URLs)
 export { AUTH_URL };
+
