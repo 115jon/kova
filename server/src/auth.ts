@@ -52,15 +52,19 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
 
         // ── Rate limiting ─────────────────────────────────────────
         // Uses KV for distributed counters across Worker instances.
+        // Global ceiling is high (200/min) since the admin dashboard makes
+        // multiple requests per page (get-session, list-users, list-sessions).
+        // Tight limits only on credential endpoints that need brute-force protection.
         rateLimit: {
           enabled: true,
           window: 60,   // 60-second sliding window
-          max: 10,      // max 10 requests per window per IP globally
+          max: 200,     // global ceiling — plenty for normal admin dashboard use
           storage: "secondary-storage", // stored in KV
           customRules: {
-            "/sign-in/email": { window: 60, max: 5 },
-            "/two-factor/verify-totp": { window: 60, max: 5 },
-            "/two-factor/send-otp": { window: 60, max: 3 },
+            "/sign-in/email": { window: 60, max: 5 }, // brute-force protection
+            "/two-factor/verify-totp": { window: 60, max: 5 }, // TOTP guessing protection
+            "/two-factor/send-otp": { window: 60, max: 3 }, // email OTP send throttle
+            "/forget-password": { window: 60, max: 3 }, // reset email throttle
           },
         },
 
