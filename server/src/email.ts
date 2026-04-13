@@ -7,7 +7,7 @@
  */
 
 const RESEND_API = "https://api.resend.com/emails";
-const FROM = "ralph-auth <onboarding@resend.dev>";
+const FROM = "ralph-auth <noreply@115jon.site>";
 
 interface SendEmailOptions {
   to: string;

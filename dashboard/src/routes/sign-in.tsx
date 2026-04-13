@@ -83,17 +83,21 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
         </div>
       )}
 
-      {/* Method tabs — Email OTP hidden: Resend sandbox sender (onboarding@resend.dev)
-          only delivers to the account owner's email. OTP requires a verified domain.
-          TOTP (authenticator app) always works. */}
+      {/* Method tabs */}
       <div style={{ display: "flex", gap: 4, background: "var(--color-surface-700)", borderRadius: 8, padding: 4 }}>
-        <button
-          className="btn btn-primary"
-          style={{ flex: 1, justifyContent: "center", fontSize: "0.78rem", padding: "6px 10px" }}
-          disabled
-        >
-          <Smartphone size={13} /> Authenticator app
-        </button>
+        {([
+          ["totp", "Authenticator app", Smartphone],
+          ["otp", "Email code", KeyRound],
+        ] as const).map(([m, label, Icon]) => (
+          <button
+            key={m}
+            className={method === m ? "btn btn-primary" : "btn btn-ghost"}
+            style={{ flex: 1, justifyContent: "center", fontSize: "0.78rem", padding: "6px 10px" }}
+            onClick={() => { setMethod(m as "totp" | "otp"); setCode(""); setError(""); }}
+          >
+            <Icon size={13} /> {label}
+          </button>
+        ))}
       </div>
 
       {method === "otp" && !otpSent ? (
