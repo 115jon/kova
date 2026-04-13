@@ -1,7 +1,8 @@
 import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
-import { admin } from "better-auth/plugins";
+import { admin, twoFactor } from "better-auth/plugins";
+import { resetPasswordEmail, sendEmail, twoFactorOtpEmail, verificationEmail } from "./email";
 
 /**
  * Factory — called once per request inside the fetch() handler.
@@ -16,13 +17,6 @@ import { admin } from "better-auth/plugins";
  *   - Second arg: standard BetterAuth config (providers, plugins, etc.)
  *   withCloudflare sets `database` internally from d1Native — don't
  *   set it again in the second arg or it will conflict.
- *
- * NOTE on hooks — the top-level hooks.after API in Better Auth 1.6.x
- * expects a plain createAuthMiddleware fn, NOT the { matcher, handler }
- * plugin-pattern. Admin role promotion is done via the admin plugin's
- * REST API (/api/auth/admin/set-role) after the first sign-up, which
- * is more reliable and avoids runtime type mismatches entirely.
- * See: server/src/admin-setup.ts for the one-time promotion helper.
  */
 export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
   return betterAuth(
@@ -32,7 +26,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         // Native D1 binding — no Drizzle adapter needed
         d1Native: env.DB,
 
-        // KV for session secondary storage (reduces D1 reads)
+        // KV for session secondary storage + rate limit counters
         kv: env.KV,
 
         // R2 for avatar/file uploads — must be { bucket } shaped, not bare R2Bucket
@@ -52,32 +46,47 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         basePath: "/api/auth",
 
         // ── Error page ───────────────────────────────────────────
-        // Redirect OAuth/API errors to our dashboard's /auth-error page
-        // instead of showing Better Auth's raw internal error screen.
         onAPIError: {
           errorURL: `${env.DASHBOARD_URL}/auth-error`,
+        },
+
+        // ── Rate limiting ─────────────────────────────────────────
+        // Uses KV for distributed counters — protection against
+        // brute-force on /sign-in/email and OAuth endpoints.
+        rateLimit: {
+          enabled: true,
+          window: 60,   // 60-second sliding window
+          max: 10,      // max 10 requests per window per IP globally
+          storage: "secondary-storage", // stored in KV
+          customRules: {
+            // Tighter limit specifically on password sign-in
+            "/sign-in/email": { window: 60, max: 5 },
+            // Also protect 2FA verification endpoint
+            "/two-factor/verify-totp": { window: 60, max: 5 },
+            "/two-factor/send-otp": { window: 60, max: 3 },
+          },
         },
 
         // ── Email + Password ──────────────────────────────────────
         emailAndPassword: {
           enabled: true,
-          requireEmailVerification: false, // flip to true once email is wired
+          requireEmailVerification: true, // enforced — Resend sends the link
+
+          sendVerificationEmail: async ({ user, url }) => {
+            const { subject, html } = verificationEmail(url);
+            await sendEmail({ to: user.email, subject, html, apiKey: env.RESEND_API_KEY });
+          },
+
+          sendResetPassword: async ({ user, url }) => {
+            const { subject, html } = resetPasswordEmail(url);
+            await sendEmail({ to: user.email, subject, html, apiKey: env.RESEND_API_KEY });
+          },
         },
 
         // ── Auto-promote admin email ──────────────────────────────
         // Runs BEFORE the user row is inserted in D1. Any account
-        // (Google, Discord, or email/password) whose email matches
+        // (Google, Discord, email/password) whose email matches
         // DASHBOARD_ADMIN_EMAIL gets role:"admin" at creation time.
-        //
-        // Why not hooks.after? Better Auth 1.6.x has a runtime bug
-        // where top-level hooks.after expects a plain middleware fn,
-        // not the { matcher, handler } plugin pattern — it throws
-        // "hook.handler is not a function". databaseHooks are a
-        // separate, stable API that don't have this issue.
-        //
-        // Spread order: { ...user, role: "admin" } — we always put
-        // our override last so it wins over the admin plugin's
-        // defaultRole: "user" which was spread before ours.
         databaseHooks: {
           user: {
             create: {
@@ -112,9 +121,23 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
             : {}),
         },
 
+        // ── Plugins ───────────────────────────────────────────────
         plugins: [
-          admin(),  // adds /api/auth/admin/* management endpoints
-          apiKey(), // adds /api/auth/api-key/* CRUD + verify endpoints
+          admin(),   // /api/auth/admin/* management endpoints
+          apiKey(),  // /api/auth/api-key/* CRUD + verify endpoints
+
+          // TOTP + email OTP 2FA
+          // Admin can enable in Settings → Security → Two-Factor Auth
+          twoFactor({
+            issuer: "ralph-auth",      // shown in authenticator apps
+            otpOptions: {
+              // Email OTP: send a code instead of / as fallback to TOTP
+              sendOTP: async ({ user, otp }) => {
+                const { subject, html } = twoFactorOtpEmail(otp);
+                await sendEmail({ to: user.email, subject, html, apiKey: env.RESEND_API_KEY });
+              },
+            },
+          }),
         ],
 
         // ── Session ───────────────────────────────────────────────

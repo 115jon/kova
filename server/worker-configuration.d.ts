@@ -15,4 +15,5 @@ interface Env {
   DISCORD_CLIENT_ID: string;
   DISCORD_CLIENT_SECRET: string;
   DASHBOARD_ADMIN_EMAIL: string;
+  RESEND_API_KEY: string;
 }

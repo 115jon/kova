@@ -152,9 +152,11 @@ function CreateKeyForm({ onCreated }: { onCreated: (key: string) => void }) {
 
   if (!open) {
     return (
-      <button className="btn btn-primary" onClick={() => setOpen(true)}>
-        <Plus size={14} /> Create API key
-      </button>
+      <div style={{ marginBottom: 16 }}>
+        <button className="btn btn-primary" onClick={() => setOpen(true)}>
+          <Plus size={14} /> Create API key
+        </button>
+      </div>
     );
   }
 
