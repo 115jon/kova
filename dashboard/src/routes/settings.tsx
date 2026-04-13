@@ -1,12 +1,38 @@
+import { ProviderIcon } from "@/components/BrandIcons";
 import { AUTH_URL, authClient, signOut, useSession } from "@/lib/auth-client";
+import type { ProviderId } from "@/lib/providers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle, Check, CheckCircle, Clock, Copy,
-  Eye, EyeOff, KeyRound, Lock, LogOut,
-  Server, Settings, Shield, Smartphone, X
+  Eye, EyeOff, KeyRound, Lock, LogOut, PlusCircle,
+  Server, Settings, Shield, Smartphone, X,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+// ── Linked accounts hook ──────────────────────────────────────────────────────
+
+type LinkedAccount = { id: string; provider: string; };
+
+function useLinkedAccounts() {
+  const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    (authClient as any).listAccounts()
+      .then((res: any) => {
+        setAccounts(res.data ?? []);
+      })
+      .catch(() => setAccounts([]))
+      .finally(() => setReady(true));
+  }, []);
+
+  // "credential" = email+password account exists
+  const hasCredential = accounts.some(a => a.provider === "credential");
+  const oauthProviders = accounts.filter(a => a.provider !== "credential");
+
+  return { accounts, hasCredential, oauthProviders, ready };
+}
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
@@ -41,7 +67,7 @@ function InfoRow({ label, value, mono = false }: { label: string; value: string;
 
 type TwoFaStep = "idle" | "password" | "qr" | "verify" | "backupCodes" | "done";
 
-function TwoFactorSection() {
+function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
   const { data: session, refetch } = useSession() as any;
   const enabled = !!(session?.user as any)?.twoFactorEnabled;
 
@@ -61,15 +87,16 @@ function TwoFactorSection() {
     setBackupCodes([]); setVerifyCode(""); setError(""); setShowSecret(false);
   };
 
-  const handleEnable = async () => {
-    if (!password) { setError("Password is required"); return; }
+  const handleEnable = async (pwd?: string) => {
     setError(""); setLoading(true);
     try {
-      const res = await (authClient as any).twoFactor.enable({ password });
+      // OAuth-only users: session is proof of identity, no password needed.
+      // Credential users: password is passed to verify before issuing secret.
+      const body = hasCredential && pwd ? { password: pwd } : {};
+      const res = await (authClient as any).twoFactor.enable(body);
       if (res.error) throw new Error(res.error.message);
       const uri: string = res.data?.totpURI ?? "";
       setTotpUri(uri);
-      // Extract secret from otpauth URI
       const match = uri.match(/secret=([A-Z2-7]+)/i);
       setSecret(match?.[1] ?? "");
       setBackupCodes(res.data?.backupCodes ?? []);
@@ -97,11 +124,11 @@ function TwoFactorSection() {
     }
   };
 
-  const handleDisable = async () => {
-    if (!password) { setError("Password is required"); return; }
+  const handleDisable = async (pwd?: string) => {
     setError(""); setLoading(true);
     try {
-      const res = await (authClient as any).twoFactor.disable({ password });
+      const body = hasCredential && pwd ? { password: pwd } : {};
+      const res = await (authClient as any).twoFactor.disable(body);
       if (res.error) throw new Error(res.error.message);
       reset();
       refetch?.();
@@ -157,13 +184,16 @@ function TwoFactorSection() {
 
       {/* ── States ── */}
       {step === "idle" && !enabled && (
-        <button className="btn btn-primary" onClick={() => setStep("password")}>
+        <button className="btn btn-primary"
+          // OAuth users: skip password step entirely
+          onClick={() => hasCredential ? setStep("password") : handleEnable()}>
           <Smartphone size={14} /> Set up authenticator app
         </button>
       )}
 
       {step === "idle" && enabled && (
-        <button className="btn btn-danger" onClick={() => setStep("password")}>
+        <button className="btn btn-danger"
+          onClick={() => hasCredential ? setStep("password") : handleDisable()}>
           <X size={14} /> Disable 2FA
         </button>
       )}
@@ -180,13 +210,13 @@ function TwoFactorSection() {
             placeholder="Your current password"
             value={password}
             onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && (enabled ? handleDisable() : handleEnable())}
+            onKeyDown={e => e.key === "Enter" && (enabled ? handleDisable(password) : handleEnable(password))}
           />
           <div style={{ display: "flex", gap: 8 }}>
             <button
               className={enabled ? "btn btn-danger" : "btn btn-primary"}
               disabled={loading}
-              onClick={enabled ? handleDisable : handleEnable}
+              onClick={() => enabled ? handleDisable(password) : handleEnable(password)}
             >
               {loading ? "Please wait…" : enabled ? "Confirm & disable" : "Continue"}
             </button>
@@ -300,7 +330,18 @@ function TwoFactorSection() {
 
 // ── Password change ───────────────────────────────────────────────────────────
 
-function PasswordSection() {
+/**
+ * CredentialsSection — adapts based on whether the current user has a
+ * password account ("credential" provider) or is OAuth-only.
+ *
+ * hasCredential = false (Google/Discord only):
+ *   → shows "Set a password" form (no currentPassword field)
+ *   → explains why adding a password is useful
+ *
+ * hasCredential = true (email+password, possibly also linked OAuth):
+ *   → shows standard Change Password form
+ */
+function CredentialsSection({ hasCredential }: { hasCredential: boolean }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -308,23 +349,33 @@ function PasswordSection() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  const handleChange = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (next !== confirm) { setError("Passwords don't match"); return; }
     if (next.length < 8) { setError("Password must be at least 8 characters"); return; }
     setError(""); setLoading(true);
     try {
-      const res = await (authClient as any).changePassword({
-        currentPassword: current,
-        newPassword: next,
-        revokeOtherSessions: true,
-      });
+      let res: any;
+      if (hasCredential) {
+        // Change existing password
+        res = await (authClient as any).changePassword({
+          currentPassword: current,
+          newPassword: next,
+          revokeOtherSessions: true,
+        });
+      } else {
+        // First-time password set for OAuth users — no current password
+        res = await (authClient as any).changePassword({
+          newPassword: next,
+          revokeOtherSessions: false,
+        });
+      }
       if (res.error) throw new Error(res.error.message);
       setSuccess(true);
       setCurrent(""); setNext(""); setConfirm("");
       setTimeout(() => setSuccess(false), 4000);
     } catch (e: any) {
-      setError(e?.message ?? "Failed to change password");
+      setError(e?.message ?? "Failed to save password");
     } finally {
       setLoading(false);
     }
@@ -332,13 +383,29 @@ function PasswordSection() {
 
   return (
     <div style={{ padding: 20 }}>
+      {!hasCredential && (
+        <div style={{
+          display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 16,
+          background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)",
+          borderRadius: 8, padding: "10px 14px", fontSize: "0.82rem", color: "#94a3b8",
+        }}>
+          <PlusCircle size={14} color="#818cf8" style={{ flexShrink: 0, marginTop: 2 }} />
+          <p style={{ lineHeight: 1.6 }}>
+            You signed in with an OAuth provider and don't have a password yet.
+            Adding one lets you sign in with email + password and enables
+            password-protected 2FA operations.
+          </p>
+        </div>
+      )}
+
       {success && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
           background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)",
           borderRadius: 8, padding: "8px 12px", color: "#22c55e", fontSize: "0.8rem",
         }}>
-          <CheckCircle size={13} /> Password changed. All other sessions revoked.
+          <CheckCircle size={13} />
+          {hasCredential ? "Password changed. All other sessions revoked." : "Password set! You can now sign in with email + password."}
         </div>
       )}
       {error && (
@@ -350,21 +417,29 @@ function PasswordSection() {
           <AlertCircle size={13} /> {error}
         </div>
       )}
-      <form onSubmit={handleChange} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {hasCredential && (
+          <div>
+            <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>Current password</label>
+            <input className="input" type="password" value={current} onChange={e => setCurrent(e.target.value)}
+              required autoComplete="current-password" />
+          </div>
+        )}
         <div>
-          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>Current password</label>
-          <input className="input" type="password" value={current} onChange={e => setCurrent(e.target.value)} required autoComplete="current-password" />
+          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>
+            {hasCredential ? "New password" : "Password"}
+          </label>
+          <input className="input" type="password" value={next} onChange={e => setNext(e.target.value)}
+            required autoComplete="new-password" minLength={8} />
         </div>
         <div>
-          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>New password</label>
-          <input className="input" type="password" value={next} onChange={e => setNext(e.target.value)} required autoComplete="new-password" minLength={8} />
-        </div>
-        <div>
-          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>Confirm new password</label>
-          <input className="input" type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required autoComplete="new-password" />
+          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>Confirm password</label>
+          <input className="input" type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+            required autoComplete="new-password" />
         </div>
         <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: 4 }}>
-          <Lock size={13} /> {loading ? "Saving…" : "Change password"}
+          <Lock size={13} /> {loading ? "Saving…" : hasCredential ? "Change password" : "Set password"}
         </button>
       </form>
     </div>
@@ -376,6 +451,7 @@ function PasswordSection() {
 function SettingsPage() {
   const { data: session } = useSession();
   const navigate = useNavigate();
+  const { hasCredential, oauthProviders, ready } = useLinkedAccounts();
 
   const handleSignOut = async () => {
     await signOut();
@@ -408,6 +484,23 @@ function SettingsPage() {
             </div>
             <InfoRow label="User ID" value={session.user.id} mono />
             <InfoRow label="Email verified" value={(session.user as any).emailVerified ? "Yes" : "No"} />
+            {/* Linked OAuth providers */}
+            {ready && oauthProviders.length > 0 && (
+              <div style={{ padding: "11px 20px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>Linked providers</span>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {oauthProviders.map(a => (
+                    <div key={a.provider} title={a.provider} style={{
+                      width: 24, height: 24, borderRadius: 6,
+                      background: "var(--color-surface-700)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      <ProviderIcon id={a.provider as ProviderId} size={13} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div style={{ padding: "12px 20px" }}>
               <button className="btn btn-ghost" style={{ fontSize: "0.8rem" }} onClick={handleSignOut}>
                 <LogOut size={13} /> Sign out
@@ -418,12 +511,16 @@ function SettingsPage() {
 
         {/* 2FA */}
         <SectionCard icon={<KeyRound size={14} />} color="#818cf8" title="Two-Factor Authentication">
-          <TwoFactorSection />
+          <TwoFactorSection hasCredential={ready ? hasCredential : true} />
         </SectionCard>
 
-        {/* Password */}
-        <SectionCard icon={<Lock size={14} />} color="#34d399" title="Change Password">
-          <PasswordSection />
+        {/* Password / Set password */}
+        <SectionCard
+          icon={<Lock size={14} />}
+          color="#34d399"
+          title={hasCredential ? "Change Password" : "Set a Password"}
+        >
+          <CredentialsSection hasCredential={ready ? hasCredential : true} />
         </SectionCard>
 
         {/* Server info */}

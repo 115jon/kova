@@ -51,17 +51,14 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         },
 
         // ── Rate limiting ─────────────────────────────────────────
-        // Uses KV for distributed counters — protection against
-        // brute-force on /sign-in/email and OAuth endpoints.
+        // Uses KV for distributed counters across Worker instances.
         rateLimit: {
           enabled: true,
           window: 60,   // 60-second sliding window
           max: 10,      // max 10 requests per window per IP globally
           storage: "secondary-storage", // stored in KV
           customRules: {
-            // Tighter limit specifically on password sign-in
             "/sign-in/email": { window: 60, max: 5 },
-            // Also protect 2FA verification endpoint
             "/two-factor/verify-totp": { window: 60, max: 5 },
             "/two-factor/send-otp": { window: 60, max: 3 },
           },
@@ -70,14 +67,14 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         // ── Email + Password ──────────────────────────────────────
         emailAndPassword: {
           enabled: true,
-          requireEmailVerification: true, // enforced — Resend sends the link
+          requireEmailVerification: true,
 
-          sendVerificationEmail: async ({ user, url }) => {
+          sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }) => {
             const { subject, html } = verificationEmail(url);
             await sendEmail({ to: user.email, subject, html, apiKey: env.RESEND_API_KEY });
           },
 
-          sendResetPassword: async ({ user, url }) => {
+          sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
             const { subject, html } = resetPasswordEmail(url);
             await sendEmail({ to: user.email, subject, html, apiKey: env.RESEND_API_KEY });
           },
@@ -90,8 +87,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         databaseHooks: {
           user: {
             create: {
-              before: async (user) => {
-                // Support comma-separated list: "a@x.com,b@y.com"
+              before: async (user: { email?: string;[key: string]: unknown }) => {
                 const adminEmails = (env.DASHBOARD_ADMIN_EMAIL ?? "")
                   .split(",")
                   .map((e) => e.trim().toLowerCase())
@@ -127,12 +123,10 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
           apiKey(),  // /api/auth/api-key/* CRUD + verify endpoints
 
           // TOTP + email OTP 2FA
-          // Admin can enable in Settings → Security → Two-Factor Auth
           twoFactor({
-            issuer: "ralph-auth",      // shown in authenticator apps
+            issuer: "ralph-auth",
             otpOptions: {
-              // Email OTP: send a code instead of / as fallback to TOTP
-              sendOTP: async ({ user, otp }) => {
+              sendOTP: async ({ user, otp }: { user: { email: string }; otp: string }) => {
                 const { subject, html } = twoFactorOtpEmail(otp);
                 await sendEmail({ to: user.email, subject, html, apiKey: env.RESEND_API_KEY });
               },
