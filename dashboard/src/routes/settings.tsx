@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 
 // ── Linked accounts hook ──────────────────────────────────────────────────────
 
-type LinkedAccount = { id: string; provider: string; };
+type LinkedAccount = { id: string; providerId: string; accountId: string; };
 
 function useLinkedAccounts() {
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
@@ -28,8 +28,8 @@ function useLinkedAccounts() {
   }, []);
 
   // "credential" = email+password account exists
-  const hasCredential = accounts.some(a => a.provider === "credential");
-  const oauthProviders = accounts.filter(a => a.provider !== "credential");
+  const hasCredential = accounts.some(a => a.providerId === "credential");
+  const oauthProviders = accounts.filter(a => a.providerId !== "credential");
 
   return { accounts, hasCredential, oauthProviders, ready };
 }
@@ -343,20 +343,22 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
   );
 }
 
-// ── Password change ───────────────────────────────────────────────────────────
+// ── Password / Set password ───────────────────────────────────────────────────
 
 /**
  * CredentialsSection — adapts based on whether the current user has a
  * password account ("credential" provider) or is OAuth-only.
  *
- * hasCredential = false (Google/Discord only):
- *   → shows "Set a password" form (no currentPassword field)
- *   → explains why adding a password is useful
+ * hasCredential = false (OAuth-only):
+ *   → No currentPassword field.
+ *   → Calls admin.setUserPassword({ userId, newPassword }) — the admin
+ *     plugin sets passwords without requiring the existing one.
+ *     All dashboard users are admins, so this is always authorized.
  *
- * hasCredential = true (email+password, possibly also linked OAuth):
- *   → shows standard Change Password form
+ * hasCredential = true (email+password account exists):
+ *   → Standard Change Password form calling changePassword().
  */
-function CredentialsSection({ hasCredential }: { hasCredential: boolean }) {
+function CredentialsSection({ hasCredential, userId }: { hasCredential: boolean; userId: string }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -372,23 +374,24 @@ function CredentialsSection({ hasCredential }: { hasCredential: boolean }) {
     try {
       let res: any;
       if (hasCredential) {
-        // Change existing password
+        // Existing credential: changePassword requires currentPassword (Zod enforced)
         res = await (authClient as any).changePassword({
           currentPassword: current,
           newPassword: next,
           revokeOtherSessions: true,
         });
       } else {
-        // First-time password set for OAuth users — no current password
-        res = await (authClient as any).changePassword({
+        // OAuth-only: use admin.setUserPassword — no currentPassword needed.
+        // All dashboard users are admins, so this endpoint is authorized.
+        res = await (authClient as any).admin.setUserPassword({
+          userId,
           newPassword: next,
-          revokeOtherSessions: false,
         });
       }
       if (res.error) throw new Error(res.error.message);
       setSuccess(true);
       setCurrent(""); setNext(""); setConfirm("");
-      setTimeout(() => setSuccess(false), 4000);
+      setTimeout(() => setSuccess(false), 5000);
     } catch (e: any) {
       setError(e?.message ?? "Failed to save password");
     } finally {
@@ -406,9 +409,8 @@ function CredentialsSection({ hasCredential }: { hasCredential: boolean }) {
         }}>
           <PlusCircle size={14} color="#818cf8" style={{ flexShrink: 0, marginTop: 2 }} />
           <p style={{ lineHeight: 1.6 }}>
-            You signed in with an OAuth provider and don't have a password yet.
-            Adding one lets you sign in with email + password and enables
-            password-protected 2FA operations.
+            You signed in with an OAuth provider. Set a password to also be
+            able to sign in with email + password and to enable 2FA.
           </p>
         </div>
       )}
@@ -505,12 +507,12 @@ function SettingsPage() {
                 <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>Linked providers</span>
                 <div style={{ display: "flex", gap: 6 }}>
                   {oauthProviders.map(a => (
-                    <div key={a.provider} title={a.provider} style={{
+                    <div key={a.providerId} title={a.providerId} style={{
                       width: 24, height: 24, borderRadius: 6,
                       background: "var(--color-surface-700)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                     }}>
-                      <ProviderIcon id={a.provider as ProviderId} size={13} />
+                      <ProviderIcon id={a.providerId as ProviderId} size={13} />
                     </div>
                   ))}
                 </div>
@@ -535,7 +537,10 @@ function SettingsPage() {
           color="#34d399"
           title={hasCredential ? "Change Password" : "Set a Password"}
         >
-          <CredentialsSection hasCredential={ready ? hasCredential : true} />
+          <CredentialsSection
+            hasCredential={ready ? hasCredential : true}
+            userId={session?.user.id ?? ""}
+          />
         </SectionCard>
 
         {/* Server info */}
