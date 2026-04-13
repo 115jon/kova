@@ -1,3 +1,4 @@
+import { apiKeyClient } from "@better-auth/api-key/client";
 import { adminClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
@@ -10,6 +11,7 @@ export const authClient = createAuthClient({
   baseURL: AUTH_URL || undefined,
   plugins: [
     adminClient(), // adds role, banned, etc. to the session user type
+    apiKeyClient(),
   ],
   fetchOptions: {
     credentials: "include",

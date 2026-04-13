@@ -1,3 +1,4 @@
+import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
 import { admin } from "better-auth/plugins";
@@ -111,9 +112,9 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
             : {}),
         },
 
-        // ── Plugins ───────────────────────────────────────────────
         plugins: [
-          admin(), // adds /api/auth/admin/* management endpoints
+          admin(),  // adds /api/auth/admin/* management endpoints
+          apiKey(), // adds /api/auth/api-key/* CRUD + verify endpoints
         ],
 
         // ── Session ───────────────────────────────────────────────
