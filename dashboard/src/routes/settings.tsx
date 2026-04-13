@@ -477,6 +477,16 @@ function SettingsPage() {
   const navigate = useNavigate();
   const { hasCredential, oauthProviders, ready, refetch } = useLinkedAccounts();
 
+  // Optimistic override: flip to true immediately when password is set,
+  // regardless of whether listAccounts() has re-fetched yet.
+  const [passwordJustSet, setPasswordJustSet] = useState(false);
+  const effectiveHasCredential = hasCredential || passwordJustSet;
+
+  const handlePasswordSet = () => {
+    setPasswordJustSet(true);
+    refetch(); // also re-sync with server in background
+  };
+
   const handleSignOut = async () => {
     await signOut();
     navigate({ to: "/sign-in" });
@@ -535,19 +545,19 @@ function SettingsPage() {
 
         {/* 2FA */}
         <SectionCard icon={<KeyRound size={14} />} color="#818cf8" title="Two-Factor Authentication">
-          <TwoFactorSection hasCredential={ready ? hasCredential : true} />
+          <TwoFactorSection hasCredential={ready ? effectiveHasCredential : true} />
         </SectionCard>
 
         {/* Password / Set password */}
         <SectionCard
           icon={<Lock size={14} />}
           color="#34d399"
-          title={hasCredential ? "Change Password" : "Set a Password"}
+          title={effectiveHasCredential ? "Change Password" : "Set a Password"}
         >
           <CredentialsSection
-            hasCredential={ready ? hasCredential : true}
+            hasCredential={ready ? effectiveHasCredential : true}
             userId={session?.user.id ?? ""}
-            onPasswordSet={refetch}
+            onPasswordSet={handlePasswordSet}
           />
         </SectionCard>
 
