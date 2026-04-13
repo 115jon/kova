@@ -39,6 +39,12 @@ export const organization = authClient.organization;
 export const apiKey = authClient.apiKey;
 export const admin = authClient.admin;
 
+// ── Reactive org hooks (from organizationClient plugin) ───────────────────────
+/** Reactive list of all orgs the current user is a member of. */
+export const useListOrganizations = () => authClient.useListOrganizations();
+/** Reactive active organization (re-evaluates when setActive is called). */
+export const useActiveOrganization = () => authClient.useActiveOrganization();
+
 /** List OAuth + credential accounts linked to the current user. */
 export const listAccounts = () => authClient.listAccounts();
 

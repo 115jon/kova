@@ -1,16 +1,20 @@
-import { signOut, useSession } from "@/lib/auth-client";
+import { organization, signOut, useActiveOrganization, useListOrganizations, useSession } from "@/lib/auth-client";
 import { createRootRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
   BarChart3,
   Building2,
+  Check,
+  ChevronDown,
   Globe,
   Key,
   LogOut,
   Settings,
   Shield,
+  UserCircle,
   Users,
 } from "lucide-react";
+import React from "react";
 
 const NAV = [
   { to: "/", label: "Overview", icon: BarChart3, exact: true },
@@ -20,6 +24,191 @@ const NAV = [
   { to: "/oauth-apps", label: "OAuth Apps", icon: Globe, exact: false },
   { to: "/api-keys", label: "API Keys", icon: Key, exact: false },
 ];
+
+// ── Org Switcher ──────────────────────────────────────────────────────────────
+
+function OrgAvatar({ name, size = 26 }: { name: string; size?: number }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: 7, flexShrink: 0,
+      background: "linear-gradient(135deg, #6366f1, #7c3aed)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontWeight: 700, fontSize: size * 0.42, color: "#fff",
+    }}>
+      {name[0]?.toUpperCase() ?? "O"}
+    </div>
+  );
+}
+
+function OrgSwitcher() {
+  const { data: activeOrg } = useActiveOrganization();
+  const { data: orgs } = useListOrganizations();
+  const [open, setOpen] = React.useState(false);
+  const [switching, setSwitching] = React.useState<string | null>(null);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const handleSetActive = async (orgId: string | null) => {
+    if (orgId === (activeOrg?.id ?? null) || switching) return;
+    setSwitching(orgId ?? "__personal__");
+    try {
+      await organization.setActive({ organizationId: orgId });
+    } finally {
+      setSwitching(null);
+      setOpen(false);
+    }
+  };
+
+  if (!orgs || orgs.length === 0) return null;
+
+  return (
+    <div ref={ref} style={{ position: "relative", marginBottom: 12 }}>
+      <button
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: 8,
+          background: open ? "var(--color-surface-700)" : "transparent",
+          border: "1px solid", borderColor: open ? "var(--color-border)" : "transparent",
+          borderRadius: 8, padding: "7px 10px", cursor: "pointer",
+          transition: "background 0.15s, border-color 0.15s",
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
+        onMouseLeave={e => { if (!open) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+      >
+        {activeOrg
+          ? <OrgAvatar name={activeOrg.name} />
+          : <div style={{
+            width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+            background: "var(--color-surface-600)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}><Building2 size={13} color="#475569" /></div>
+        }
+        <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+          <p style={{
+            fontSize: "0.78rem", fontWeight: 600, color: "#e2e8f0",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>
+            {activeOrg?.name ?? "Select org"}
+          </p>
+          {activeOrg && (
+            <p style={{ fontSize: "0.65rem", color: "#475569", fontFamily: "monospace" }}>
+              {activeOrg.slug}
+            </p>
+          )}
+        </div>
+        <ChevronDown size={13} color="#475569"
+          style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
+        />
+      </button>
+
+      {open && (
+        <div role="listbox" style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
+          background: "var(--color-surface-800)", border: "1px solid var(--color-border)",
+          borderRadius: 10, padding: 4, boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
+        }}>
+          <p style={{
+            fontSize: "0.6rem", color: "#475569", fontWeight: 600,
+            letterSpacing: "0.08em", textTransform: "uppercase",
+            padding: "6px 10px 4px",
+          }}>Switch organization</p>
+
+          {/* Personal / no-org escape hatch */}
+          {(() => {
+            const isPersonal = activeOrg === null;
+            const isSwitching = switching === "__personal__";
+            return (
+              <button
+                role="option"
+                aria-selected={isPersonal}
+                disabled={isSwitching}
+                onClick={() => handleSetActive(null)}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 8,
+                  padding: "7px 10px", borderRadius: 7,
+                  cursor: isPersonal ? "default" : "pointer",
+                  background: isPersonal ? "rgba(99,102,241,0.12)" : "transparent",
+                  border: "none", transition: "background 0.12s", marginBottom: 2,
+                  opacity: isSwitching ? 0.6 : 1,
+                }}
+                onMouseEnter={e => { if (!isPersonal) (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
+                onMouseLeave={e => { if (!isPersonal) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+              >
+                <div style={{
+                  width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                  background: "var(--color-surface-600)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <UserCircle size={14} color="#475569" />
+                </div>
+                <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                  <p style={{
+                    fontSize: "0.8rem", fontWeight: 600,
+                    color: isPersonal ? "#818cf8" : "#94a3b8",
+                  }}>
+                    {isSwitching ? "Switching…" : "No organization"}
+                  </p>
+                </div>
+                {isPersonal && <Check size={12} color="#818cf8" />}
+              </button>
+            );
+          })()}
+
+          {/* Divider */}
+          <div style={{ height: 1, background: "var(--color-border)", margin: "4px 0" }} />
+
+          {orgs.map(org => {
+            const isActive = org.id === activeOrg?.id;
+            const isSwitching = switching === org.id;
+            return (
+              <button
+                key={org.id}
+                role="option"
+                aria-selected={isActive}
+                disabled={isSwitching}
+                onClick={() => handleSetActive(org.id)}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 8,
+                  padding: "7px 10px", borderRadius: 7,
+                  cursor: isActive ? "default" : "pointer",
+                  background: isActive ? "rgba(99,102,241,0.12)" : "transparent",
+                  border: "none", transition: "background 0.12s", marginBottom: 2,
+                  opacity: isSwitching ? 0.6 : 1,
+                }}
+                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
+                onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+              >
+                <OrgAvatar name={org.name} />
+                <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                  <p style={{
+                    fontSize: "0.8rem", fontWeight: 600,
+                    color: isActive ? "#818cf8" : "#e2e8f0",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {isSwitching ? "Switching…" : org.name}
+                  </p>
+                </div>
+                {isActive && <Check size={12} color="#818cf8" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 
 function Sidebar() {
   const { data: session } = useSession();
@@ -56,6 +245,9 @@ function Sidebar() {
           ralph<span style={{ color: "#818cf8" }}>auth</span>
         </span>
       </div>
+
+      {/* Org Switcher */}
+      <OrgSwitcher />
 
       {/* Nav */}
       <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>

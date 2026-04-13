@@ -124,7 +124,11 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         // ── Plugins ───────────────────────────────────────────────
         plugins: [
           admin(),   // /api/auth/admin/* management endpoints
-          apiKey(),  // /api/auth/api-key/* CRUD + verify endpoints
+          // API Key CRUD endpoints. We pass two configs: one for personal keys, one for org keys.
+          apiKey([
+            { configId: "personal", references: "user" },
+            { configId: "organization", references: "organization" }
+          ]),
 
           // TOTP + email OTP 2FA
           twoFactor({
@@ -181,9 +185,8 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
             enabled: true,
             maxAge: 5 * 60,              // 5-minute encrypted cookie = JWT access token
             strategy: "jwe",             // fully encrypted — session data hidden from client
-            refreshCache: {
-              updateAge: 60,             // refresh cookie when < 60 s remain (seamless UX)
-            },
+            // refreshCache is intentionally omitted: it's stateless-only and
+            // conflicts with D1 + KV secondary storage (Better Auth would warn).
           },
         },
 

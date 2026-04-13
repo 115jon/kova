@@ -1,6 +1,6 @@
-import { apiKey } from "@/lib/auth-client";
+import { apiKey, useActiveOrganization } from "@/lib/auth-client";
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertCircle, Check, Copy, Key, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { AlertCircle, Building2, Check, Copy, Key, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/api-keys")({
@@ -108,7 +108,7 @@ function KeyRevealModal({ keyValue, onClose }: { keyValue: string; onClose: () =
 
 // ── Create key form ───────────────────────────────────────────────────────────
 
-function CreateKeyForm({ onCreated }: { onCreated: (key: string) => void }) {
+function CreateKeyForm({ organizationId, onCreated }: { organizationId: string | null; onCreated: (key: string) => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [expiry, setExpiry] = useState("never");
@@ -131,16 +131,21 @@ function CreateKeyForm({ onCreated }: { onCreated: (key: string) => void }) {
     try {
       const result = await apiKey.create({
         name: name.trim(),
+        configId: organizationId ? "organization" : "personal",
         ...(expiry !== "never" ? { expiresIn: parseInt(expiry) } : {}),
+        ...(organizationId ? { organizationId } : {}),
       });
       if (result.error) throw new Error(result.error.message ?? "Failed to create key");
-      const rawKey = result.data?.key ?? result.data?.id;
+      // `key` is the plaintext secret — only present on creation response
+      const rawKey = result.data?.key;
+      if (!rawKey) throw new Error("Key created but server did not return the plaintext value — check the API key plugin version");
       onCreated(rawKey);
       setName("");
       setExpiry("never");
       setOpen(false);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to create API key");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to create API key";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -222,35 +227,47 @@ function CreateKeyForm({ onCreated }: { onCreated: (key: string) => void }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 function ApiKeysPage() {
+  const { data: activeOrg } = useActiveOrganization();
+  const activeOrgId = activeOrg?.id ?? null;
+
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [revealKey, setRevealKey] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const loadKeys = useCallback(async () => {
+  const loadKeys = useCallback(async (orgId: string | null) => {
     setLoading(true);
     setError("");
     try {
-      const res = await apiKey.list({ query: { sortBy: "createdAt", sortDirection: "desc" } });
+      const res = await apiKey.list({
+        query: {
+          configId: orgId ? "organization" : "personal",
+          sortBy: "createdAt",
+          sortDirection: "desc",
+          ...(orgId ? { organizationId: orgId } : {}),
+        },
+      });
       if (res.error) throw new Error(res.error.message);
       setKeys(res.data?.apiKeys ?? []);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to load API keys");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to load API keys";
+      setError(msg);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadKeys(); }, [loadKeys]);
+  useEffect(() => { loadKeys(activeOrgId); }, [loadKeys, activeOrgId]);
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
       await apiKey.delete({ keyId: id });
       setKeys(k => k.filter(x => x.id !== id));
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to revoke key");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to revoke key";
+      setError(msg);
     } finally {
       setDeletingId(null);
     }
@@ -259,7 +276,7 @@ function ApiKeysPage() {
   return (
     <div className="animate-in">
       {revealKey && (
-        <KeyRevealModal keyValue={revealKey} onClose={() => { setRevealKey(null); loadKeys(); }} />
+        <KeyRevealModal keyValue={revealKey} onClose={() => { setRevealKey(null); loadKeys(activeOrgId); }} />
       )}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
@@ -267,16 +284,19 @@ function ApiKeysPage() {
           <h1 style={{ fontSize: "1.4rem", fontWeight: 700, color: "#e2e8f0", letterSpacing: "-0.02em" }}>
             API Keys
           </h1>
-          <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 2 }}>
-            Server-to-server access tokens — shown once on creation
+          <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
+            {activeOrg
+              ? (<><Building2 size={13} /><span>Keys for <strong style={{ color: "#94a3b8" }}>{activeOrg.name}</strong></span></>)
+              : "Server-to-server access tokens — shown once on creation"
+            }
           </p>
         </div>
-        <button className="btn btn-ghost" onClick={loadKeys} disabled={loading} title="Refresh">
+        <button className="btn btn-ghost" onClick={() => loadKeys(activeOrgId)} disabled={loading} title="Refresh">
           <RotateCcw size={14} className={loading ? "spin" : ""} />
         </button>
       </div>
 
-      <CreateKeyForm onCreated={(key) => setRevealKey(key)} />
+      <CreateKeyForm organizationId={activeOrgId} onCreated={(key) => setRevealKey(key)} />
 
       {error && (
         <div style={{
