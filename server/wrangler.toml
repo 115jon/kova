@@ -1,0 +1,31 @@
+name = "ralph-auth-server"
+main = "src/index.ts"
+compatibility_date = "2026-04-12"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Override AUTH_URL via wrangler secret put in prod
+AUTH_URL = "http://localhost:8787"
+
+# ── D1 Database ─────────────────────────────────────────────
+[[d1_databases]]
+binding = "DB"
+database_name = "ralph-auth-db"
+database_id = "aefbb49d-1582-4052-bd4e-77e5d559a3c6"
+
+# ── KV Session Cache ─────────────────────────────────────────
+[[kv_namespaces]]
+binding = "KV"
+id = "aecb44a2caff4a65a65a6f5c8e5c375e"
+
+# ── R2 Avatar Storage ────────────────────────────────────────
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "ralph-auth-avatars"
+
+[dev]
+port = 8787
+
+[observability.logs]
+enabled = true
+invocation_logs = true

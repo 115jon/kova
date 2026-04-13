@@ -1,0 +1,23 @@
+{
+  "name": "server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "migrate:local": "wrangler d1 migrations apply ralph-auth-db --local",
+    "migrate:prod": "wrangler d1 migrations apply ralph-auth-db --remote",
+    "generate": "better-auth generate --output src/db/migrations"
+  },
+  "dependencies": {
+    "better-auth": "^1.6.2",
+    "better-auth-cloudflare": "^0.3.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260214.0",
+    "typescript": "^5",
+    "wrangler": "^4"
+  }
+}

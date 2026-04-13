@@ -1,0 +1,7 @@
+packages:
+  - 'server'
+  - 'dashboard'
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
