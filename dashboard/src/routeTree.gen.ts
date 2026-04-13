@@ -14,6 +14,7 @@ import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as OauthAppsRouteImport } from './routes/oauth-apps'
+import { Route as AuthErrorRouteImport } from './routes/auth-error'
 import { Route as ApiKeysRouteImport } from './routes/api-keys'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -42,6 +43,11 @@ const OauthAppsRoute = OauthAppsRouteImport.update({
   path: '/oauth-apps',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthErrorRoute = AuthErrorRouteImport.update({
+  id: '/auth-error',
+  path: '/auth-error',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiKeysRoute = ApiKeysRouteImport.update({
   id: '/api-keys',
   path: '/api-keys',
@@ -56,6 +62,7 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
+  '/auth-error': typeof AuthErrorRoute
   '/oauth-apps': typeof OauthAppsRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
+  '/auth-error': typeof AuthErrorRoute
   '/oauth-apps': typeof OauthAppsRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
+  '/auth-error': typeof AuthErrorRoute
   '/oauth-apps': typeof OauthAppsRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/api-keys'
+    | '/auth-error'
     | '/oauth-apps'
     | '/sessions'
     | '/settings'
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/api-keys'
+    | '/auth-error'
     | '/oauth-apps'
     | '/sessions'
     | '/settings'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/api-keys'
+    | '/auth-error'
     | '/oauth-apps'
     | '/sessions'
     | '/settings'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiKeysRoute: typeof ApiKeysRoute
+  AuthErrorRoute: typeof AuthErrorRoute
   OauthAppsRoute: typeof OauthAppsRoute
   SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
@@ -158,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OauthAppsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth-error': {
+      id: '/auth-error'
+      path: '/auth-error'
+      fullPath: '/auth-error'
+      preLoaderRoute: typeof AuthErrorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api-keys': {
       id: '/api-keys'
       path: '/api-keys'
@@ -178,6 +198,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiKeysRoute: ApiKeysRoute,
+  AuthErrorRoute: AuthErrorRoute,
   OauthAppsRoute: OauthAppsRoute,
   SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,

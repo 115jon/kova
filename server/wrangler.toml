@@ -6,6 +6,8 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 # Override AUTH_URL via wrangler secret put in prod
 AUTH_URL = "http://localhost:8787"
+# Dashboard URL — used for onAPIError redirects. Override in prod.
+DASHBOARD_URL = "http://localhost:5174"
 
 # ── D1 Database ─────────────────────────────────────────────
 [[d1_databases]]

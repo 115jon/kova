@@ -128,9 +128,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const location = useLocation();
-  const isSignIn = location.pathname === "/sign-in";
+  const isPublic = location.pathname === "/sign-in" || location.pathname === "/auth-error";
 
-  if (isSignIn) {
+  if (isPublic) {
     return <Outlet />;
   }
 

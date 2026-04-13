@@ -50,6 +50,13 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         baseURL: env.AUTH_URL,
         basePath: "/api/auth",
 
+        // ── Error page ───────────────────────────────────────────
+        // Redirect OAuth/API errors to our dashboard's /auth-error page
+        // instead of showing Better Auth's raw internal error screen.
+        onAPIError: {
+          errorURL: `${env.DASHBOARD_URL}/auth-error`,
+        },
+
         // ── Email + Password ──────────────────────────────────────
         emailAndPassword: {
           enabled: true,
