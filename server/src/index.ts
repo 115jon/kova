@@ -1,4 +1,5 @@
 import { hashPassword } from "better-auth/crypto";
+import { logAudit, queryAuditLogs } from "./audit";
 import { createAuth } from "./auth";
 import { validatePassword } from "./password";
 
@@ -160,6 +161,17 @@ export default {
         .bind(accountId, session.user.email, session.user.id, hashed, now, now)
         .run();
 
+      // 6. Audit: user set their initial password
+      await logAudit(env.DB, {
+        userId: session.user.id,
+        actor: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        action: "user.passwordSet",
+        ipAddress: request.headers.get("CF-Connecting-IP"),
+        userAgent: request.headers.get("User-Agent"),
+      });
+
       return withHeaders(Response.json({ success: true }), request);
     }
 
@@ -167,6 +179,49 @@ export default {
     // Minimal response — no service name or timestamp to avoid info leakage.
     if (url.pathname === "/health") {
       return withHeaders(Response.json({ status: "ok" }), request);
+    }
+
+    // ── Audit log query ───────────────────────────────────────
+    //
+    // GET /api/audit/logs
+    //   ?userId=   filter by subject user
+    //   ?orgId=    filter by organization
+    //   ?action=   exact action or prefix (e.g. "user.*")
+    //   ?limit=    max rows (1-200, defaults to 50)
+    //   ?before=   opaque cursor from previous response for next-page
+    //
+    // Admin-only — 403 if caller is not role:admin.
+    if (url.pathname === "/api/audit/logs" && request.method === "GET") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const role = (session.user as { role?: string }).role ?? "";
+      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      const params = url.searchParams;
+      const { logs, nextCursor } = await queryAuditLogs(env.DB, {
+        userId: params.get("userId") ?? undefined,
+        orgId: params.get("orgId") ?? undefined,
+        action: params.get("action") ?? undefined,
+        before: params.get("before") ?? null,
+        limit: params.get("limit") ? Number(params.get("limit")) : 50,
+      });
+
+      // Parse metadata back from JSON string before sending to client
+      const parsed = logs.map(row => ({
+        ...row,
+        metadata: row.metadata ? JSON.parse(row.metadata) : null,
+      }));
+
+      return withHeaders(
+        Response.json({ logs: parsed, nextCursor }),
+        request
+      );
     }
 
     return withHeaders(new Response("Not found", { status: 404 }), request);

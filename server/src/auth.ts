@@ -2,6 +2,7 @@ import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
 import { admin, organization, twoFactor } from "better-auth/plugins";
+import { logAudit } from "./audit";
 import { invitationEmail, resetPasswordEmail, sendEmail, twoFactorOtpEmail, verificationEmail } from "./email";
 
 /**
@@ -99,6 +100,67 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
                 if (adminEmails.length && adminEmails.includes((user.email ?? "").toLowerCase())) {
                   return { data: { ...user, role: "admin" } };
                 }
+              },
+              after: async (user: { id: string; name?: string | null; email?: string }) => {
+                // A new user account was created (sign-up)
+                await logAudit(env.DB, {
+                  userId: user.id,
+                  actor: user.id,
+                  actorName: user.name ?? null,
+                  actorEmail: user.email ?? null,
+                  action: "user.signUp",
+                }).catch(() => { }); // non-fatal
+              },
+            },
+          },
+          session: {
+            create: {
+              after: async (session: {
+                userId: string;
+                ipAddress?: string | null;
+                userAgent?: string | null;
+              }) => {
+                // The session object only carries userId — look up name+email to
+                // populate the actor columns so the audit log shows a real name.
+                const user = await env.DB
+                  .prepare('SELECT name, email FROM "user" WHERE id = ? LIMIT 1')
+                  .bind(session.userId)
+                  .first<{ name: string; email: string }>()
+                  .catch(() => null);
+
+                await logAudit(env.DB, {
+                  userId: session.userId,
+                  actor: session.userId,
+                  actorName: user?.name ?? null,
+                  actorEmail: user?.email ?? null,
+                  action: "user.signIn",
+                  ipAddress: session.ipAddress ?? null,
+                  userAgent: session.userAgent ?? null,
+                }).catch(() => { }); // non-fatal — never block login
+              },
+            },
+            delete: {
+              after: async (session: {
+                userId: string;
+                ipAddress?: string | null;
+                userAgent?: string | null;
+              }) => {
+                // Look up user — may still exist after session deletion
+                const user = await env.DB
+                  .prepare('SELECT name, email FROM "user" WHERE id = ? LIMIT 1')
+                  .bind(session.userId)
+                  .first<{ name: string; email: string }>()
+                  .catch(() => null);
+
+                await logAudit(env.DB, {
+                  userId: session.userId,
+                  actor: session.userId,
+                  actorName: user?.name ?? null,
+                  actorEmail: user?.email ?? null,
+                  action: "user.signOut",
+                  ipAddress: session.ipAddress ?? null,
+                  userAgent: session.userAgent ?? null,
+                }).catch(() => { }); // non-fatal
               },
             },
           },
