@@ -15,6 +15,13 @@ import { admin } from "better-auth/plugins";
  *   - Second arg: standard BetterAuth config (providers, plugins, etc.)
  *   withCloudflare sets `database` internally from d1Native — don't
  *   set it again in the second arg or it will conflict.
+ *
+ * NOTE on hooks — the top-level hooks.after API in Better Auth 1.6.x
+ * expects a plain createAuthMiddleware fn, NOT the { matcher, handler }
+ * plugin-pattern. Admin role promotion is done via the admin plugin's
+ * REST API (/api/auth/admin/set-role) after the first sign-up, which
+ * is more reliable and avoids runtime type mismatches entirely.
+ * See: server/src/admin-setup.ts for the one-time promotion helper.
  */
 export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
   return betterAuth(
@@ -85,6 +92,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         trustedOrigins: [
           "http://localhost:3000",
           "http://localhost:5173",
+          "http://localhost:5174",  // dashboard dev server
           "http://localhost:8787",  // wrangler dev server itself
           "http://localhost:8888",  // ralph-meet dev port
           "https://ralph-meet.workers.dev",
