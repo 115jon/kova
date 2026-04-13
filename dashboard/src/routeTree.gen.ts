@@ -18,7 +18,7 @@ import { Route as OauthAppsRouteImport } from './routes/oauth-apps'
 import { Route as AuthErrorRouteImport } from './routes/auth-error'
 import { Route as ApiKeysRouteImport } from './routes/api-keys'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as OrganizationsOrgIdRouteImport } from './routes/organizations.$orgId'
+import { Route as OrganizationsOrgIdRouteImport } from './routes/organizations_.$orgId'
 import { Route as AcceptInvitationInvitationIdRouteImport } from './routes/accept-invitation.$invitationId'
 
 const UsersRoute = UsersRouteImport.update({
@@ -67,9 +67,9 @@ const IndexRoute = IndexRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrganizationsOrgIdRoute = OrganizationsOrgIdRouteImport.update({
-  id: '/$orgId',
-  path: '/$orgId',
-  getParentRoute: () => OrganizationsRoute,
+  id: '/organizations_/$orgId',
+  path: '/organizations/$orgId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AcceptInvitationInvitationIdRoute =
   AcceptInvitationInvitationIdRouteImport.update({
@@ -83,7 +83,7 @@ export interface FileRoutesByFullPath {
   '/api-keys': typeof ApiKeysRoute
   '/auth-error': typeof AuthErrorRoute
   '/oauth-apps': typeof OauthAppsRoute
-  '/organizations': typeof OrganizationsRouteWithChildren
+  '/organizations': typeof OrganizationsRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
@@ -96,7 +96,7 @@ export interface FileRoutesByTo {
   '/api-keys': typeof ApiKeysRoute
   '/auth-error': typeof AuthErrorRoute
   '/oauth-apps': typeof OauthAppsRoute
-  '/organizations': typeof OrganizationsRouteWithChildren
+  '/organizations': typeof OrganizationsRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
@@ -110,13 +110,13 @@ export interface FileRoutesById {
   '/api-keys': typeof ApiKeysRoute
   '/auth-error': typeof AuthErrorRoute
   '/oauth-apps': typeof OauthAppsRoute
-  '/organizations': typeof OrganizationsRouteWithChildren
+  '/organizations': typeof OrganizationsRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/users': typeof UsersRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
-  '/organizations/$orgId': typeof OrganizationsOrgIdRoute
+  '/organizations_/$orgId': typeof OrganizationsOrgIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -157,7 +157,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/users'
     | '/accept-invitation/$invitationId'
-    | '/organizations/$orgId'
+    | '/organizations_/$orgId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -165,12 +165,13 @@ export interface RootRouteChildren {
   ApiKeysRoute: typeof ApiKeysRoute
   AuthErrorRoute: typeof AuthErrorRoute
   OauthAppsRoute: typeof OauthAppsRoute
-  OrganizationsRoute: typeof OrganizationsRouteWithChildren
+  OrganizationsRoute: typeof OrganizationsRoute
   SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
   UsersRoute: typeof UsersRoute
   AcceptInvitationInvitationIdRoute: typeof AcceptInvitationInvitationIdRoute
+  OrganizationsOrgIdRoute: typeof OrganizationsOrgIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -238,12 +239,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/organizations/$orgId': {
-      id: '/organizations/$orgId'
-      path: '/$orgId'
+    '/organizations_/$orgId': {
+      id: '/organizations_/$orgId'
+      path: '/organizations/$orgId'
       fullPath: '/organizations/$orgId'
       preLoaderRoute: typeof OrganizationsOrgIdRouteImport
-      parentRoute: typeof OrganizationsRoute
+      parentRoute: typeof rootRouteImport
     }
     '/accept-invitation/$invitationId': {
       id: '/accept-invitation/$invitationId'
@@ -255,29 +256,18 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface OrganizationsRouteChildren {
-  OrganizationsOrgIdRoute: typeof OrganizationsOrgIdRoute
-}
-
-const OrganizationsRouteChildren: OrganizationsRouteChildren = {
-  OrganizationsOrgIdRoute: OrganizationsOrgIdRoute,
-}
-
-const OrganizationsRouteWithChildren = OrganizationsRoute._addFileChildren(
-  OrganizationsRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiKeysRoute: ApiKeysRoute,
   AuthErrorRoute: AuthErrorRoute,
   OauthAppsRoute: OauthAppsRoute,
-  OrganizationsRoute: OrganizationsRouteWithChildren,
+  OrganizationsRoute: OrganizationsRoute,
   SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
   UsersRoute: UsersRoute,
   AcceptInvitationInvitationIdRoute: AcceptInvitationInvitationIdRoute,
+  OrganizationsOrgIdRoute: OrganizationsOrgIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-export const Route = createFileRoute("/organizations/$orgId")({
+export const Route = createFileRoute("/organizations_/$orgId")({
   component: OrgDetailPage,
 });
 
