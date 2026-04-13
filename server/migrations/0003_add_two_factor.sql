@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS `twoFactor` (
   `id`          TEXT    NOT NULL PRIMARY KEY,
   `secret`      TEXT    NOT NULL,
   `backupCodes` TEXT    NOT NULL,
-  `userId`      TEXT    NOT NULL REFERENCES `user`(`id`) ON DELETE CASCADE
+  `userId`      TEXT    NOT NULL REFERENCES `user`(`id`) ON DELETE CASCADE,
+  `verified`    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS `twoFactor_userId` ON `twoFactor` (`userId`);

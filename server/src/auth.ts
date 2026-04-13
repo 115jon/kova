@@ -140,7 +140,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
           updateAge: 60 * 60 * 24,       // refresh if > 1 day old
           cookieCache: {
             enabled: true,
-            maxAge: 60 * 5, // 5 min client-side cache reduces D1 reads
+            maxAge: 60, // KV minimum TTL is 60s; this avoids the "TTL < 60s" warning
           },
         },
 
