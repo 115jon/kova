@@ -1,5 +1,5 @@
 import { ProviderIcon } from "@/components/BrandIcons";
-import { authClient, getSession, signIn } from "@/lib/auth-client";
+import { getSession, signIn, twoFactor } from "@/lib/auth-client";
 import { CONFIGURED_PROVIDERS } from "@/lib/providers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertCircle, KeyRound, Shield, Smartphone } from "lucide-react";
@@ -24,11 +24,11 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
     setError("");
     setLoading(true);
     try {
-      let result: any;
+      let result: Awaited<ReturnType<typeof twoFactor.verifyTotp>> | Awaited<ReturnType<typeof twoFactor.verifyOtp>>;
       if (method === "totp") {
-        result = await (authClient as any).twoFactor.verifyTotp({ code });
+        result = await twoFactor.verifyTotp({ code });
       } else {
-        result = await (authClient as any).twoFactor.verifyOtp({ code });
+        result = await twoFactor.verifyOtp({ code });
       }
       if (result?.error) throw new Error(result.error.message ?? "Invalid code");
       // Refresh the Better Auth session store so AuthGuard.useSession()
@@ -46,7 +46,7 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
   const handleSendOtp = async () => {
     setError("");
     try {
-      await (authClient as any).twoFactor.sendOtp();
+      await twoFactor.sendOtp();
       setOtpSent(true);
     } catch (e: any) {
       setError(e?.message ?? "Failed to send code");

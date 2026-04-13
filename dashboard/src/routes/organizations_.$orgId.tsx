@@ -1,4 +1,4 @@
-import { authClient } from "@/lib/auth-client";
+import { organization } from "@/lib/auth-client";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle, ArrowLeft, CheckCircle,
@@ -33,7 +33,7 @@ function InviteModal({ orgId, onClose, onInvited }: { orgId: string; onClose: ()
     e.preventDefault();
     setError(""); setLoading(true);
     try {
-      const res = await (authClient as any).organization.inviteMember({
+      const res = await organization.inviteMember({
         email, role, organizationId: orgId,
       });
       if (res.error) throw new Error(res.error.message);
@@ -123,9 +123,9 @@ function OrgDetailPage() {
     setLoading(true);
     try {
       const [orgRes, membersRes, invitesRes] = await Promise.all([
-        (authClient as any).organization.getFullOrganization({ organizationId: orgId }),
-        (authClient as any).organization.listMembers({ organizationId: orgId }),
-        (authClient as any).organization.listInvitations({ organizationId: orgId }),
+        organization.getFullOrganization({ query: { organizationId: orgId } }),
+        organization.listMembers({ query: { organizationId: orgId } }),
+        organization.listInvitations({ query: { organizationId: orgId } }),
       ]);
       const orgData = orgRes.data;
       if (orgData) {
@@ -133,8 +133,8 @@ function OrgDetailPage() {
         setEditName(orgData.name ?? "");
         setEditSlug(orgData.slug ?? "");
       }
-      setMembers(membersRes.data ?? []);
-      setInvitations(invitesRes.data ?? []);
+      setMembers((membersRes.data as any)?.members ?? membersRes.data ?? []);
+      setInvitations((invitesRes.data as any) ?? []);
     } finally {
       setLoading(false);
     }
@@ -143,17 +143,17 @@ function OrgDetailPage() {
   useEffect(() => { fetchOrg(); }, [orgId]);
 
   const handleRemoveMember = async (memberId: string) => {
-    await (authClient as any).organization.removeMember({ memberId, organizationId: orgId });
+    await organization.removeMember({ memberIdOrEmail: memberId, organizationId: orgId });
     setMembers(m => m.filter(x => x.id !== memberId));
   };
 
   const handleChangeRole = async (memberId: string, role: string) => {
-    await (authClient as any).organization.updateMemberRole({ memberId, role, organizationId: orgId });
+    await organization.updateMemberRole({ memberId, role, organizationId: orgId });
     setMembers(m => m.map(x => x.id === memberId ? { ...x, role } : x));
   };
 
   const handleCancelInvite = async (inviteId: string) => {
-    await (authClient as any).organization.cancelInvitation({ invitationId: inviteId });
+    await organization.cancelInvitation({ invitationId: inviteId });
     setInvitations(i => i.filter(x => x.id !== inviteId));
   };
 
@@ -161,7 +161,7 @@ function OrgDetailPage() {
     e.preventDefault();
     setSaveErr(""); setSaveMsg(""); setSaveLoading(true);
     try {
-      const res = await (authClient as any).organization.update({
+      const res = await organization.update({
         organizationId: orgId,
         data: { name: editName, slug: editSlug },
       });
@@ -178,7 +178,7 @@ function OrgDetailPage() {
 
   const handleDeleteOrg = async () => {
     if (!confirm(`Delete "${org?.name}"? This is irreversible.`)) return;
-    await (authClient as any).organization.delete({ organizationId: orgId });
+    await organization.delete({ organizationId: orgId });
     navigate({ to: "/organizations" as any });
   };
 

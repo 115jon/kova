@@ -1,4 +1,4 @@
-import { authClient } from "@/lib/auth-client";
+import { organization } from "@/lib/auth-client";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Building2, ChevronRight, Crown, Plus, Shield } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -33,7 +33,8 @@ function CreateOrgModal({ onClose, onCreated }: { onClose: () => void; onCreated
     if (!name.trim()) return;
     setError(""); setLoading(true);
     try {
-      const res = await (authClient as any).organization.create({ name: name.trim(), slug: slug || undefined });
+      const resolvedSlug = slug.trim() || name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const res = await organization.create({ name: name.trim(), slug: resolvedSlug });
       if (res.error) throw new Error(res.error.message);
       onCreated();
       onClose();
@@ -117,7 +118,7 @@ function OrganizationsPage() {
   const fetchOrgs = async () => {
     setLoading(true);
     try {
-      const res = await (authClient as any).organization.list();
+      const res = await organization.list();
       if (!res.error) setOrgs(res.data ?? []);
     } finally {
       setLoading(false);

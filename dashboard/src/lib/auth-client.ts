@@ -24,13 +24,23 @@ export const authClient = createAuthClient({
   },
 });
 
-
 export const {
   signIn,
   signOut,
   useSession,
   getSession,  // imperative fetch — call after TOTP to refresh the session store
 } = authClient;
+
+// ── Typed plugin accessors ────────────────────────────────────────────────────
+// Use these instead of `(authClient as any).pluginName` in route components.
+// TypeScript will catch typos in method names and wrong argument shapes.
+export const twoFactor = authClient.twoFactor;
+export const organization = authClient.organization;
+export const apiKey = authClient.apiKey;
+export const admin = authClient.admin;
+
+/** List OAuth + credential accounts linked to the current user. */
+export const listAccounts = () => authClient.listAccounts();
 
 // Exported for direct use in components (e.g. building OAuth redirect URLs)
 export { AUTH_URL };

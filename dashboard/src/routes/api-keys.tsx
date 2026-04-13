@@ -1,4 +1,4 @@
-import { authClient } from "@/lib/auth-client";
+import { apiKey } from "@/lib/auth-client";
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertCircle, Check, Copy, Key, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -13,9 +13,9 @@ type ApiKey = {
   start: string | null;
   prefix: string | null;
   enabled: boolean;
-  expiresAt: string | null;
-  createdAt: string;
-  lastRequest: string | null;
+  expiresAt: Date | string | null;
+  createdAt: Date | string;
+  lastRequest: Date | string | null;
   requestCount: number;
 };
 
@@ -129,12 +129,12 @@ function CreateKeyForm({ onCreated }: { onCreated: (key: string) => void }) {
     setError("");
     setLoading(true);
     try {
-      const result = await (authClient as any).apiKey.create({
+      const result = await apiKey.create({
         name: name.trim(),
         ...(expiry !== "never" ? { expiresIn: parseInt(expiry) } : {}),
       });
       if (result.error) throw new Error(result.error.message ?? "Failed to create key");
-      const rawKey = result.data?.key ?? result.data?.keyValue ?? result.data?.id;
+      const rawKey = result.data?.key ?? result.data?.id;
       onCreated(rawKey);
       setName("");
       setExpiry("never");
@@ -232,7 +232,7 @@ function ApiKeysPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await (authClient as any).apiKey.list({ query: { sortBy: "createdAt", sortDirection: "desc" } });
+      const res = await apiKey.list({ query: { sortBy: "createdAt", sortDirection: "desc" } });
       if (res.error) throw new Error(res.error.message);
       setKeys(res.data?.apiKeys ?? []);
     } catch (e: any) {
@@ -247,7 +247,7 @@ function ApiKeysPage() {
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     try {
-      await (authClient as any).apiKey.delete({ body: { keyId: id } });
+      await apiKey.delete({ keyId: id });
       setKeys(k => k.filter(x => x.id !== id));
     } catch (e: any) {
       setError(e?.message ?? "Failed to revoke key");
@@ -344,16 +344,16 @@ function ApiKeysPage() {
                     </code>
                   </td>
                   <td style={{ padding: "12px 16px", fontSize: "0.82rem", color: "#64748b" }}>
-                    {fmt(k.createdAt)}
+                    {fmt(String(k.createdAt))}
                   </td>
                   <td style={{ padding: "12px 16px", fontSize: "0.82rem", color: "#64748b" }}>
                     {k.expiresAt
-                      ? <span style={{ color: new Date(k.expiresAt) < new Date() ? "#f87171" : "#64748b" }}>{fmt(k.expiresAt)}</span>
+                      ? <span style={{ color: new Date(k.expiresAt) < new Date() ? "#f87171" : "#64748b" }}>{fmt(String(k.expiresAt))}</span>
                       : <span className="badge badge-gray">Never</span>
                     }
                   </td>
                   <td style={{ padding: "12px 16px", fontSize: "0.82rem", color: "#64748b" }}>
-                    {relativeTime(k.lastRequest)}
+                    {relativeTime(k.lastRequest ? String(k.lastRequest) : null)}
                     {k.requestCount > 0 && (
                       <span style={{ marginLeft: 6, fontSize: "0.72rem", color: "#475569" }}>
                         ({k.requestCount.toLocaleString()} reqs)

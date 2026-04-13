@@ -154,23 +154,65 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         ],
 
         // ── Session ───────────────────────────────────────────────
+        //
+        // Architecture: hybrid stateful + JWE cookie cache
+        //
+        //  • D1 is source of truth — enables immediate revocation (ban user,
+        //    revoke session, password change) which pure stateless JWT can't do.
+        //  • JWE cookie cache acts as a short-lived encrypted "access token":
+        //    the server validates the cookie without a DB round-trip for the
+        //    vast majority of requests, hitting D1 only when the cookie expires.
+        //  • "jwe" strategy = fully encrypted (A256CBC-HS512 + HKDF).
+        //    Neither the user nor a network observer can read the session data.
+        //  • 5-minute cache means a revoked session is invalid within 5 minutes
+        //    on all devices — a good balance between performance and security.
+        //
+        // Why not fully stateless (no DB)?
+        //   We need instant ban/revoke for admin users. Stateless JWTs cannot
+        //   be invalidated before their TTL expires. The JWE cache gives us
+        //   JWT-equivalent performance while preserving the revocation guarantee.
         session: {
-          expiresIn: 60 * 60 * 24 * 30, // 30 days
-          updateAge: 60 * 60 * 24,       // refresh if > 1 day old
+          expiresIn: 60 * 60 * 24 * 7,   // 7-day hard cap (was 30 days)
+          updateAge: 0,                    // disable sliding window — no auto-extend
+          disableSessionRefresh: true,     // sessions are fixed-duration, not rolling
+          freshAge: 60 * 10,              // re-auth required for sensitive ops within 10 min
+
           cookieCache: {
             enabled: true,
-            maxAge: 60, // KV minimum TTL is 60s; this avoids the "TTL < 60s" warning
+            maxAge: 5 * 60,              // 5-minute encrypted cookie = JWT access token
+            strategy: "jwe",             // fully encrypted — session data hidden from client
+            refreshCache: {
+              updateAge: 60,             // refresh cookie when < 60 s remain (seamless UX)
+            },
           },
         },
 
+
         // ── Trusted origins (CORS) ────────────────────────────────
+        //
+        // ⚠️  PRODUCTION NOTE: Also update ALLOWED_ORIGINS in index.ts.
+        //     Auth server will be reachable at:
+        //       https://auth.115jon.site
+        //       https://ralph-auth.jontitor.workers.dev
+        //     TODO: add production dashboard Pages URL once deployed, e.g.:
+        //       "https://ralph-auth-dashboard.pages.dev"
+        // ────────────────────────────────────────────────────────
         trustedOrigins: [
+          // Dev
           "http://localhost:3000",
           "http://localhost:5173",
           "http://localhost:5174",  // dashboard dev server
           "http://localhost:8787",  // wrangler dev server itself
           "http://localhost:8888",  // ralph-meet dev port
-          "https://ralph-meet.workers.dev",
+          // Production — auth server self (needed for server-side calls)
+          "https://auth.115jon.site",
+          "https://ralph-auth.jontitor.workers.dev",
+          // Production — external consumers
+          "https://meet.115jon.site",
+          "https://ralph-meet.jontitor.workers.dev",
+          // Production dashboard
+          "https://ralph-auth-dashboard.jontitor.workers.dev",
+          // "https://dash.115jon.site",  // uncomment if you add a custom domain
         ],
       }
     )

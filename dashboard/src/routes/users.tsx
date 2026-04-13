@@ -29,6 +29,7 @@ function UsersPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [actionUser, setActionUser] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -51,14 +52,22 @@ function UsersPage() {
 
   const action = async (endpoint: string, body: object, userId: string) => {
     setActionUser(userId);
+    setActionError("");
     try {
-      await fetch(`/api/auth/admin/${endpoint}`, {
+      const res = await fetch(`/api/auth/admin/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify(body),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText })) as { message?: string };
+        setActionError(err.message ?? `Action failed (${res.status})`);
+        return;
+      }
       load();
+    } catch (e: any) {
+      setActionError(e?.message ?? "Network error — action may not have completed");
     } finally {
       setActionUser(null);
     }
@@ -98,6 +107,17 @@ function UsersPage() {
           onChange={e => { setSearch(e.target.value); setPage(0); }}
         />
       </div>
+
+      {/* Action error banner */}
+      {actionError && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
+          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
+          borderRadius: 8, padding: "10px 14px", color: "#f87171", fontSize: "0.83rem",
+        }}>
+          <Ban size={14} /> {actionError}
+        </div>
+      )}
 
       {/* Table */}
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>

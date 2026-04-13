@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "deploy": "vite build && wrangler pages deploy dist --project-name=ralph-auth-dashboard",
+    "deploy": "vite build && wrangler deploy",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
@@ -29,6 +29,7 @@
     "@cloudflare/workers-types": "^4.20260214.0",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/router-plugin": "^1.167.20",
+    "@types/node": "^25.6.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.1.4",

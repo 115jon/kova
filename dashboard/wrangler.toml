@@ -1,0 +1,19 @@
+name = "ralph-auth-dashboard"
+compatibility_date = "2026-04-12"
+compatibility_flags = ["nodejs_compat"]
+
+# This worker serves the dashboard SPA as static assets via Cloudflare Workers Assets.
+# Deploy with: pnpm --filter dashboard deploy
+# URL: https://ralph-auth-dashboard.jontitor.workers.dev
+#      (or https://dash.115jon.site if you add a custom domain)
+
+[assets]
+directory = "./dist/client"
+html_handling = "auto-trailing-slash"
+not_found_handling = "single-page-application"
+
+[dev]
+port = 5174
+
+[observability.logs]
+enabled = true

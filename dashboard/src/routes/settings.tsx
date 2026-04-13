@@ -1,5 +1,6 @@
 import { ProviderIcon } from "@/components/BrandIcons";
-import { AUTH_URL, authClient, signOut, useSession } from "@/lib/auth-client";
+import { AUTH_URL, authClient, listAccounts, signOut, twoFactor, useSession } from "@/lib/auth-client";
+import { validatePassword } from "@/lib/password";
 import type { ProviderId } from "@/lib/providers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
@@ -21,8 +22,8 @@ function useLinkedAccounts() {
 
   useEffect(() => {
     setReady(false);
-    (authClient as any).listAccounts()
-      .then((res: any) => { setAccounts(res.data ?? []); })
+    listAccounts()
+      .then((res) => { setAccounts((res.data as LinkedAccount[]) ?? []); })
       .catch(() => setAccounts([]))
       .finally(() => setReady(true));
   }, [tick]);
@@ -69,7 +70,7 @@ function InfoRow({ label, value, mono = false }: { label: string; value: string;
 type TwoFaStep = "idle" | "password" | "qr" | "verify" | "backupCodes" | "done";
 
 function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
-  const { data: session, refetch } = useSession() as any;
+  const { data: session, refetch } = useSession();
   const enabled = !!(session?.user as any)?.twoFactorEnabled;
 
   const [step, setStep] = useState<TwoFaStep>("idle");
@@ -93,7 +94,7 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
     if (!pwd) { setError("Password is required"); return; }
     setError(""); setLoading(true);
     try {
-      const res = await (authClient as any).twoFactor.enable({ password: pwd });
+      const res = await twoFactor.enable({ password: pwd });
       if (res.error) throw new Error(res.error.message);
       const uri: string = res.data?.totpURI ?? "";
       setTotpUri(uri);
@@ -112,7 +113,7 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
     if (verifyCode.length < 6) return;
     setError(""); setLoading(true);
     try {
-      const res = await (authClient as any).twoFactor.verifyTotp({ code: verifyCode });
+      const res = await twoFactor.verifyTotp({ code: verifyCode });
       if (res.error) throw new Error(res.error.message);
       setStep("backupCodes");
       refetch?.();
@@ -128,7 +129,7 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
     setError(""); setLoading(true);
     try {
       const body = hasCredential && pwd ? { password: pwd } : {};
-      const res = await (authClient as any).twoFactor.disable(body);
+      const res = await twoFactor.disable(body);
       if (res.error) throw new Error(res.error.message);
       reset();
       refetch?.();
@@ -374,13 +375,15 @@ function CredentialsSection({ hasCredential, userId, onPasswordSet }: {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (next !== confirm) { setError("Passwords don't match"); return; }
-    if (next.length < 8) { setError("Password must be at least 8 characters"); return; }
+    // Client-side validation — same rules enforced server-side in set-initial-password
+    const { valid, errors: pwErrors } = validatePassword(next);
+    if (!valid) { setError(pwErrors[0] ?? "Password does not meet requirements"); return; }
     setError(""); setLoading(true);
     try {
       let res: any;
       if (hasCredential) {
         // Existing credential account — changePassword requires currentPassword (Zod-enforced)
-        res = await (authClient as any).changePassword({
+        res = await authClient.changePassword({
           currentPassword: current,
           newPassword: next,
           revokeOtherSessions: true,

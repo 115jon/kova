@@ -1,4 +1,4 @@
-import { authClient } from "@/lib/auth-client";
+import { organization } from "@/lib/auth-client";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Building2, CheckCircle, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -16,10 +16,19 @@ function AcceptInvitationPage() {
 
   useEffect(() => {
     const accept = async () => {
+      // Validate format before hitting the API — prevents garbage/enumeration attempts.
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!UUID_RE.test(invitationId)) {
+        setErrorMsg("Invalid invitation link.");
+        setStatus("error");
+        return;
+      }
       try {
-        const res = await (authClient as any).organization.acceptInvitation({ invitationId });
+        const res = await organization.acceptInvitation({ invitationId });
         if (res.error) throw new Error(res.error.message);
-        setOrgName(res.data?.organization?.name ?? "the organization");
+        // acceptInvitation returns { invitation, member } — organization name
+        // isn't in the response, so show a generic success message.
+        setOrgName("the organization");
         setStatus("success");
         setTimeout(() => navigate({ to: "/organizations" as any }), 2500);
       } catch (e: any) {
