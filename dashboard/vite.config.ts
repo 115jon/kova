@@ -18,10 +18,11 @@ export default defineConfig({
     proxy: {
       // Proxy all auth API calls through Vite in dev — eliminates CORS and
       // cross-origin redirect issues entirely. The browser sees one origin.
+      // Use 127.0.0.1 explicitly — wrangler binds there, and on
+      // Windows 'localhost' may resolve to ::1 (IPv6) instead.
       "/api": {
-        target: "http://localhost:8787",
+        target: "http://127.0.0.1:8787",
         changeOrigin: true,
-        // Don't rewrite the path — keep /api/auth/* as-is
       },
     },
   },
