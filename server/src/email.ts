@@ -139,3 +139,25 @@ export function invitationEmail({
       </div>`,
   };
 }
+
+export function magicLinkEmail(url: string) {
+  return {
+    subject: "Your sign-in link — ralph-auth",
+    html: `
+      <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#0f172a;color:#e2e8f0;border-radius:12px">
+        <div style="margin-bottom:24px">
+          <span style="font-weight:700;font-size:18px">ralph<span style="color:#818cf8">auth</span></span>
+        </div>
+        <h1 style="font-size:20px;font-weight:700;margin-bottom:8px">Sign in to ralph-auth</h1>
+        <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:24px">
+          Click the button below to sign in. This link expires in <strong style="color:#e2e8f0">10 minutes</strong> and can only be used once.
+        </p>
+        <a href="${url}" style="display:inline-block;background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">
+          Sign in →
+        </a>
+        <p style="color:#475569;font-size:12px;margin-top:24px">
+          If you didn't request this link, you can safely ignore this email. Your account is not at risk.
+        </p>
+      </div>`,
+  };
+}

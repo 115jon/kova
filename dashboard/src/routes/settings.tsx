@@ -1,12 +1,12 @@
 import { ProviderIcon } from "@/components/BrandIcons";
-import { AUTH_URL, authClient, listAccounts, signOut, twoFactor, useSession } from "@/lib/auth-client";
+import { AUTH_URL, authClient, listAccounts, passkey, signOut, twoFactor, useSession } from "@/lib/auth-client";
 import { validatePassword } from "@/lib/password";
 import type { ProviderId } from "@/lib/providers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle, Check, CheckCircle, Clock, Copy,
-  Eye, EyeOff, KeyRound, Lock, LogOut, PlusCircle,
-  Server, Settings, Shield, Smartphone, X,
+  Eye, EyeOff, Fingerprint, KeyRound, Lock, LogOut, PlusCircle,
+  Server, Settings, Shield, Smartphone, Trash2, User, X,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
@@ -345,6 +345,208 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
   );
 }
 
+// ── Passkeys Section ─────────────────────────────────────────────────────────
+
+type PasskeyEntry = { id: string; name?: string | null; createdAt?: number | null; deviceType?: string };
+
+function PasskeysSection() {
+  const [passkeys, setPasskeys] = useState<PasskeyEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    passkey
+      .listUserPasskeys()
+      .then((res: Awaited<ReturnType<typeof passkey.listUserPasskeys>>) => setPasskeys((res.data as PasskeyEntry[]) ?? []))
+      .catch(() => setPasskeys([]));
+  }, [tick]);
+
+  const handleAdd = async () => {
+    setError(""); setSuccess(""); setAdding(true);
+    try {
+      const res = await passkey.addPasskey({ name: "My passkey" });
+      if ((res as any)?.error) throw new Error((res as any).error?.message ?? "Registration failed");
+      setSuccess("Passkey registered successfully!");
+      setTick(t => t + 1);
+    } catch (e: any) {
+      if (e?.name !== "NotAllowedError") {
+        setError(e?.message ?? "Registration failed. Please try again.");
+      }
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setError(""); setSuccess("");
+    try {
+      const res = await passkey.deletePasskey({ id });
+      if ((res as any)?.error) throw new Error((res as any).error?.message ?? "Delete failed");
+      setSuccess("Passkey removed.");
+      setTick(t => t + 1);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to remove passkey.");
+    }
+  };
+
+  return (
+    <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <p style={{ fontSize: "0.88rem", fontWeight: 600, color: "#e2e8f0" }}>Registered passkeys</p>
+          <p style={{ fontSize: "0.76rem", color: "#64748b", marginTop: 2 }}>Sign in with Touch ID, Face ID, or a hardware security key.</p>
+        </div>
+        <button
+          id="add-passkey-btn"
+          className="btn btn-primary"
+          disabled={adding}
+          onClick={handleAdd}
+          style={{ fontSize: "0.8rem" }}
+        >
+          <Fingerprint size={13} /> {adding ? "Waiting…" : "Add passkey"}
+        </button>
+      </div>
+
+      {error && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
+          borderRadius: 8, padding: "8px 12px", color: "#f87171", fontSize: "0.8rem",
+        }}>
+          <AlertCircle size={13} /> {error}
+        </div>
+      )}
+      {success && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)",
+          borderRadius: 8, padding: "8px 12px", color: "#22c55e", fontSize: "0.8rem",
+        }}>
+          <CheckCircle size={13} /> {success}
+        </div>
+      )}
+
+      {passkeys.length === 0 ? (
+        <div style={{
+          background: "var(--color-surface-700)", borderRadius: 8, padding: "14px 16px",
+          fontSize: "0.82rem", color: "#475569", textAlign: "center",
+        }}>
+          No passkeys registered yet.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {passkeys.map(pk => (
+            <div
+              key={pk.id}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                background: "var(--color-surface-700)", borderRadius: 8, padding: "10px 14px",
+              }}
+            >
+              <Fingerprint size={16} color="#818cf8" style={{ flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: "0.85rem", color: "#e2e8f0", fontWeight: 500 }}>
+                  {pk.name ?? "Passkey"}
+                </p>
+                {pk.createdAt && (
+                  <p style={{ fontSize: "0.72rem", color: "#475569", marginTop: 1 }}>
+                    Added {new Date(pk.createdAt).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+              <button
+                className="btn btn-ghost"
+                style={{ padding: "4px 8px", fontSize: "0.76rem", color: "#f87171" }}
+                onClick={() => handleDelete(pk.id)}
+                title="Remove passkey"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Username Section ──────────────────────────────────────────────────────────
+
+function UsernameSection({ currentUsername }: { currentUsername?: string | null }) {
+  const [username, setUsername] = useState(currentUsername ?? "");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const { refetch } = useSession();
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (username.length < 3) { setError("Username must be at least 3 characters."); return; }
+    if (username.length > 32) { setError("Username must be at most 32 characters."); return; }
+    if (!/^[a-zA-Z0-9_-]+$/.test(username)) { setError("Only letters, digits, _ and - allowed."); return; }
+    setError(""); setLoading(true);
+    try {
+      const res = await authClient.updateUser({ username } as any);
+      if ((res as any)?.error) throw new Error((res as any).error?.message ?? "Failed to update username");
+      setSuccess(true);
+      refetch?.();
+      setTimeout(() => setSuccess(false), 4000);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to update username.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: 20 }}>
+      {success && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
+          background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)",
+          borderRadius: 8, padding: "8px 12px", color: "#22c55e", fontSize: "0.8rem",
+        }}>
+          <CheckCircle size={13} /> Username updated!
+        </div>
+      )}
+      {error && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
+          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
+          borderRadius: 8, padding: "8px 12px", color: "#f87171", fontSize: "0.8rem",
+        }}>
+          <AlertCircle size={13} /> {error}
+        </div>
+      )}
+      <form onSubmit={handleSave} style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>
+            Username <span style={{ color: "#475569" }}>(3–32 chars, letters/digits/_ -)</span>
+          </label>
+          <input
+            id="username-input"
+            className="input"
+            type="text"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            placeholder="your-username"
+            minLength={3}
+            maxLength={32}
+            pattern="[a-zA-Z0-9_-]+"
+            autoComplete="username"
+          />
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={loading}>
+          <Check size={13} /> {loading ? "Saving…" : "Save"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 // ── Password / Set password ───────────────────────────────────────────────────
 
 /**
@@ -494,11 +696,13 @@ function SettingsPage() {
     navigate({ to: "/sign-in" });
   };
 
+  const currentUsername = (session?.user as any)?.username as string | null | undefined;
+
   return (
     <div className="animate-in" style={{ maxWidth: 680 }}>
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: "1.4rem", fontWeight: 700, color: "#e2e8f0", letterSpacing: "-0.02em" }}>Settings</h1>
-        <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 2 }}>Account security & platform configuration</p>
+        <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 2 }}>Account security &amp; platform configuration</p>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -520,6 +724,7 @@ function SettingsPage() {
             </div>
             <InfoRow label="User ID" value={session.user.id} mono />
             <InfoRow label="Email verified" value={(session.user as any).emailVerified ? "Yes" : "No"} />
+            {currentUsername && <InfoRow label="Username" value={currentUsername} mono />}
             {/* Linked OAuth providers */}
             {ready && oauthProviders.length > 0 && (
               <div style={{ padding: "11px 20px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -544,6 +749,16 @@ function SettingsPage() {
             </div>
           </SectionCard>
         )}
+
+        {/* Username */}
+        <SectionCard icon={<User size={14} />} color="#34d399" title="Username">
+          <UsernameSection currentUsername={currentUsername} />
+        </SectionCard>
+
+        {/* Passkeys */}
+        <SectionCard icon={<Fingerprint size={14} />} color="#818cf8" title="Passkeys">
+          <PasskeysSection />
+        </SectionCard>
 
         {/* 2FA */}
         <SectionCard icon={<KeyRound size={14} />} color="#818cf8" title="Two-Factor Authentication">
@@ -570,14 +785,18 @@ function SettingsPage() {
           <InfoRow label="Email Verification" value="Enabled (Resend)" />
           <InfoRow label="Rate Limiting" value="5 req / 60 s on sign-in" />
           <InfoRow label="2FA Plugin" value="TOTP + Email OTP" />
+          <InfoRow label="Passkey Plugin" value="WebAuthn (biometric / hardware key)" />
+          <InfoRow label="Magic Link Plugin" value="Enabled (10 min expiry)" />
+          <InfoRow label="Bearer Plugin" value="Authorization: Bearer <token>" />
           <div style={{ padding: "12px 20px" }} />
         </SectionCard>
 
         {/* Session */}
         <SectionCard icon={<Clock size={14} />} color="#34d399" title="Session">
-          <InfoRow label="Session Expiry" value="30 days" />
-          <InfoRow label="Update Age" value="1 day" />
-          <InfoRow label="Cookie Cache TTL" value="5 minutes" />
+          <InfoRow label="Session Expiry" value="7 days" />
+          <InfoRow label="Sliding Window" value="Disabled (fixed duration)" />
+          <InfoRow label="Cookie Cache TTL" value="5 minutes (JWE encrypted)" />
+          <InfoRow label="Multi-Session" value="Up to 5 simultaneous accounts" />
           <div style={{ padding: "12px 20px" }} />
         </SectionCard>
 

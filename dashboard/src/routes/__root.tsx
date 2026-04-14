@@ -1,4 +1,4 @@
-import { organization, signOut, useActiveOrganization, useListOrganizations, useSession } from "@/lib/auth-client";
+import { multiSession, organization, signOut, useActiveOrganization, useListOrganizations, useSession } from "@/lib/auth-client";
 import { createRootRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
@@ -10,10 +10,11 @@ import {
   Globe,
   Key,
   LogOut,
+  PlusCircle,
   Settings,
   Shield,
   UserCircle,
-  Users,
+  Users
 } from "lucide-react";
 import React from "react";
 
@@ -210,6 +211,163 @@ function OrgSwitcher() {
   );
 }
 
+// ── Session Switcher (Multi-Session) ──────────────────────────────────────────
+
+type DeviceSession = {
+  session: { token: string; userAgent?: string | null };
+  user: { id: string; name?: string | null; email: string; image?: string | null };
+};
+
+function SessionSwitcher() {
+  const { data: currentSession } = useSession();
+  const [sessions, setSessions] = React.useState<DeviceSession[]>([]);
+  const [open, setOpen] = React.useState(false);
+  const [switching, setSwitching] = React.useState<string | null>(null);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  // Load device sessions whenever the dropdown opens
+  React.useEffect(() => {
+    if (!open) return;
+    multiSession.listDeviceSessions().then((res: Awaited<ReturnType<typeof multiSession.listDeviceSessions>>) => {
+      setSessions((res.data as DeviceSession[] | null) ?? []);
+    }).catch(() => setSessions([]));
+  }, [open]);
+
+  // Close on outside click
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const handleSwitch = async (token: string) => {
+    if (switching) return;
+    setSwitching(token);
+    try {
+      await multiSession.setActive({ sessionToken: token });
+      window.location.reload(); // full reload to pick up new session cookie
+    } catch {
+      setSwitching(null);
+    }
+  };
+
+  const others = sessions.filter(s => s.user.id !== currentSession?.user.id);
+
+  return (
+    <div ref={ref} style={{ position: "relative", marginBottom: 4 }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: 8,
+          background: "transparent", border: "none",
+          borderRadius: 8, padding: "5px 10px", cursor: "pointer",
+          color: "#475569", fontSize: "0.72rem", transition: "background 0.15s",
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
+        onMouseLeave={e => { if (!open) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+      >
+        <UserCircle size={13} />
+        <span style={{ flex: 1, textAlign: "left" }}>
+          Accounts{others.length > 0 ? ` (${others.length + 1})` : ""}
+        </span>
+        <ChevronDown size={11} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", bottom: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
+          background: "var(--color-surface-800)", border: "1px solid var(--color-border)",
+          borderRadius: 10, padding: 4, boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
+        }}>
+          <p style={{
+            fontSize: "0.6rem", color: "#475569", fontWeight: 600,
+            letterSpacing: "0.08em", textTransform: "uppercase",
+            padding: "6px 10px 4px",
+          }}>Switch account</p>
+
+          {/* Current session */}
+          {currentSession && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "7px 10px", borderRadius: 7,
+              background: "rgba(99,102,241,0.12)", marginBottom: 2,
+            }}>
+              <div className="avatar" style={{ width: 24, height: 24, fontSize: "0.62rem", flexShrink: 0 }}>
+                {currentSession.user.name?.[0]?.toUpperCase() ?? "?"}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: "0.78rem", fontWeight: 600, color: "#818cf8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {currentSession.user.name ?? currentSession.user.email}
+                </p>
+                <p style={{ fontSize: "0.65rem", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {currentSession.user.email}
+                </p>
+              </div>
+              <Check size={11} color="#818cf8" />
+            </div>
+          )}
+
+          {/* Other sessions */}
+          {others.map(s => {
+            const isSwitching = switching === s.session.token;
+            return (
+              <button
+                key={s.session.token}
+                onClick={() => handleSwitch(s.session.token)}
+                disabled={!!switching}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 8,
+                  padding: "7px 10px", borderRadius: 7, marginBottom: 2,
+                  background: "transparent", border: "none", cursor: "pointer",
+                  opacity: isSwitching ? 0.6 : 1, transition: "background 0.12s",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+              >
+                <div className="avatar" style={{ width: 24, height: 24, fontSize: "0.62rem", flexShrink: 0 }}>
+                  {s.user.name?.[0]?.toUpperCase() ?? "?"}
+                </div>
+                <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                  <p style={{ fontSize: "0.78rem", fontWeight: 600, color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {isSwitching ? "Switching..." : (s.user.name ?? s.user.email)}
+                  </p>
+                  <p style={{ fontSize: "0.65rem", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {s.user.email}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+
+          {others.length === 0 && sessions.length > 0 && (
+            <p style={{ padding: "8px 10px", fontSize: "0.75rem", color: "#475569" }}>
+              Only one account signed in
+            </p>
+          )}
+
+          <div style={{ height: 1, background: "var(--color-border)", margin: "4px 0" }} />
+          <button
+            onClick={() => { setOpen(false); window.location.href = "/sign-in"; }}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 8,
+              padding: "7px 10px", borderRadius: 7,
+              background: "transparent", border: "none", cursor: "pointer",
+              color: "#64748b", fontSize: "0.78rem", transition: "background 0.12s",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+          >
+            <PlusCircle size={13} /> Add account
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
 function Sidebar() {
@@ -275,6 +433,9 @@ function Sidebar() {
           Settings
         </Link>
       </nav>
+
+      {/* Session / Account Switcher (multi-session) */}
+      <SessionSwitcher />
 
       {/* User */}
       {session && (

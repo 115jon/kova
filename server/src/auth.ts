@@ -1,9 +1,17 @@
 import { apiKey } from "@better-auth/api-key";
+import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
-import { admin, organization, twoFactor } from "better-auth/plugins";
+import { admin, bearer, magicLink, multiSession, organization, twoFactor, username } from "better-auth/plugins";
 import { logAudit } from "./audit";
-import { invitationEmail, resetPasswordEmail, sendEmail, twoFactorOtpEmail, verificationEmail } from "./email";
+import {
+  invitationEmail,
+  magicLinkEmail,
+  resetPasswordEmail,
+  sendEmail,
+  twoFactorOtpEmail,
+  verificationEmail,
+} from "./email";
 
 /**
  * Factory — called once per request inside the fetch() handler.
@@ -62,10 +70,11 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
           max: 200,     // global ceiling — plenty for normal admin dashboard use
           storage: "secondary-storage", // stored in KV
           customRules: {
-            "/sign-in/email": { window: 60, max: 5 }, // brute-force protection
+            "/sign-in/email": { window: 60, max: 5 },          // brute-force protection
+            "/sign-in/magic-link": { window: 60, max: 3 },      // magic link send throttle
             "/two-factor/verify-totp": { window: 60, max: 5 }, // TOTP guessing protection
-            "/two-factor/send-otp": { window: 60, max: 3 }, // email OTP send throttle
-            "/forget-password": { window: 60, max: 3 }, // reset email throttle
+            "/two-factor/send-otp": { window: 60, max: 3 },    // email OTP send throttle
+            "/forget-password": { window: 60, max: 3 },         // reset email throttle
           },
         },
 
@@ -186,6 +195,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         // ── Plugins ───────────────────────────────────────────────
         plugins: [
           admin(),   // /api/auth/admin/* management endpoints
+
           // API Key CRUD endpoints. We pass two configs: one for personal keys, one for org keys.
           apiKey([
             { configId: "personal", references: "user" },
@@ -216,6 +226,60 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
               });
               await sendEmail({ to: data.email, subject, html, apiKey: env.RESEND_API_KEY });
             },
+          }),
+
+          // ── Feature 6: Easy Plugin Drop-ins ──────────────────────
+
+          // Bearer — allows Authorization: Bearer <token> auth for API consumers.
+          // Zero config — Better Auth auto-detects the header.
+          bearer(),
+
+          // Multi-Session — simultaneous sign-in with multiple accounts.
+          // Default max = 5 sessions; we keep the default.
+          multiSession(),
+
+          // Username — adds `username` + `displayUsername` fields to the user.
+          // Min 3 chars, max 32 chars. Usernames normalised to lowercase.
+          username({
+            minUsernameLength: 3,
+            maxUsernameLength: 32,
+          }),
+
+          // Magic Link — passwordless sign-in via email URL.
+          // Links expire after 10 minutes; one attempt allowed per token.
+          magicLink({
+            expiresIn: 60 * 10, // 10 minutes
+            sendMagicLink: async ({ email, url }: { email: string; url: string }) => {
+              const { subject, html } = magicLinkEmail(url);
+              await sendEmail({ to: email, subject, html, apiKey: env.RESEND_API_KEY });
+            },
+          }),
+
+          // Passkey (WebAuthn) — biometric / hardware key sign-in.
+          //
+          // rpID = the "relying party" identifier, tied to the auth server's
+          //   registered domain (not the dashboard). Browsers require rpID to
+          //   be a suffix of the page's effective domain, and both
+          //   localhost:8787 and localhost:5174 share rpID "localhost", so
+          //   this is fine for local dev.
+          //
+          // origin = the page origin where window.navigator.credentials is
+          //   called. Because the WebAuthn UI runs inside the DASHBOARD (port
+          //   5174 in dev, custom domain in prod), this must be DASHBOARD_URL
+          //   — NOT AUTH_URL. The browser embeds the page's origin in the
+          //   authenticator data and the server must match it exactly.
+          passkey({
+            rpName: "ralph-auth",
+            rpID: (() => {
+              try {
+                // rpID = hostname of auth server (the RP)
+                return new URL(env.AUTH_URL).hostname;
+              } catch {
+                return "localhost";
+              }
+            })(),
+            // origin = where the WebAuthn API is called from (the dashboard)
+            origin: env.DASHBOARD_URL,
           }),
         ],
 
