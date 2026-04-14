@@ -1,6 +1,7 @@
 import { hashPassword } from "better-auth/crypto";
 import { logAudit, queryAuditLogs } from "./audit";
 import { createAuth } from "./auth";
+import { parseDevice, parseGeo } from "./device";
 import { validatePassword } from "./password";
 
 // ── Allowed CORS origins ──────────────────────────────────────────────────────
@@ -295,6 +296,176 @@ export default {
         sessionCount: sessionsRow?.count ?? 0,
         apiKeyCount: apiKeyRow?.count ?? 0,
         recentActivity,
+      }), request);
+    }
+
+    // ── Enriched sessions list ────────────────────────────────
+    //
+    // GET /api/admin/sessions
+    //   ?userId=   optional — filter to a single user's sessions
+    //
+    // Returns all non-expired sessions, each enriched with:
+    //   - Parsed UA → deviceType, browser, os, label
+    //   - Cloudflare geo → city, country, flag, location string
+    //   - User name, email, image (joined from `user` table)
+    //
+    // Admin-only.
+    if (url.pathname === "/api/admin/sessions" && request.method === "GET") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const role = (session.user as { role?: string }).role ?? "";
+      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      const filterUserId = url.searchParams.get("userId");
+      const nowMs = Date.now();
+
+      // Pull all non-expired sessions (or single user's) with user info
+      type RawSession = {
+        id: string;
+        userId: string;
+        token: string;
+        userAgent: string | null;
+        ipAddress: string | null;
+        createdAt: number;
+        updatedAt: number;
+        expiresAt: number;
+        userName: string;
+        userEmail: string;
+        userImage: string | null;
+      };
+
+      let sessionsResult: D1Result<RawSession>;
+      if (filterUserId) {
+        sessionsResult = await env.DB
+          .prepare(
+            `SELECT s.id, s.userId, s.token, s.userAgent, s.ipAddress,
+                    s.createdAt, s.updatedAt, s.expiresAt,
+                    u.name as userName, u.email as userEmail, u.image as userImage
+             FROM session s
+             JOIN "user" u ON u.id = s.userId
+             WHERE s.expiresAt > ? AND s.userId = ?
+             ORDER BY s.updatedAt DESC`
+          )
+          .bind(nowMs, filterUserId)
+          .all<RawSession>();
+      } else {
+        sessionsResult = await env.DB
+          .prepare(
+            `SELECT s.id, s.userId, s.token, s.userAgent, s.ipAddress,
+                    s.createdAt, s.updatedAt, s.expiresAt,
+                    u.name as userName, u.email as userEmail, u.image as userImage
+             FROM session s
+             JOIN "user" u ON u.id = s.userId
+             WHERE s.expiresAt > ?
+             ORDER BY s.updatedAt DESC
+             LIMIT 500`
+          )
+          .bind(nowMs)
+          .all<RawSession>();
+      }
+
+      const rawSessions = sessionsResult.results ?? [];
+
+      // Current caller's session token — used for "This session" badge
+      const callerToken = session.session.token;
+
+      // Enrich each session row with UA parsing + CF geo
+      // NOTE: CF properties are from the admin's own request — this gives us the
+      // admin user's geo. Real per-session geo would require storing it at login time.
+      // We store ipAddress already, so we use the stored IP display + live CF for admin.
+      const geo = parseGeo(request.cf as IncomingRequestCfProperties | undefined);
+
+      const enriched = rawSessions.map(s => {
+        const device = parseDevice(s.userAgent);
+        const isCurrent = s.token === callerToken;
+        return {
+          id: s.id,
+          userId: s.userId,
+          token: s.token,
+          userAgent: s.userAgent,
+          ipAddress: s.ipAddress,
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt,
+          expiresAt: s.expiresAt,
+          userName: s.userName,
+          userEmail: s.userEmail,
+          userImage: s.userImage,
+          isCurrent,
+          // Device info from UA parsing
+          deviceType: device.deviceType,
+          browser: device.browser,
+          browserVersion: device.browserVersion,
+          os: device.os,
+          osVersion: device.osVersion,
+          deviceLabel: device.label,
+          // Geo from CF (live request geo — best effort)
+          geoCity: geo.city,
+          geoCountry: geo.country,
+          geoLocation: geo.location,
+          geoFlag: geo.flag,
+        };
+      });
+
+      return withHeaders(Response.json({
+        sessions: enriched,
+        currentSessionToken: callerToken,
+      }), request);
+    }
+
+    // ── Bulk revoke other sessions ──────────────────────────────
+    //
+    // POST /api/admin/sessions/revoke-all-others
+    // Body: { exceptToken: string }
+    //
+    // Deletes all non-expired sessions whose token ≠ exceptToken.
+    // Admin-only.
+    if (url.pathname === "/api/admin/sessions/revoke-all-others" && request.method === "POST") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const role = (session.user as { role?: string }).role ?? "";
+      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      let exceptToken: string;
+      try {
+        const body = await request.json() as { exceptToken?: string };
+        exceptToken = body.exceptToken ?? session.session.token;
+      } catch {
+        exceptToken = session.session.token;
+      }
+
+      const nowMs = Date.now();
+      const result = await env.DB
+        .prepare(`DELETE FROM session WHERE token != ? AND expiresAt > ?`)
+        .bind(exceptToken, nowMs)
+        .run();
+
+      // Audit log
+      await logAudit(env.DB, {
+        userId: session.user.id,
+        actor: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        action: "session.revokeAll",
+        ipAddress: request.headers.get("CF-Connecting-IP"),
+        userAgent: request.headers.get("User-Agent"),
+        metadata: { revokedCount: result.meta?.changes ?? 0 },
+      }).catch(() => { });
+
+      return withHeaders(Response.json({
+        success: true,
+        revokedCount: result.meta?.changes ?? 0,
       }), request);
     }
 

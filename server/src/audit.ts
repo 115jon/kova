@@ -31,6 +31,7 @@ export type AuditAction =
   | "apiKey.allExpiredDeleted"
   // Sessions
   | "session.revoked"           // admin-initiated revoke
+  | "session.revokeAll"         // admin bulk-revoked all other sessions
   | "session.expired"
   // Organization
   | "org.created"
