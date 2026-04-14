@@ -1,3 +1,4 @@
+import { UserAvatar } from "@/components/UserAvatar";
 import { organization } from "@/lib/auth-client";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
@@ -264,9 +265,12 @@ function OrgDetailPage() {
               display: "flex", alignItems: "center", gap: 12, padding: "12px 20px",
               borderBottom: i < members.length - 1 ? "1px solid var(--color-border)" : "none",
             }}>
-              <div className="avatar" style={{ width: 32, height: 32, fontSize: "0.75rem", flexShrink: 0 }}>
-                {m.user?.name?.[0]?.toUpperCase() ?? "?"}
-              </div>
+              <UserAvatar
+                src={(m.user as any)?.image ?? null}
+                name={m.user?.name}
+                size={32}
+                style={{ flexShrink: 0 }}
+              />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: "0.85rem", fontWeight: 500, color: "#e2e8f0" }}>{m.user?.name ?? "—"}</p>
                 <p style={{ fontSize: "0.75rem", color: "#64748b" }}>{m.user?.email ?? "—"}</p>

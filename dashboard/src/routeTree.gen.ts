@@ -19,6 +19,7 @@ import { Route as AuthErrorRouteImport } from './routes/auth-error'
 import { Route as AuditLogsRouteImport } from './routes/audit-logs'
 import { Route as ApiKeysRouteImport } from './routes/api-keys'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as UsersUserIdRouteImport } from './routes/users_.$userId'
 import { Route as OrganizationsOrgIdRouteImport } from './routes/organizations_.$orgId'
 import { Route as AcceptInvitationInvitationIdRouteImport } from './routes/accept-invitation.$invitationId'
 
@@ -72,6 +73,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UsersUserIdRoute = UsersUserIdRouteImport.update({
+  id: '/users_/$userId',
+  path: '/users/$userId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OrganizationsOrgIdRoute = OrganizationsOrgIdRouteImport.update({
   id: '/organizations_/$orgId',
   path: '/organizations/$orgId',
@@ -97,6 +103,7 @@ export interface FileRoutesByFullPath {
   '/users': typeof UsersRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
+  '/users/$userId': typeof UsersUserIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -111,6 +118,7 @@ export interface FileRoutesByTo {
   '/users': typeof UsersRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
+  '/users/$userId': typeof UsersUserIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -126,6 +134,7 @@ export interface FileRoutesById {
   '/users': typeof UsersRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/organizations_/$orgId': typeof OrganizationsOrgIdRoute
+  '/users_/$userId': typeof UsersUserIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -142,6 +151,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/accept-invitation/$invitationId'
     | '/organizations/$orgId'
+    | '/users/$userId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -156,6 +166,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/accept-invitation/$invitationId'
     | '/organizations/$orgId'
+    | '/users/$userId'
   id:
     | '__root__'
     | '/'
@@ -170,6 +181,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/accept-invitation/$invitationId'
     | '/organizations_/$orgId'
+    | '/users_/$userId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -185,6 +197,7 @@ export interface RootRouteChildren {
   UsersRoute: typeof UsersRoute
   AcceptInvitationInvitationIdRoute: typeof AcceptInvitationInvitationIdRoute
   OrganizationsOrgIdRoute: typeof OrganizationsOrgIdRoute
+  UsersUserIdRoute: typeof UsersUserIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -259,6 +272,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/users_/$userId': {
+      id: '/users_/$userId'
+      path: '/users/$userId'
+      fullPath: '/users/$userId'
+      preLoaderRoute: typeof UsersUserIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/organizations_/$orgId': {
       id: '/organizations_/$orgId'
       path: '/organizations/$orgId'
@@ -289,6 +309,7 @@ const rootRouteChildren: RootRouteChildren = {
   UsersRoute: UsersRoute,
   AcceptInvitationInvitationIdRoute: AcceptInvitationInvitationIdRoute,
   OrganizationsOrgIdRoute: OrganizationsOrgIdRoute,
+  UsersUserIdRoute: UsersUserIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

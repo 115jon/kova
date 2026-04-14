@@ -224,6 +224,81 @@ export default {
       );
     }
 
+    // ── User detail (aggregate) ───────────────────────────────
+    //
+    // GET /api/admin/users/:userId
+    //   Returns full user identity: user record, linked provider accounts,
+    //   active session count, API key count, last 10 audit entries.
+    //
+    // Admin-only.
+    const userDetailMatch = url.pathname.match(/^\/api\/admin\/users\/([^/]+)$/);
+    if (userDetailMatch && request.method === "GET") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const role = (session.user as { role?: string }).role ?? "";
+      if (!role.split(",").map((r: string) => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      const targetId = userDetailMatch[1];
+
+      // 1. User record
+      const user = await env.DB
+        .prepare(`SELECT id, name, email, emailVerified, image, role, banned, banReason, banExpires, createdAt, updatedAt, username FROM "user" WHERE id = ? LIMIT 1`)
+        .bind(targetId)
+        .first<{
+          id: string; name: string; email: string; emailVerified: number;
+          image: string | null; role: string | null; banned: number;
+          banReason: string | null; banExpires: number | null;
+          createdAt: number; updatedAt: number; username: string | null;
+        }>();
+      if (!user) {
+        return withHeaders(Response.json({ error: "User not found" }, { status: 404 }), request);
+      }
+
+      // 2. Linked accounts (OAuth providers + credential)
+      const accounts = await env.DB
+        .prepare(`SELECT id, providerId, accountId, createdAt FROM account WHERE userId = ? ORDER BY createdAt ASC`)
+        .bind(targetId)
+        .all<{ id: string; providerId: string; accountId: string; createdAt: number }>();
+
+      // 3. Active session count (non-expired)
+      const sessionsRow = await env.DB
+        .prepare(`SELECT COUNT(*) as count FROM session WHERE userId = ? AND expiresAt > ?`)
+        .bind(targetId, Date.now())
+        .first<{ count: number }>();
+
+      // 4. API key count (personal keys for this user)
+      const apiKeyRow = await env.DB
+        .prepare(`SELECT COUNT(*) as count FROM "apikey" WHERE userId = ? AND enabled = 1`)
+        .bind(targetId)
+        .first<{ count: number }>()
+        .catch(() => ({ count: 0 })); // table may not exist yet
+
+      // 5. Recent audit log entries for this user
+      const { logs } = await queryAuditLogs(env.DB, { userId: targetId, limit: 10 });
+      const recentActivity = logs.map(row => ({
+        ...row,
+        metadata: row.metadata ? JSON.parse(row.metadata) : null,
+      }));
+
+      return withHeaders(Response.json({
+        user: {
+          ...user,
+          emailVerified: Boolean(user.emailVerified),
+          banned: Boolean(user.banned),
+        },
+        accounts: accounts.results ?? [],
+        sessionCount: sessionsRow?.count ?? 0,
+        apiKeyCount: apiKeyRow?.count ?? 0,
+        recentActivity,
+      }), request);
+    }
+
     return withHeaders(new Response("Not found", { status: 404 }), request);
+
   },
 } satisfies ExportedHandler<Env>;

@@ -170,7 +170,10 @@ export async function queryAuditLogs(
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   // Fetch one extra row to detect if there's a next page
   const stmt = db.prepare(
-    `SELECT * FROM audit_log ${where} ORDER BY createdAt DESC LIMIT ?`
+    `SELECT audit_log.*, "user".image as actorImage
+     FROM audit_log
+     LEFT JOIN "user" ON audit_log.actor = "user".id
+     ${where} ORDER BY audit_log.createdAt DESC LIMIT ?`
   );
 
   const result = await stmt.bind(...bindings, limit + 1).all<AuditLogRow>();
@@ -199,4 +202,5 @@ export interface AuditLogRow {
   userAgent: string | null;
   metadata: string | null;  // JSON string — parse before returning to client
   createdAt: number;
+  actorImage?: string | null;
 }

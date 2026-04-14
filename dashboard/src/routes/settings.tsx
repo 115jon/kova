@@ -1,4 +1,5 @@
 import { ProviderIcon } from "@/components/BrandIcons";
+import { UserAvatar } from "@/components/UserAvatar";
 import { AUTH_URL, authClient, listAccounts, passkey, signOut, twoFactor, useSession } from "@/lib/auth-client";
 import { validatePassword } from "@/lib/password";
 import type { ProviderId } from "@/lib/providers";
@@ -711,9 +712,11 @@ function SettingsPage() {
         {session && (
           <SectionCard icon={<Shield size={14} />} color="#818cf8" title="Profile">
             <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--color-border)" }}>
-              <div className="avatar" style={{ width: 40, height: 40, fontSize: "1rem" }}>
-                {session.user.name?.[0]?.toUpperCase() ?? "?"}
-              </div>
+              <UserAvatar
+                src={(session.user as any).image as string | null}
+                name={session.user.name}
+                size={40}
+              />
               <div>
                 <p style={{ fontWeight: 600, color: "#e2e8f0" }}>{session.user.name}</p>
                 <p style={{ fontSize: "0.8rem", color: "#64748b" }}>{session.user.email}</p>

@@ -1,5 +1,6 @@
+import { UserAvatar } from "@/components/UserAvatar";
 import { relativeTime } from "@/lib/utils";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Ban, ChevronLeft, ChevronRight, RefreshCw, Search, ShieldCheck, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -23,6 +24,7 @@ type User = {
 const PAGE_SIZE = 20;
 
 function UsersPage() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -50,7 +52,8 @@ function UsersPage() {
 
   useEffect(() => { load(); }, [page, search]);
 
-  const action = async (endpoint: string, body: object, userId: string) => {
+  const action = async (endpoint: string, body: object, userId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // don't trigger row click → detail page
     setActionUser(userId);
     setActionError("");
     try {
@@ -73,12 +76,13 @@ function UsersPage() {
     }
   };
 
-  const setRole = (id: string, role: string) => action("set-role", { userId: id, role }, id);
-  const banUser = (id: string) => action("ban-user", { userId: id, banReason: "Banned by admin" }, id);
-  const unbanUser = (id: string) => action("unban-user", { userId: id }, id);
-  const deleteUser = (id: string) => {
+  const setRole = (id: string, role: string, e: React.MouseEvent) => action("set-role", { userId: id, role }, id, e);
+  const banUser = (id: string, e: React.MouseEvent) => action("ban-user", { userId: id, banReason: "Banned by admin" }, id, e);
+  const unbanUser = (id: string, e: React.MouseEvent) => action("unban-user", { userId: id }, id, e);
+  const deleteUser = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!confirm("Delete this user permanently?")) return;
-    action("remove-user", { userId: id }, id);
+    action("remove-user", { userId: id }, id, e);
   };
 
   const pages = Math.ceil(total / PAGE_SIZE);
@@ -137,10 +141,15 @@ function UsersPage() {
             </thead>
             <tbody>
               {users.map(u => (
-                <tr key={u.id}>
+                <tr
+                  key={u.id}
+                  onClick={() => navigate({ to: "/users/$userId", params: { userId: u.id } })}
+                  style={{ cursor: "pointer" }}
+                  title="View user details"
+                >
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div className="avatar">{u.name?.[0]?.toUpperCase() ?? "?"}</div>
+                      <UserAvatar src={u.image} name={u.name} size={32} />
                       <div>
                         <p style={{ fontWeight: 500, color: "#e2e8f0", fontSize: "0.875rem" }}>{u.name}</p>
                         <p style={{ color: "#64748b", fontSize: "0.75rem" }}>{u.email}</p>
@@ -162,13 +171,13 @@ function UsersPage() {
                   </td>
                   <td style={{ color: "#64748b", fontSize: "0.8rem" }}>{relativeTime(u.createdAt)}</td>
                   <td>
-                    <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                    <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
                       {u.role !== "admin" && (
                         <button
                           className="btn btn-ghost"
                           style={{ padding: "4px 8px", fontSize: "0.75rem" }}
                           disabled={actionUser === u.id}
-                          onClick={() => setRole(u.id, "admin")}
+                          onClick={e => setRole(u.id, "admin", e)}
                           title="Make admin"
                         >
                           <ShieldCheck size={13} /> Admin
@@ -179,7 +188,7 @@ function UsersPage() {
                           className="btn btn-ghost"
                           style={{ padding: "4px 8px", fontSize: "0.75rem" }}
                           disabled={actionUser === u.id}
-                          onClick={() => setRole(u.id, "user")}
+                          onClick={e => setRole(u.id, "user", e)}
                           title="Remove admin"
                         >
                           User
@@ -190,7 +199,7 @@ function UsersPage() {
                           className="btn btn-ghost"
                           style={{ padding: "4px 8px", fontSize: "0.75rem" }}
                           disabled={actionUser === u.id}
-                          onClick={() => unbanUser(u.id)}
+                          onClick={e => unbanUser(u.id, e)}
                           title="Unban"
                         >
                           Unban
@@ -200,7 +209,7 @@ function UsersPage() {
                           className="btn btn-danger"
                           style={{ padding: "4px 8px", fontSize: "0.75rem" }}
                           disabled={actionUser === u.id}
-                          onClick={() => banUser(u.id)}
+                          onClick={e => banUser(u.id, e)}
                           title="Ban user"
                         >
                           <Ban size={12} />
@@ -210,7 +219,7 @@ function UsersPage() {
                         className="btn btn-danger"
                         style={{ padding: "4px 8px" }}
                         disabled={actionUser === u.id}
-                        onClick={() => deleteUser(u.id)}
+                        onClick={e => deleteUser(u.id, e)}
                         title="Delete user"
                       >
                         <Trash2 size={13} />

@@ -1,3 +1,4 @@
+import { UserAvatar } from "@/components/UserAvatar";
 import { multiSession, organization, signOut, useActiveOrganization, useListOrganizations, useSession } from "@/lib/auth-client";
 import { createRootRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
@@ -295,9 +296,12 @@ function SessionSwitcher() {
               padding: "7px 10px", borderRadius: 7,
               background: "rgba(99,102,241,0.12)", marginBottom: 2,
             }}>
-              <div className="avatar" style={{ width: 24, height: 24, fontSize: "0.62rem", flexShrink: 0 }}>
-                {currentSession.user.name?.[0]?.toUpperCase() ?? "?"}
-              </div>
+              <UserAvatar
+                src={(currentSession.user as any).image as string | null}
+                name={currentSession.user.name}
+                size={24}
+                style={{ flexShrink: 0 }}
+              />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: "0.78rem", fontWeight: 600, color: "#818cf8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {currentSession.user.name ?? currentSession.user.email}
@@ -327,9 +331,12 @@ function SessionSwitcher() {
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
               >
-                <div className="avatar" style={{ width: 24, height: 24, fontSize: "0.62rem", flexShrink: 0 }}>
-                  {s.user.name?.[0]?.toUpperCase() ?? "?"}
-                </div>
+                <UserAvatar
+                  src={(s.user as any).image as string | null}
+                  name={s.user.name}
+                  size={24}
+                  style={{ flexShrink: 0 }}
+                />
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                   <p style={{ fontSize: "0.78rem", fontWeight: 600, color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {isSwitching ? "Switching..." : (s.user.name ?? s.user.email)}
@@ -441,9 +448,11 @@ function Sidebar() {
       {session && (
         <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 12, marginTop: 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px" }}>
-            <div className="avatar" style={{ width: 28, height: 28, fontSize: "0.7rem" }}>
-              {session.user.name?.[0]?.toUpperCase() ?? "?"}
-            </div>
+            <UserAvatar
+              src={(session.user as any).image as string | null}
+              name={session.user.name}
+              size={28}
+            />
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: "0.8rem", fontWeight: 600, color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {session.user.name}

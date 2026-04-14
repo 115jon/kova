@@ -1,3 +1,4 @@
+import { UserAvatar } from "@/components/UserAvatar";
 import { useActiveOrganization } from "@/lib/auth-client";
 import { relativeTime } from "@/lib/utils";
 import { createFileRoute } from "@tanstack/react-router";
@@ -30,6 +31,7 @@ interface AuditLogRow {
   actor: string;
   actorName: string | null;
   actorEmail: string | null;
+  actorImage?: string | null;
   action: string;
   targetType: string | null;
   targetId: string | null;
@@ -128,14 +130,12 @@ function ActorCell({ row }: { row: AuditLogRow }) {
   const email = row.actorEmail ?? row.actor;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <div style={{
-        width: 26, height: 26, borderRadius: 8, flexShrink: 0,
-        background: "linear-gradient(135deg, #6366f1, #7c3aed)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: "0.65rem", fontWeight: 700, color: "#fff",
-      }}>
-        {name[0]?.toUpperCase() ?? "?"}
-      </div>
+      <UserAvatar
+        src={(row as any).actorImage ?? null}
+        name={name}
+        size={26}
+        style={{ flexShrink: 0, borderRadius: 8 }}
+      />
       <div style={{ minWidth: 0 }}>
         <p style={{ fontSize: "0.8rem", fontWeight: 500, color: "#e2e8f0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {name}

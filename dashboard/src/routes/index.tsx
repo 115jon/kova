@@ -1,5 +1,6 @@
+import { UserAvatar } from "@/components/UserAvatar";
 import { relativeTime } from "@/lib/utils";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Activity, Globe, Shield, TrendingUp, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -11,7 +12,7 @@ type Stats = {
   totalUsers: number;
   activeSessions: number;
   bannedUsers: number;
-  recentUsers: { id: string; name: string; email: string; createdAt: string; role: string }[];
+  recentUsers: { id: string; name: string; email: string; createdAt: string; role: string; image?: string | null }[];
 };
 
 function StatCard({ label, value, icon: Icon, color }: {
@@ -34,6 +35,7 @@ function StatCard({ label, value, icon: Icon, color }: {
 }
 
 function OverviewPage() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -107,10 +109,15 @@ function OverviewPage() {
             </thead>
             <tbody>
               {stats!.recentUsers.map(u => (
-                <tr key={u.id}>
+                <tr
+                  key={u.id}
+                  onClick={() => navigate({ to: "/users/$userId", params: { userId: u.id } })}
+                  style={{ cursor: "pointer" }}
+                  title="View user details"
+                >
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div className="avatar">{u.name?.[0]?.toUpperCase() ?? "?"}</div>
+                      <UserAvatar src={u.image ?? null} name={u.name} size={32} />
                       <span style={{ fontWeight: 500, color: "#e2e8f0" }}>{u.name}</span>
                     </div>
                   </td>

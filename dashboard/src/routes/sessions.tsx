@@ -1,3 +1,4 @@
+import { UserAvatar } from "@/components/UserAvatar";
 import { formatDate } from "@/lib/utils";
 import { createFileRoute } from "@tanstack/react-router";
 import { Info, Monitor, RefreshCw, Smartphone, X } from "lucide-react";
@@ -17,6 +18,7 @@ type Session = {
   expiresAt: string;
   userName?: string;
   userEmail?: string;
+  userImage?: string | null;
 };
 
 function isMobile(ua: string | null) {
@@ -34,7 +36,7 @@ function SessionsPage() {
     try {
       // Fetch all users first
       const usersRes = await fetch(`/api/auth/admin/list-users?limit=100`, { credentials: "include" });
-      const usersData = await usersRes.json() as { users: { id: string; name: string; email: string }[] };
+      const usersData = await usersRes.json() as { users: { id: string; name: string; email: string; image?: string | null }[] };
       const users = usersData.users ?? [];
 
       // POST list-user-sessions for each user (userId in body, not query)
@@ -53,6 +55,7 @@ function SessionsPage() {
               ...s,
               userName: u.name,
               userEmail: u.email,
+              userImage: u.image ?? null,
             }));
           } catch {
             return [];
@@ -132,7 +135,7 @@ function SessionsPage() {
                   <tr key={s.id}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div className="avatar">{s.userName?.[0]?.toUpperCase() ?? "?"}</div>
+                        <UserAvatar src={s.userImage ?? null} name={s.userName} size={32} />
                         <div>
                           <p style={{ fontWeight: 500, color: "#e2e8f0", fontSize: "0.875rem" }}>{s.userName}</p>
                           <p style={{ color: "#64748b", fontSize: "0.75rem" }}>{s.userEmail}</p>
