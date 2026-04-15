@@ -25,7 +25,10 @@ export const authClient = createAuthClient({
         // Intentionally left blank — sign-in.tsx checks twoFactorRequired
       },
     }),
-    organizationClient(), // orgs, members, invitations, roles
+    organizationClient({
+      teams: { enabled: true },             // unlocks createTeam / listTeams / addTeamMember …
+      dynamicAccessControl: { enabled: true }, // unlocks createRole / listRoles / deleteRole …
+    }),
     // ── Feature 6 plugins ────────────────────────────────────────
     multiSessionClient(),   // simultaneous multi-account sessions
     passkeyClient(),        // WebAuthn passkey registration + sign-in

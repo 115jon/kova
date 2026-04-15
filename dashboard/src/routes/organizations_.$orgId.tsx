@@ -8,9 +8,11 @@ import {
   AlertCircle, ArrowLeft, CheckCircle,
   ClipboardList,
   Mail,
+  Plus,
   RefreshCw,
   Settings,
-  Trash2, UserMinus, UserPlus, Users, X
+  Shield,
+  Trash2, UserMinus, UserPlus, Users, UsersRound, X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -18,9 +20,9 @@ export const Route = createFileRoute("/organizations_/$orgId")({
   component: OrgDetailPage,
 });
 
-type Tab = "members" | "invitations" | "activity" | "settings";
+type Tab = "members" | "invitations" | "teams" | "roles" | "activity" | "settings";
 
-// ── Role badge styling using design tokens ────────────────────────────────────
+// ── Role badge styling ────────────────────────────────────────────────────────
 
 function roleBadgeStyle(role: string): React.CSSProperties {
   if (role === "owner") return { background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)", color: "var(--color-amber)" };
@@ -28,11 +30,43 @@ function roleBadgeStyle(role: string): React.CSSProperties {
   return { background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" };
 }
 
+// ── Shared inline error / success banners ─────────────────────────────────────
+
+function ErrBanner({ msg }: { msg: string }) {
+  return (
+    <div style={{
+      background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+      borderRadius: 4, padding: "8px 12px", fontFamily: "var(--font-mono)",
+      color: "var(--color-red)", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 6,
+    }}>
+      <AlertCircle size={12} /> {msg}
+    </div>
+  );
+}
+
+function OkBanner({ msg }: { msg: string }) {
+  return (
+    <div style={{
+      background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
+      borderRadius: 4, padding: "8px 12px", fontFamily: "var(--font-mono)",
+      color: "var(--color-green)", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 6,
+    }}>
+      <CheckCircle size={12} /> {msg}
+    </div>
+  );
+}
+
 // ── Invite Member Modal ───────────────────────────────────────────────────────
 
-function InviteModal({ orgId, onClose, onInvited }: { orgId: string; onClose: () => void; onInvited: () => void }) {
+function InviteModal({ orgId, teams, onClose, onInvited }: {
+  orgId: string;
+  teams: any[];
+  onClose: () => void;
+  onInvited: () => void;
+}) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"member" | "admin">("member");
+  const [teamId, setTeamId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -41,7 +75,9 @@ function InviteModal({ orgId, onClose, onInvited }: { orgId: string; onClose: ()
     e.preventDefault();
     setError(""); setLoading(true);
     try {
-      const res = await organization.inviteMember({ email, role, organizationId: orgId });
+      const payload: any = { email, role, organizationId: orgId };
+      if (teamId) payload.teamId = teamId;
+      const res = await organization.inviteMember(payload);
       if (res.error) throw new Error(res.error.message);
       setSuccess(true);
       setTimeout(() => { onInvited(); onClose(); }, 1200);
@@ -74,25 +110,262 @@ function InviteModal({ orgId, onClose, onInvited }: { orgId: string; onClose: ()
             <option value="admin">Admin</option>
           </select>
         </div>
-        {error && (
-          <div style={{
-            background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-            borderRadius: 4, padding: "8px 12px", fontFamily: "var(--font-mono)",
-            color: "var(--color-red)", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 6,
-          }}><AlertCircle size={12} /> {error}</div>
+        {teams.length > 0 && (
+          <div className="form-group">
+            <label className="form-label">Assign to team <span style={{ color: "var(--color-text-tertiary)" }}>(optional)</span></label>
+            <select className="input" value={teamId} onChange={e => setTeamId(e.target.value)}
+              style={{ appearance: "none", cursor: "pointer" }}>
+              <option value="">No team</option>
+              {teams.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
         )}
-        {success && (
-          <div style={{
-            background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
-            borderRadius: 4, padding: "8px 12px", fontFamily: "var(--font-mono)",
-            color: "var(--color-green)", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 6,
-          }}><CheckCircle size={12} /> Invitation sent!</div>
-        )}
+        {error && <ErrBanner msg={error} />}
+        {success && <OkBanner msg="Invitation sent!" />}
         <div className="modal-footer" style={{ border: "none", padding: 0 }}>
           <button type="button" className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Cancel</button>
           <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }}
             disabled={loading || !email || success}>
             <Mail size={13} /> {loading ? "Sending…" : "Send invite"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ── Create Team Modal ─────────────────────────────────────────────────────────
+
+function CreateTeamModal({ orgId, onClose, onCreated }: { orgId: string; onClose: () => void; onCreated: () => void }) {
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(""); setLoading(true);
+    try {
+      const res = await organization.createTeam({ name, organizationId: orgId });
+      if (res.error) throw new Error(res.error.message);
+      onCreated();
+      onClose();
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to create team");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} maxWidth={380}>
+      <div className="modal-header">
+        <p className="panel-title">New team</p>
+        <button className="btn btn-ghost" style={{ padding: 5, marginLeft: "auto" }} onClick={onClose}><X size={13} /></button>
+      </div>
+      <form onSubmit={handle} className="modal-body">
+        <div className="form-group">
+          <label className="form-label">Team name</label>
+          <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Frontend, Platform…" autoFocus required />
+        </div>
+        {error && <ErrBanner msg={error} />}
+        <div className="modal-footer" style={{ border: "none", padding: 0 }}>
+          <button type="button" className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} disabled={loading || !name}>
+            <Plus size={13} /> {loading ? "Creating…" : "Create team"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ── Add Team Member Modal (multi-select + avatars) ───────────────────────────
+
+function AddTeamMemberModal({ teamId, orgId, members, currentTeamUserIds, onClose, onAdded }: {
+  teamId: string;
+  orgId: string;
+  members: any[];
+  currentTeamUserIds: Set<string>;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  // Filter out members already in this team
+  const available = members.filter((m: any) => {
+    const uid = m.userId ?? m.user?.id ?? m.id;
+    return !currentTeamUserIds.has(uid);
+  });
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const toggle = (userId: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId); else next.add(userId);
+      return next;
+    });
+  };
+
+  const handle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selected.size) return;
+    setError(""); setLoading(true);
+    try {
+      await Promise.all(
+        Array.from(selected).map(userId =>
+          organization.addTeamMember({ teamId, userId, organizationId: orgId })
+        )
+      );
+      onAdded();
+      onClose();
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to add members");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} maxWidth={420}>
+      <div className="modal-header">
+        <p className="panel-title">Add members to team</p>
+        <button className="btn btn-ghost" style={{ padding: 5, marginLeft: "auto" }} onClick={onClose}><X size={13} /></button>
+      </div>
+      <form onSubmit={handle} className="modal-body">
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)", marginBottom: 12 }}>
+          Select one or more members to add:
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 280, overflowY: "auto" }}>
+          {available.length === 0 && (
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-tertiary)" }}>
+              {members.length === 0 ? "No org members to add." : "All members are already in this team."}
+            </p>
+          )}
+          {available.map((m: any) => {
+            const uid = m.userId ?? m.user?.id ?? m.id;
+            const checked = selected.has(uid);
+            return (
+              <label key={m.id} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "8px 10px", borderRadius: 6, cursor: "pointer",
+                background: checked ? "var(--color-accent-dim)" : "transparent",
+                border: checked ? "1px solid rgba(59,130,246,0.25)" : "1px solid transparent",
+                transition: "background 0.12s, border 0.12s",
+              }}>
+                <input type="checkbox" checked={checked} onChange={() => toggle(uid)}
+                  style={{ accentColor: "var(--color-accent)", width: 14, height: 14, cursor: "pointer", flexShrink: 0 }} />
+                <UserAvatar src={(m.user as any)?.image ?? null} name={m.user?.name ?? uid} size={28} style={{ flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.82rem", fontWeight: 500, color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {m.user?.name ?? "—"}
+                  </p>
+                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {m.user?.email ?? uid}
+                  </p>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+        {error && <ErrBanner msg={error} />}
+        <div className="modal-footer" style={{ border: "none", padding: 0 }}>
+          <button type="button" className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} disabled={loading || !selected.size}>
+            <UserPlus size={13} /> {loading ? "Adding…" : `Add ${selected.size > 0 ? `(${selected.size})` : ""}`}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ── Create Role Modal ─────────────────────────────────────────────────────────
+
+const PERMISSION_RESOURCES = [
+  { resource: "organization", actions: ["update", "delete"] },
+  { resource: "member", actions: ["create", "update", "delete"] },
+  { resource: "invitation", actions: ["create", "cancel"] },
+  { resource: "project", actions: ["create", "update", "delete", "view"] },
+  { resource: "billing", actions: ["read", "manage"] },
+  { resource: "deploy", actions: ["trigger", "rollback"] },
+] as const;
+
+type PermMap = Record<string, string[]>;
+
+function CreateRoleModal({ orgId, onClose, onCreated }: { orgId: string; onClose: () => void; onCreated: () => void }) {
+  const [roleName, setRoleName] = useState("");
+  const [perms, setPerms] = useState<PermMap>({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const toggle = (resource: string, action: string) => {
+    setPerms(prev => {
+      const existing = prev[resource] ?? [];
+      const next = existing.includes(action)
+        ? existing.filter(a => a !== action)
+        : [...existing, action];
+      return { ...prev, [resource]: next };
+    });
+  };
+
+  const handle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(""); setLoading(true);
+    try {
+      const res = await (organization as any).createOrgRole({ role: roleName, permission: perms, organizationId: orgId });
+      if (res.error) throw new Error(res.error.message);
+      onCreated();
+      onClose();
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to create role");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} maxWidth={480}>
+      <div className="modal-header">
+        <p className="panel-title">New role</p>
+        <button className="btn btn-ghost" style={{ padding: 5, marginLeft: "auto" }} onClick={onClose}><X size={13} /></button>
+      </div>
+      <form onSubmit={handle} className="modal-body" style={{ gap: 14 }}>
+        <div className="form-group">
+          <label className="form-label">Role name</label>
+          <input className="input" value={roleName} onChange={e => setRoleName(e.target.value)}
+            placeholder="e.g. billing-manager, deployer…" autoFocus required />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Permissions</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {PERMISSION_RESOURCES.map(({ resource, actions }) => (
+              <div key={resource}>
+                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: 5, textTransform: "lowercase" }}>
+                  {resource}
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {actions.map(action => {
+                    const checked = (perms[resource] ?? []).includes(action);
+                    return (
+                      <label key={action} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                        <input type="checkbox" checked={checked} onChange={() => toggle(resource, action)}
+                          style={{ accentColor: "var(--color-accent)", width: 13, height: 13, cursor: "pointer" }} />
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: checked ? "var(--color-accent)" : "var(--color-text-secondary)" }}>
+                          {action}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {error && <ErrBanner msg={error} />}
+        <div className="modal-footer" style={{ border: "none", padding: 0 }}>
+          <button type="button" className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} disabled={loading || !roleName}>
+            <Shield size={13} /> {loading ? "Creating…" : "Create role"}
           </button>
         </div>
       </form>
@@ -271,6 +544,327 @@ function OrgAuditLog({ orgId }: { orgId: string }) {
   );
 }
 
+// ── Teams Tab ─────────────────────────────────────────────────────────────────
+
+function TeamsTab({ orgId, members }: { orgId: string; members: any[] }) {
+  const [teams, setTeams] = useState<any[]>([]);
+  const [teamMembersMap, setTeamMembersMap] = useState<Record<string, any[]>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [addToTeam, setAddToTeam] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    title: string; body: string; confirmLabel: string; onConfirm: () => void;
+  } | null>(null);
+
+  const fetchTeams = useCallback(async () => {
+    setLoading(true); setError("");
+    // Build a lookup map from userId -> org member (for enriching team member rows with user data)
+    const memberByUserId = Object.fromEntries(members.map((m: any) => [m.userId, m]));
+    try {
+      const res = await fetch(
+        `/api/auth/organization/list-teams?organizationId=${orgId}`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error(`Failed to load teams (${res.status})`);
+      const list: any[] = await res.json();
+      setTeams(list);
+      const entries = await Promise.all(
+        list.map(async (t: any) => {
+          const r = await fetch(
+            `/api/auth/organization/list-team-members?teamId=${t.id}`,
+            { credentials: "include" }
+          );
+          const rawRows: any[] = r.ok ? await r.json() : [];
+          // Enrich: BA only returns { id, teamId, userId, createdAt } — no nested user.
+          // Cross-reference with the org members array to get name/email/image.
+          const enriched = (Array.isArray(rawRows) ? rawRows : []).map((tm: any) => ({
+            ...tm,
+            user: memberByUserId[tm.userId]?.user ?? null,
+          }));
+          return [t.id, enriched] as [string, any[]];
+        })
+      );
+      setTeamMembersMap(Object.fromEntries(entries));
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load teams");
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId, members]);
+
+  useEffect(() => { fetchTeams(); }, [fetchTeams]);
+
+  const handleRemoveTeam = (teamId: string, teamName: string) => {
+    setConfirmState({
+      title: `Delete team "${teamName}"?`,
+      body: "All team members will be removed from this team. This cannot be undone.",
+      confirmLabel: "Delete team",
+      onConfirm: async () => {
+        setConfirmState(null);
+        await organization.removeTeam({ teamId, organizationId: orgId });
+        fetchTeams();
+      },
+    });
+  };
+
+  const handleRemoveTeamMember = (teamId: string, userId: string, name: string) => {
+    setConfirmState({
+      title: "Remove from team?",
+      body: `${name} will be removed from this team.`,
+      confirmLabel: "Remove",
+      onConfirm: async () => {
+        setConfirmState(null);
+        await organization.removeTeamMember({ teamId, userId, organizationId: orgId });
+        fetchTeams();
+      },
+    });
+  };
+
+  if (loading) return <div className="loading empty-state" style={{ fontSize: "0.78rem" }}>Loading teams…</div>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {confirmState && (
+        <ConfirmModal
+          title={confirmState.title}
+          body={confirmState.body}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onClose={() => setConfirmState(null)}
+        />
+      )}
+      {showCreate && (
+        <CreateTeamModal orgId={orgId} onClose={() => setShowCreate(false)} onCreated={fetchTeams} />
+      )}
+      {addToTeam && (
+        <AddTeamMemberModal
+          teamId={addToTeam}
+          orgId={orgId}
+          members={members}
+          currentTeamUserIds={new Set((teamMembersMap[addToTeam] ?? []).map((tm: any) => tm.userId))}
+          onClose={() => setAddToTeam(null)}
+          onAdded={fetchTeams}
+        />
+      )}
+
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button className="btn btn-primary" style={{ fontSize: "0.76rem", padding: "5px 11px" }} onClick={() => setShowCreate(true)}>
+          <Plus size={12} /> New team
+        </button>
+      </div>
+
+      {error && <ErrBanner msg={error} />}
+
+      {teams.length === 0 ? (
+        <div className="card empty-state">
+          <UsersRound size={18} color="var(--color-text-tertiary)" strokeWidth={1.5} style={{ marginBottom: 10 }} />
+          <p>No teams yet. Create one to start grouping members.</p>
+        </div>
+      ) : (
+        teams.map((team: any) => {
+          const tms: any[] = teamMembersMap[team.id] ?? [];
+          return (
+            <div key={team.id} className="card" style={{ padding: 0, overflow: "hidden" }}>
+              <div className="panel-header">
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <UsersRound size={13} color="var(--color-accent)" />
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-primary)" }}>
+                    {team.name}
+                  </span>
+                  <span style={{
+                    fontFamily: "var(--font-mono)", fontSize: "0.67rem", color: "var(--color-text-tertiary)",
+                    background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
+                    borderRadius: 3, padding: "1px 6px",
+                  }}>
+                    {tms.length} member{tms.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button className="btn btn-ghost" style={{ fontSize: "0.73rem", padding: "4px 9px" }}
+                    onClick={() => setAddToTeam(team.id)}>
+                    <UserPlus size={11} /> Add
+                  </button>
+                  <button className="btn btn-ghost" style={{ padding: "4px 6px", color: "var(--color-red)" }}
+                    onClick={() => handleRemoveTeam(team.id, team.name)} title="Delete team">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+              {tms.length === 0 ? (
+                <div style={{ padding: "14px 18px", fontFamily: "var(--font-mono)", fontSize: "0.73rem", color: "var(--color-text-tertiary)" }}>
+                  No members yet.
+                </div>
+              ) : (
+                tms.map((tm: any, i: number) => (
+                  <div key={tm.id} style={{
+                    display: "flex", alignItems: "center", gap: 12, padding: "10px 18px",
+                    borderTop: i === 0 ? "1px solid var(--color-border)" : undefined,
+                    borderBottom: i < tms.length - 1 ? "1px solid var(--color-border)" : undefined,
+                    transition: "background 0.1s",
+                  }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-hover)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "")}
+                  >
+                    <UserAvatar src={(tm.user as any)?.image ?? null} name={tm.user?.name ?? tm.userId} size={28} style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.82rem", fontWeight: 500, color: "var(--color-text-primary)" }}>{tm.user?.name ?? "—"}</p>
+                      <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.69rem", color: "var(--color-text-tertiary)" }}>{tm.user?.email ?? tm.userId}</p>
+                    </div>
+                    <button className="btn btn-ghost" style={{ padding: "4px 6px", color: "var(--color-red)" }}
+                      onClick={() => handleRemoveTeamMember(team.id, tm.userId, tm.user?.name ?? tm.userId)}
+                      title="Remove from team">
+                      <UserMinus size={12} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+// ── Roles Tab (Dynamic RBAC) ──────────────────────────────────────────────────
+
+function PermBadge({ resource, actions }: { resource: string; actions: string[] }) {
+  if (!actions.length) return null;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 3, marginRight: 6, marginBottom: 4 }}>
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>{resource}:</span>
+      {actions.map(a => (
+        <span key={a} style={{
+          fontFamily: "var(--font-mono)", fontSize: "0.66rem", fontWeight: 600,
+          background: "var(--color-accent-dim)", color: "var(--color-accent)",
+          border: "1px solid rgba(59,130,246,0.18)", borderRadius: 3, padding: "1px 5px",
+        }}>{a}</span>
+      ))}
+    </span>
+  );
+}
+
+function RolesTab({ orgId }: { orgId: string }) {
+  const [roles, setRoles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    title: string; body: string; confirmLabel: string; onConfirm: () => void;
+  } | null>(null);
+
+  const fetchRoles = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      // list-roles is a GET endpoint
+      const res = await fetch(
+        `/api/auth/organization/list-roles?organizationId=${orgId}`,
+        { credentials: "include" }
+      );
+      if (!res.ok) throw new Error(`Failed to load roles (${res.status})`);
+      const data = await res.json();
+      setRoles(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load roles");
+    } finally {
+      setLoading(false);
+    }
+  }, [orgId]);
+
+  useEffect(() => { fetchRoles(); }, [fetchRoles]);
+
+  const handleDeleteRole = (roleId: string, roleName: string) => {
+    setConfirmState({
+      title: `Delete role "${roleName}"?`,
+      body: "Members assigned this role will fall back to their base org role. This cannot be undone.",
+      confirmLabel: "Delete role",
+      onConfirm: async () => {
+        setConfirmState(null);
+        await (organization as any).deleteOrgRole({ roleId, organizationId: orgId });
+        fetchRoles();
+      },
+    });
+  };
+
+  if (loading) return <div className="loading empty-state" style={{ fontSize: "0.78rem" }}>Loading roles…</div>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {confirmState && (
+        <ConfirmModal
+          title={confirmState.title}
+          body={confirmState.body}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onClose={() => setConfirmState(null)}
+        />
+      )}
+      {showCreate && (
+        <CreateRoleModal orgId={orgId} onClose={() => setShowCreate(false)} onCreated={fetchRoles} />
+      )}
+
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-tertiary)", maxWidth: 420 }}>
+          Custom roles let you define fine-grained permissions for org members beyond the built-in owner / admin / member hierarchy.
+        </p>
+        <button className="btn btn-primary" style={{ fontSize: "0.76rem", padding: "5px 11px", flexShrink: 0 }} onClick={() => setShowCreate(true)}>
+          <Shield size={12} /> New role
+        </button>
+      </div>
+
+      {error && <ErrBanner msg={error} />}
+
+      {roles.length === 0 ? (
+        <div className="card empty-state">
+          <Shield size={18} color="var(--color-text-tertiary)" strokeWidth={1.5} style={{ marginBottom: 10 }} />
+          <p>No custom roles yet. Create one to define granular permissions.</p>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          {roles.map((role: any, i: number) => {
+            const permsObj: PermMap = (() => {
+              try { return typeof role.permissions === "string" ? JSON.parse(role.permissions) : role.permissions ?? {}; }
+              catch { return {}; }
+            })();
+            return (
+              <div key={role.id} style={{
+                padding: "13px 18px",
+                borderBottom: i < roles.length - 1 ? "1px solid var(--color-border)" : undefined,
+                transition: "background 0.1s",
+              }}
+                onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-hover)")}
+                onMouseLeave={e => (e.currentTarget.style.background = "")}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Shield size={12} color="var(--color-accent)" />
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-primary)" }}>
+                      {role.role}
+                    </span>
+                  </div>
+                  <button className="btn btn-ghost" style={{ padding: "4px 6px", color: "var(--color-red)" }}
+                    onClick={() => handleDeleteRole(role.id, role.role)} title="Delete role">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap" }}>
+                  {Object.entries((() => { try { return typeof role.permission === "string" ? JSON.parse(role.permission) : role.permission ?? {}; } catch { return {}; } })()).map(([resource, actions]) => (
+                    <PermBadge key={resource} resource={resource} actions={actions as string[]} />
+                  ))}
+                  {Object.keys((() => { try { return typeof role.permission === "string" ? JSON.parse(role.permission) : role.permission ?? {}; } catch { return {}; } })()).length === 0 && (
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>No permissions assigned</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Org Detail Page ───────────────────────────────────────────────────────────
 
 function OrgDetailPage() {
@@ -279,6 +873,7 @@ function OrgDetailPage() {
   const [org, setOrg] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
   const [invitations, setInvitations] = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("members");
   const [showInvite, setShowInvite] = useState(false);
@@ -295,10 +890,13 @@ function OrgDetailPage() {
   const fetchOrg = async () => {
     setLoading(true);
     try {
-      const [orgRes, membersRes, invitesRes] = await Promise.all([
+      const [orgRes, membersRes, invitesRes, teamsRes] = await Promise.all([
         organization.getFullOrganization({ query: { organizationId: orgId } }),
         organization.listMembers({ query: { organizationId: orgId } }),
         organization.listInvitations({ query: { organizationId: orgId } }),
+        // list-teams is a GET — call directly
+        fetch(`/api/auth/organization/list-teams?organizationId=${orgId}`, { credentials: "include" })
+          .then(r => r.ok ? r.json() : []),
       ]);
       const orgData = orgRes.data;
       if (orgData) {
@@ -308,6 +906,7 @@ function OrgDetailPage() {
       }
       setMembers((membersRes.data as any)?.members ?? membersRes.data ?? []);
       setInvitations((invitesRes.data as any) ?? []);
+      setTeams(Array.isArray(teamsRes) ? teamsRes : []);
     } finally {
       setLoading(false);
     }
@@ -385,9 +984,12 @@ function OrgDetailPage() {
     </div>
   );
 
+  const pendingTeamCount = teams.length;
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "members", label: `Members (${members.length})`, icon: <Users size={13} /> },
     { key: "invitations", label: `Invitations (${invitations.filter(i => i.status === "pending").length})`, icon: <Mail size={13} /> },
+    { key: "teams", label: `Teams (${pendingTeamCount})`, icon: <UsersRound size={13} /> },
+    { key: "roles", label: "Roles", icon: <Shield size={13} /> },
     { key: "activity", label: "Activity", icon: <ClipboardList size={13} /> },
     { key: "settings", label: "Settings", icon: <Settings size={13} /> },
   ];
@@ -395,7 +997,7 @@ function OrgDetailPage() {
   return (
     <div className="animate-in" style={{ maxWidth: 760 }}>
       {showInvite && (
-        <InviteModal orgId={orgId} onClose={() => setShowInvite(false)} onInvited={fetchOrg} />
+        <InviteModal orgId={orgId} teams={teams} onClose={() => setShowInvite(false)} onInvited={fetchOrg} />
       )}
       {confirmState && (
         <ConfirmModal
@@ -414,7 +1016,6 @@ function OrgDetailPage() {
           <ArrowLeft size={12} /> Organizations
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          {/* Org avatar square */}
           <div style={{
             width: 44, height: 44, borderRadius: 5, flexShrink: 0,
             background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
@@ -476,7 +1077,6 @@ function OrgDetailPage() {
                 <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.84rem", fontWeight: 500, color: "var(--color-text-primary)" }}>{m.user?.name ?? "—"}</p>
                 <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>{m.user?.email ?? "—"}</p>
               </div>
-              {/* Role badge/selector */}
               <select
                 value={m.role}
                 onChange={e => handleChangeRole(m.id, e.target.value)}
@@ -505,9 +1105,6 @@ function OrgDetailPage() {
         </div>
       )}
 
-      {/* Activity tab */}
-      {activeTab === "activity" && <OrgAuditLog orgId={orgId} />}
-
       {/* Invitations tab */}
       {activeTab === "invitations" && (
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -530,6 +1127,7 @@ function OrgDetailPage() {
                 <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.83rem", color: "var(--color-text-primary)" }}>{inv.email}</p>
                 <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
                   Invited as <span style={{ color: "var(--color-accent)", fontWeight: 600 }}>{inv.role}</span>
+                  {inv.teamId && <span> · team <span style={{ color: "var(--color-accent)" }}>{teams.find(t => t.id === inv.teamId)?.name ?? inv.teamId}</span></span>}
                   {" · "}{inv.status}
                 </p>
               </div>
@@ -543,6 +1141,15 @@ function OrgDetailPage() {
           ))}
         </div>
       )}
+
+      {/* Teams tab */}
+      {activeTab === "teams" && <TeamsTab orgId={orgId} members={members} />}
+
+      {/* Roles tab */}
+      {activeTab === "roles" && <RolesTab orgId={orgId} />}
+
+      {/* Activity tab */}
+      {activeTab === "activity" && <OrgAuditLog orgId={orgId} />}
 
       {/* Settings tab */}
       {activeTab === "settings" && (
@@ -560,20 +1167,8 @@ function OrgDetailPage() {
                 <label className="form-label">Slug</label>
                 <input className="input" value={editSlug} onChange={e => setEditSlug(e.target.value)} />
               </div>
-              {saveMsg && (
-                <div style={{
-                  display: "flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)",
-                  fontSize: "0.76rem", color: "var(--color-green)", background: "var(--color-green-dim)",
-                  border: "1px solid rgba(52,211,153,0.2)", borderRadius: 4, padding: "8px 12px",
-                }}><CheckCircle size={12} /> {saveMsg}</div>
-              )}
-              {saveErr && (
-                <div style={{
-                  display: "flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)",
-                  fontSize: "0.76rem", color: "var(--color-red)", background: "var(--color-red-dim)",
-                  border: "1px solid rgba(248,113,113,0.2)", borderRadius: 4, padding: "8px 12px",
-                }}><AlertCircle size={12} /> {saveErr}</div>
-              )}
+              {saveMsg && <OkBanner msg={saveMsg} />}
+              {saveErr && <ErrBanner msg={saveErr} />}
               <div>
                 <button type="submit" className="btn btn-primary" disabled={saveLoading}>
                   {saveLoading ? "Saving…" : "Save changes"}
@@ -582,7 +1177,6 @@ function OrgDetailPage() {
             </form>
           </div>
 
-          {/* Danger zone */}
           <div className="card" style={{ padding: 0, overflow: "hidden", borderColor: "rgba(248,113,113,0.18)" }}>
             <div className="panel-header" style={{ borderBottomColor: "rgba(248,113,113,0.14)" }}>
               <p className="section-label" style={{ color: "var(--color-red)" }}>Danger zone</p>

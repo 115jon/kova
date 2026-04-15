@@ -12,6 +12,7 @@ import {
   twoFactorOtpEmail,
   verificationEmail,
 } from "./email";
+import { ac, member, admin as orgAdmin, owner } from "./permissions";
 import { deliverEvent } from "./webhook";
 
 /**
@@ -235,6 +236,23 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
 
           // Organizations — multi-tenancy (orgs = apps, members, invites, roles)
           organization({
+            // ── Access controller (shared with dynamic RBAC)
+            ac,
+            roles: { owner, admin: orgAdmin, member },
+
+            // ── Teams: group members within an org (adds team + teamMember tables)
+            teams: {
+              enabled: true,
+              maximumTeams: 20,          // per-org ceiling
+              allowRemovingAllTeams: true,
+            },
+
+            // ── Dynamic RBAC: create/edit/delete roles per-org at runtime
+            // Stores roles + permissions in the `organizationRole` table.
+            dynamicAccessControl: {
+              enabled: true,
+            },
+
             async sendInvitationEmail(data) {
               const inviteLink = `${env.DASHBOARD_URL}/accept-invitation/${data.id}`;
               const { subject, html } = invitationEmail({
