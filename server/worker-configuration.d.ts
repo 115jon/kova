@@ -4,7 +4,6 @@ interface Env {
   // ── Cloudflare bindings ──────────────────────────────────────
   DB: D1Database;
   KV: KVNamespace;
-  BUCKET: R2Bucket;
 
   // ── Runtime vars (wrangler.toml [vars] + secrets) ────────────
   AUTH_URL: string;
@@ -16,4 +15,7 @@ interface Env {
   DISCORD_CLIENT_SECRET: string;
   DASHBOARD_ADMIN_EMAIL: string;
   RESEND_API_KEY: string;
+  // CDN integration
+  CDN_URL: string;
+  CDN_API_KEY: string;
 }

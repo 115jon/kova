@@ -10,8 +10,10 @@ compatibility_flags = ["nodejs_compat"]
 AUTH_URL = "http://localhost:8787"
 # Production DASHBOARD_URL will be your Cloudflare Pages URL, e.g.:
 #   https://ralph-auth-dashboard.pages.dev   (or a custom domain)
-# Update trustedOrigins in auth.ts + ALLOWED_ORIGINS in index.ts at the same time.
 DASHBOARD_URL = "http://localhost:5174"
+# CDN — set as secret in production: wrangler secret put CDN_API_KEY
+# Dev URL overridden in .dev.vars; prod points to deployed worker.
+CDN_URL = "https://cdn.115jon.site"
 
 # ── D1 Database ─────────────────────────────────────────────
 [[d1_databases]]
@@ -24,10 +26,6 @@ database_id = "aefbb49d-1582-4052-bd4e-77e5d559a3c6"
 binding = "KV"
 id = "aecb44a2caff4a65a65a6f5c8e5c375e"
 
-# ── R2 Avatar Storage ────────────────────────────────────────
-[[r2_buckets]]
-binding = "BUCKET"
-bucket_name = "ralph-auth-avatars"
 
 [dev]
 port = 8787

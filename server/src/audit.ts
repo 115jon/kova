@@ -21,6 +21,7 @@ export type AuditAction =
   | "user.passwordChanged"
   | "user.passwordSet"          // OAuth-only user adds a password for the first time
   | "user.emailVerified"
+  | "user.avatarUpdated"        // user or admin changed the profile photo
   // Two-factor
   | "twoFactor.enabled"
   | "twoFactor.disabled"

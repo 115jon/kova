@@ -1,5 +1,5 @@
+import { AvatarUpload } from "@/components/AvatarUpload";
 import { ProviderIcon } from "@/components/BrandIcons";
-import { UserAvatar } from "@/components/UserAvatar";
 import type { ProviderId } from "@/lib/providers";
 import { relativeTime } from "@/lib/utils";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -158,6 +158,7 @@ function UserDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
+  const [localImage, setLocalImage] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true); setError("");
@@ -242,7 +243,14 @@ function UserDetailPage() {
 
       {/* ── Hero header ─────────────────────────────────────── */}
       <div className="card" style={{ padding: 28, marginBottom: 20, display: "flex", alignItems: "flex-start", gap: 20 }}>
-        <UserAvatar src={user.image} name={user.name} size={72} />
+        <AvatarUpload
+          src={localImage ?? user.image}
+          name={user.name}
+          size={72}
+          uploadUrl={`/api/admin/users/${userId}/avatar`}
+          onSuccess={(url) => setLocalImage(url)}
+          onError={(msg) => setActionError(msg)}
+        />
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>

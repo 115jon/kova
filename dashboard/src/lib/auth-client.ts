@@ -43,6 +43,7 @@ export const {
   signOut,
   useSession,
   getSession,  // imperative fetch — call after TOTP to refresh the session store
+  updateUser,  // patches user fields + invalidates Better Auth's KV session cache
 } = authClient;
 
 // ── Typed plugin accessors ────────────────────────────────────────────────────
@@ -72,3 +73,4 @@ export const listAccounts = () => authClient.listAccounts();
 
 // Exported for direct use in components (e.g. building OAuth redirect URLs)
 export { AUTH_URL };
+

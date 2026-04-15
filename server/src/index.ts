@@ -1,19 +1,20 @@
-import { hashPassword } from "better-auth/crypto";
+﻿﻿import { hashPassword } from "better-auth/crypto";
+import type { AuditAction } from "./audit";
 import { logAudit, queryAuditLogs } from "./audit";
 import { createAuth } from "./auth";
 import { parseDevice, parseGeo } from "./device";
 import { validatePassword } from "./password";
 
-// ── Allowed CORS origins ──────────────────────────────────────────────────────
+// â”€â”€ Allowed CORS origins â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
 // In development: Vite proxy (5174) and wrangler dev (8787) both count as origins.
 // In production: add your deployed dashboard URL (Cloudflare Pages) here too.
 //   e.g. "https://ralph-auth-dashboard.pages.dev" or "https://dash.115jon.site"
 //
-// ⚠️  PRODUCTION NOTE: Before deploying, add the production dashboard Pages URL
+// âš ï¸  PRODUCTION NOTE: Before deploying, add the production dashboard Pages URL
 //     to this set AND to trustedOrigins in auth.ts.
 //     Auth server URLs: https://auth.115jon.site, https://ralph-auth.jontitor.workers.dev
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const ALLOWED_ORIGINS = new Set([
   // Dev
   "http://localhost:3000",
@@ -21,17 +22,20 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:5174",
   "http://localhost:8787",
   "http://localhost:8888",
-  // Production — third-party consumers
+  // Production â€” third-party consumers
   "https://meet.115jon.site",
   "https://ralph-meet.jontitor.workers.dev",
   // Dashboard deployed as a Worker
   "https://ralph-auth-dashboard.jontitor.workers.dev",
   // "https://dash.115jon.site",  // uncomment if you add a custom domain
+  // CDN dashboard (dev + prod)
+  "http://localhost:5175",
+  "https://cdn.115jon.site",
 ]);
 
 /**
  * Returns a validated `Access-Control-Allow-Origin` value.
- * Only echoes the origin if it's in the allowlist — never wildcards credentials.
+ * Only echoes the origin if it's in the allowlist â€” never wildcards credentials.
  */
 function allowedOrigin(request: Request): string {
   const origin = request.headers.get("Origin") ?? "";
@@ -82,8 +86,8 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
 
-    // ── CORS preflight ────────────────────────────────────────
-    // Validate Origin against allowlist — never reflect arbitrary origins.
+    // â”€â”€ CORS preflight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Validate Origin against allowlist â€” never reflect arbitrary origins.
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -91,17 +95,260 @@ export default {
       });
     }
 
-    // ── Auth routes — delegate entirely to Better Auth ────────
+    // â”€â”€ Auth routes â€” delegate entirely to Better Auth â”€â”€â”€â”€â”€â”€â”€â”€
     // Better Auth uses trustedOrigins from auth.ts for its own CORS.
     if (url.pathname.startsWith("/api/auth")) {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       return auth.handler(request);
     }
 
-    // ── Set initial password (OAuth-only users adding a password) ─
+    // â”€â”€ Avatar upload (self) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     //
+    // POST /api/user/avatar   (multipart/form-data, field name "avatar")
+    //
+    // Validates: image/jpeg | image/png | image/webp, â‰¤ 2 MB.
+    // Forwards to CDN; the returned absolute URL is stored as user.image in D1.
+    //
+    // Any authenticated user can update their own avatar.
+    if (url.pathname === "/api/user/avatar" && request.method === "POST") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+
+      const form = await request.formData().catch(() => null);
+      const file = form?.get("avatar");
+      const isFile = (v: unknown): v is { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> } =>
+        typeof v === "object" && v !== null && "arrayBuffer" in v && "type" in v && "size" in v;
+      if (!isFile(file)) {
+        return withHeaders(Response.json({ error: "No file provided â€” send a multipart field named 'avatar'" }, { status: 400 }), request);
+      }
+
+      const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+      if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
+        return withHeaders(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        return withHeaders(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
+      }
+
+      // Content-addressed upload — each upload gets a unique ID like Discord's
+      // /avatars/{userId}/{hash}.webp. URL is immutable; old avatar is deleted
+      // from R2 as fire-and-forget to avoid accumulating stale files.
+      const uploadId = crypto.randomUUID().replace(/-/g, "");
+      const cdnKey = `avatars/${session.user.id}/${uploadId}.webp`;
+      const oldImage = (session.user as { image?: string | null }).image ?? null;
+
+      const cdnForm = new FormData();
+      cdnForm.append("file", new File([await file.arrayBuffer()], "avatar.webp", { type: file.type }));
+      cdnForm.append("app", "ralph-auth");
+      cdnForm.append("key", cdnKey);
+      cdnForm.append("uploader", session.user.id);
+      cdnForm.append("tags", "avatar");
+      cdnForm.append("cacheControl", "immutable");
+
+      const cdnRes = await fetch(`${env.CDN_URL}/upload`, {
+        method: "POST",
+        headers: { "CDN-API-Key": env.CDN_API_KEY },
+        body: cdnForm,
+      });
+      if (!cdnRes.ok) {
+        const detail = await cdnRes.text().catch(() => "");
+        return withHeaders(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
+      }
+      const { url: imageUrl } = await cdnRes.json() as { url: string };
+
+      await env.DB
+        .prepare(`UPDATE "user" SET image = ?, updatedAt = ? WHERE id = ?`)
+        .bind(imageUrl, Date.now(), session.user.id)
+        .run();
+
+      if (oldImage && oldImage.startsWith(env.CDN_URL)) {
+        const oldKey = oldImage.replace(`${env.CDN_URL}/`, "").split("?")[0];
+        fetch(`${env.CDN_URL}/files/${oldKey}`, {
+          method: "DELETE",
+          headers: { "CDN-API-Key": env.CDN_API_KEY },
+        }).catch(() => { });
+      }
+
+      await logAudit(env.DB, {
+        userId: session.user.id,
+        actor: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        action: "user.avatarUpdated" as AuditAction,
+        ipAddress: request.headers.get("CF-Connecting-IP"),
+        userAgent: request.headers.get("User-Agent"),
+      }).catch(() => { });
+
+      return withHeaders(Response.json({ imageUrl }), request);
+    }
+
+    // â”€â”€ Avatar upload (admin â€” CRM override) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    //
+    // POST /api/admin/users/:userId/avatar   (multipart/form-data, field "avatar")
+    //
+    // Identical pipeline to the self-service endpoint but targets any user.
+    // Admin-only.
+    const adminAvatarMatch = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/avatar$/);
+    if (adminAvatarMatch && request.method === "POST") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const role = (session.user as { role?: string }).role ?? "";
+      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      const targetUserId = adminAvatarMatch[1]!;
+      const targetUser = await env.DB
+        .prepare(`SELECT id, name, email, image FROM "user" WHERE id = ? LIMIT 1`)
+        .bind(targetUserId)
+        .first<{ id: string; name: string; email: string; image: string | null }>()
+        .catch(() => null);
+      if (!targetUser) {
+        return withHeaders(Response.json({ error: "User not found" }, { status: 404 }), request);
+      }
+
+      const form = await request.formData().catch(() => null);
+      const file = form?.get("avatar");
+      const isFile2 = (v: unknown): v is { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> } =>
+        typeof v === "object" && v !== null && "arrayBuffer" in v && "type" in v && "size" in v;
+      if (!isFile2(file)) {
+        return withHeaders(Response.json({ error: "No file provided" }, { status: 400 }), request);
+      }
+
+      const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+      if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
+        return withHeaders(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        return withHeaders(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
+      }
+
+      // Content-addressed: unique uploadId per upload — same pattern as user self-upload.
+      const uploadId2 = crypto.randomUUID().replace(/-/g, "");
+      const cdnKey2 = `avatars/${targetUserId}/${uploadId2}.webp`;
+
+      // Capture old image for cleanup
+      const oldTargetImage = targetUser.image ?? null;
+
+      const cdnForm = new FormData();
+      cdnForm.append("file", new File([await file.arrayBuffer()], "avatar.webp", { type: file.type }));
+      cdnForm.append("app", "ralph-auth");
+      cdnForm.append("key", cdnKey2);
+      cdnForm.append("uploader", session.user.id);
+      cdnForm.append("tags", "avatar");
+      cdnForm.append("cacheControl", "immutable");
+
+      const cdnRes = await fetch(`${env.CDN_URL}/upload`, {
+        method: "POST",
+        headers: { "CDN-API-Key": env.CDN_API_KEY },
+        body: cdnForm,
+      });
+      if (!cdnRes.ok) {
+        const detail = await cdnRes.text().catch(() => "");
+        return withHeaders(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
+      }
+      const { url: imageUrl } = await cdnRes.json() as { url: string };
+
+      await env.DB
+        .prepare(`UPDATE "user" SET image = ?, updatedAt = ? WHERE id = ?`)
+        .bind(imageUrl, Date.now(), targetUserId)
+        .run();
+
+      // Fire-and-forget cleanup of previous avatar
+      if (oldTargetImage && oldTargetImage.startsWith(env.CDN_URL)) {
+        const oldKey = oldTargetImage.replace(`${env.CDN_URL}/`, "").split("?")[0];
+        fetch(`${env.CDN_URL}/files/${oldKey}`, {
+          method: "DELETE",
+          headers: { "CDN-API-Key": env.CDN_API_KEY },
+        }).catch(() => { });
+      }
+
+      await logAudit(env.DB, {
+        userId: targetUserId,
+        actor: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        action: "user.avatarUpdated" as AuditAction,
+        targetType: "user",
+        targetId: targetUserId,
+        targetLabel: targetUser.email,
+        ipAddress: request.headers.get("CF-Connecting-IP"),
+        userAgent: request.headers.get("User-Agent"),
+      }).catch(() => { });
+
+      return withHeaders(Response.json({ imageUrl }), request);
+    }
+
+    // â”€â”€ Avatar remove (self) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    //
+    // DELETE /api/user/avatar
+    //
+    // Nulls user.image in D1 and deletes the CDN asset.
+    // Better Auth will show OAuth picture on next sign-in, or initials until then.
+    if (url.pathname === "/api/user/avatar" && request.method === "DELETE") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+
+      // Get current image URL to purge both the versioned URL (exactly what
+      // the browser cached) AND the bare URL (belt-and-suspenders).
+      const row = await env.DB
+        .prepare(`SELECT image FROM "user" WHERE id = ? LIMIT 1`)
+        .bind(session.user.id)
+        .first<{ image: string | null }>();
+
+      // Null the DB image field
+      await env.DB
+        .prepare(`UPDATE "user" SET image = NULL, updatedAt = ? WHERE id = ?`)
+        .bind(Date.now(), session.user.id)
+        .run();
+
+      // Derive CDN key from the stored URL; strip ?v= for back-compat with old mutable uploads.
+      if (row?.image && row.image.startsWith(env.CDN_URL)) {
+        const oldKey = row.image.replace(env.CDN_URL + "/", "").split("?")[0];
+        fetch(env.CDN_URL + "/files/" + oldKey, {
+          method: "DELETE",
+          headers: { "CDN-API-Key": env.CDN_API_KEY },
+        }).catch(() => { });
+      }
+
+      await logAudit(env.DB, {
+        userId: session.user.id,
+        actor: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        action: "user.avatarUpdated" as AuditAction,
+        ipAddress: request.headers.get("CF-Connecting-IP"),
+        userAgent: request.headers.get("User-Agent"),
+      }).catch(() => { });
+
+      return withHeaders(Response.json({ ok: true, previous: row?.image ?? null }), request);
+    }
+
+    // â”€â”€ Avatar serve â€” legacy redirect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    //
+    // GET /api/avatar/avatars/{userId}.{ext}
+    //
+    // Old avatars stored as relative /api/avatar/... paths in the DB redirect
+    // permanently to the CDN URL. New uploads store absolute CDN URLs directly.
+    if (url.pathname.startsWith("/api/avatar/") && request.method === "GET") {
+      const key = url.pathname.replace("/api/avatar/", ""); // e.g. "avatars/usr_123.jpg"
+      const cdnUrl = `${env.CDN_URL}/ralph-auth/${key}`;
+      return Response.redirect(cdnUrl, 301);
+    }
+
+
     // Better Auth's admin.setUserPassword doesn't create a credential
-    // account entry — it only updates an existing one. For OAuth-only
+    // account entry â€” it only updates an existing one. For OAuth-only
     // users we need to INSERT a new account row ourselves using the
     // same hashPassword function that Better Auth uses for sign-in.
     //
@@ -132,7 +379,7 @@ export default {
         );
       }
 
-      // 3. Reject if credential account already exists — use changePassword instead
+      // 3. Reject if credential account already exists â€” use changePassword instead
       const existing = await env.DB
         .prepare("SELECT id FROM account WHERE userId = ? AND providerId = 'credential'")
         .bind(session.user.id)
@@ -176,13 +423,13 @@ export default {
       return withHeaders(Response.json({ success: true }), request);
     }
 
-    // ── Health check ──────────────────────────────────────────
-    // Minimal response — no service name or timestamp to avoid info leakage.
+    // â”€â”€ Health check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Minimal response â€” no service name or timestamp to avoid info leakage.
     if (url.pathname === "/health") {
       return withHeaders(Response.json({ status: "ok" }), request);
     }
 
-    // ── Audit log query ───────────────────────────────────────
+    // â”€â”€ Audit log query â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     //
     // GET /api/audit/logs
     //   ?userId=   filter by subject user
@@ -191,7 +438,7 @@ export default {
     //   ?limit=    max rows (1-200, defaults to 50)
     //   ?before=   opaque cursor from previous response for next-page
     //
-    // Admin-only — 403 if caller is not role:admin.
+    // Admin-only â€” 403 if caller is not role:admin.
     if (url.pathname === "/api/audit/logs" && request.method === "GET") {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
 
@@ -225,7 +472,7 @@ export default {
       );
     }
 
-    // ── User detail (aggregate) ───────────────────────────────
+    // â”€â”€ User detail (aggregate) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     //
     // GET /api/admin/users/:userId
     //   Returns full user identity: user record, linked provider accounts,
@@ -299,14 +546,14 @@ export default {
       }), request);
     }
 
-    // ── Enriched sessions list ────────────────────────────────
+    // â”€â”€ Enriched sessions list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     //
     // GET /api/admin/sessions
-    //   ?userId=   optional — filter to a single user's sessions
+    //   ?userId=   optional â€” filter to a single user's sessions
     //
     // Returns all non-expired sessions, each enriched with:
-    //   - Parsed UA → deviceType, browser, os, label
-    //   - Cloudflare geo → city, country, flag, location string
+    //   - Parsed UA â†’ deviceType, browser, os, label
+    //   - Cloudflare geo â†’ city, country, flag, location string
     //   - User name, email, image (joined from `user` table)
     //
     // Admin-only.
@@ -372,11 +619,11 @@ export default {
 
       const rawSessions = sessionsResult.results ?? [];
 
-      // Current caller's session token — used for "This session" badge
+      // Current caller's session token â€” used for "This session" badge
       const callerToken = session.session.token;
 
       // Enrich each session row with UA parsing + CF geo
-      // NOTE: CF properties are from the admin's own request — this gives us the
+      // NOTE: CF properties are from the admin's own request â€” this gives us the
       // admin user's geo. Real per-session geo would require storing it at login time.
       // We store ipAddress already, so we use the stored IP display + live CF for admin.
       const geo = parseGeo(request.cf as IncomingRequestCfProperties | undefined);
@@ -404,7 +651,7 @@ export default {
           os: device.os,
           osVersion: device.osVersion,
           deviceLabel: device.label,
-          // Geo from CF (live request geo — best effort)
+          // Geo from CF (live request geo â€” best effort)
           geoCity: geo.city,
           geoCountry: geo.country,
           geoLocation: geo.location,
@@ -418,12 +665,12 @@ export default {
       }), request);
     }
 
-    // ── Bulk revoke other sessions ──────────────────────────────
+    // â”€â”€ Bulk revoke other sessions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     //
     // POST /api/admin/sessions/revoke-all-others
     // Body: { exceptToken: string }
     //
-    // Deletes all non-expired sessions whose token ≠ exceptToken.
+    // Deletes all non-expired sessions whose token â‰  exceptToken.
     // Admin-only.
     if (url.pathname === "/api/admin/sessions/revoke-all-others" && request.method === "POST") {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);

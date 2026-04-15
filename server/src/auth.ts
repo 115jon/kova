@@ -38,9 +38,6 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         // KV for session secondary storage + rate limit counters
         kv: env.KV,
 
-        // R2 for avatar/file uploads — must be { bucket } shaped, not bare R2Bucket
-        r2: { bucket: env.BUCKET },
-
         // Pass `cf` from the incoming request for geo + IP detection.
         // If cf is undefined (local dev without --remote), disable geo.
         cf: cf,

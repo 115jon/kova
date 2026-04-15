@@ -1,6 +1,6 @@
+import { AvatarUpload } from "@/components/AvatarUpload";
 import { ProviderIcon } from "@/components/BrandIcons";
-import { UserAvatar } from "@/components/UserAvatar";
-import { AUTH_URL, authClient, listAccounts, passkey, signOut, twoFactor, useSession } from "@/lib/auth-client";
+import { AUTH_URL, authClient, listAccounts, passkey, signOut, twoFactor, updateUser, useSession } from "@/lib/auth-client";
 import { validatePassword } from "@/lib/password";
 import type { ProviderId } from "@/lib/providers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -698,9 +698,32 @@ function SettingsPage() {
   };
 
   const currentUsername = (session?.user as any)?.username as string | null | undefined;
+  // localImage: optimistic preview while updateUser propagates through Better Auth
+  const [localImage, setLocalImage] = useState<string | null>(null);
+  const [removingAvatar, setRemovingAvatar] = useState(false);
+
+  const hasCustomAvatar = (): boolean => {
+    const img = localImage ?? (session?.user as any)?.image as string | null;
+    // CDN URLs are absolute; OAuth pictures from Google/Discord are also absolute
+    // but NOT routed through our CDN domain.
+    return !!img && img.includes("cdn.115jon.site") || !!img && img.includes("localhost:5173");
+  };
+
+  const handleRemoveAvatar = async () => {
+    setRemovingAvatar(true);
+    try {
+      await fetch("/api/user/avatar", { method: "DELETE", credentials: "include" });
+      // Tell Better Auth to null out the image; it will fall back to the OAuth
+      // picture on the next OAuth sign-in, or show initials until then.
+      await updateUser({ image: null } as any);
+      setLocalImage(null);
+    } catch { /* silent */ } finally {
+      setRemovingAvatar(false);
+    }
+  };
 
   return (
-    <div className="animate-in" style={{ maxWidth: 680 }}>
+    <div className="animate-in">
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: "1.4rem", fontWeight: 700, color: "#e2e8f0", letterSpacing: "-0.02em" }}>Settings</h1>
         <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 2 }}>Account security &amp; platform configuration</p>
@@ -711,15 +734,39 @@ function SettingsPage() {
         {/* Profile */}
         {session && (
           <SectionCard icon={<Shield size={14} />} color="#818cf8" title="Profile">
-            <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--color-border)" }}>
-              <UserAvatar
-                src={(session.user as any).image as string | null}
+            <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 14, borderBottom: "1px solid var(--color-border)" }}>
+              <AvatarUpload
+                src={localImage ?? ((session.user as any).image as string | null)}
                 name={session.user.name}
-                size={40}
+                size={48}
+                uploadUrl="/api/user/avatar"
+                onSuccess={async (url) => {
+                  setLocalImage(url);
+                  // Propagate through Better Auth — invalidates KV session cache
+                  // so useSession() everywhere (sidebar, etc.) sees the new image.
+                  await updateUser({ image: url } as any);
+                }}
               />
               <div>
                 <p style={{ fontWeight: 600, color: "#e2e8f0" }}>{session.user.name}</p>
                 <p style={{ fontSize: "0.8rem", color: "#64748b" }}>{session.user.email}</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                  <p style={{ fontSize: "0.7rem", color: "#475569" }}>Click avatar to change photo</p>
+                  {hasCustomAvatar() && (
+                    <button
+                      onClick={handleRemoveAvatar}
+                      disabled={removingAvatar}
+                      style={{
+                        all: "unset", cursor: removingAvatar ? "wait" : "pointer",
+                        fontSize: "0.7rem", color: "#ef4444",
+                        opacity: removingAvatar ? 0.5 : 1,
+                        textDecoration: "underline", textDecorationStyle: "dotted",
+                      }}
+                    >
+                      {removingAvatar ? "Removing…" : "Remove photo"}
+                    </button>
+                  )}
+                </div>
               </div>
               <span className="badge badge-blue" style={{ marginLeft: "auto" }}>
                 {(session.user as any).role ?? "user"}
