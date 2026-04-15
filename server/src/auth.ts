@@ -12,6 +12,7 @@ import {
   twoFactorOtpEmail,
   verificationEmail,
 } from "./email";
+import { deliverEvent } from "./webhook";
 
 /**
  * Factory — called once per request inside the fetch() handler.
@@ -116,6 +117,12 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
                   actorEmail: user.email ?? null,
                   action: "user.signUp",
                 }).catch(() => { }); // non-fatal
+                // Webhook fan-out — fire-and-forget
+                deliverEvent(env.DB, "user.signUp", {
+                  userId: user.id,
+                  actorName: user.name ?? null,
+                  actorEmail: user.email ?? null,
+                }).catch(() => { });
               },
             },
           },
@@ -143,6 +150,14 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
                   ipAddress: session.ipAddress ?? null,
                   userAgent: session.userAgent ?? null,
                 }).catch(() => { }); // non-fatal — never block login
+                // Webhook fan-out
+                deliverEvent(env.DB, "user.signIn", {
+                  userId: session.userId,
+                  actorName: user?.name ?? null,
+                  actorEmail: user?.email ?? null,
+                  ipAddress: session.ipAddress ?? null,
+                  userAgent: session.userAgent ?? null,
+                }).catch(() => { });
               },
             },
             delete: {
@@ -167,6 +182,14 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
                   ipAddress: session.ipAddress ?? null,
                   userAgent: session.userAgent ?? null,
                 }).catch(() => { }); // non-fatal
+                // Webhook fan-out
+                deliverEvent(env.DB, "user.signOut", {
+                  userId: session.userId,
+                  actorName: user?.name ?? null,
+                  actorEmail: user?.email ?? null,
+                  ipAddress: session.ipAddress ?? null,
+                  userAgent: session.userAgent ?? null,
+                }).catch(() => { });
               },
             },
           },

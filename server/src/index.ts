@@ -4,6 +4,14 @@ import { logAudit, queryAuditLogs } from "./audit";
 import { createAuth } from "./auth";
 import { parseDevice, parseGeo } from "./device";
 import { validatePassword } from "./password";
+import {
+  createWebhookEndpoint,
+  deleteWebhookEndpoint,
+  deliverEvent,
+  listWebhookEndpoints,
+  sendTestPing,
+  setWebhookEnabled,
+} from "./webhook";
 
 // â”€â”€ Allowed CORS origins â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
@@ -181,6 +189,12 @@ export default {
         ipAddress: request.headers.get("CF-Connecting-IP"),
         userAgent: request.headers.get("User-Agent"),
       }).catch(() => { });
+      deliverEvent(env.DB, "user.avatarUpdated", {
+        userId: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        imageUrl,
+      }).catch(() => { });
 
       return withHeaders(Response.json({ imageUrl }), request);
     }
@@ -282,6 +296,14 @@ export default {
         ipAddress: request.headers.get("CF-Connecting-IP"),
         userAgent: request.headers.get("User-Agent"),
       }).catch(() => { });
+      deliverEvent(env.DB, "user.avatarUpdated", {
+        userId: targetUserId,
+        actor: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        targetId: targetUserId,
+        targetLabel: targetUser.email,
+      }).catch(() => { });
 
       return withHeaders(Response.json({ imageUrl }), request);
     }
@@ -329,6 +351,12 @@ export default {
         action: "user.avatarUpdated" as AuditAction,
         ipAddress: request.headers.get("CF-Connecting-IP"),
         userAgent: request.headers.get("User-Agent"),
+      }).catch(() => { });
+      deliverEvent(env.DB, "user.avatarUpdated", {
+        userId: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        removed: true,
       }).catch(() => { });
 
       return withHeaders(Response.json({ ok: true, previous: row?.image ?? null }), request);
@@ -419,6 +447,11 @@ export default {
         ipAddress: request.headers.get("CF-Connecting-IP"),
         userAgent: request.headers.get("User-Agent"),
       });
+      deliverEvent(env.DB, "user.passwordSet", {
+        userId: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+      }).catch(() => { });
 
       return withHeaders(Response.json({ success: true }), request);
     }
@@ -709,11 +742,161 @@ export default {
         userAgent: request.headers.get("User-Agent"),
         metadata: { revokedCount: result.meta?.changes ?? 0 },
       }).catch(() => { });
+      deliverEvent(env.DB, "session.revokeAll", {
+        userId: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        revokedCount: result.meta?.changes ?? 0,
+      }).catch(() => { });
 
       return withHeaders(Response.json({
         success: true,
         revokedCount: result.meta?.changes ?? 0,
       }), request);
+    }
+
+    // ── Webhook endpoints: list + create ─────────────────────────────────────
+    //
+    // GET  /api/webhooks/endpoints            list all (admin)
+    // POST /api/webhooks/endpoints            create new (admin)
+    //
+    // POST body: { url: string; events: string[] | ["*"]; orgId?: string }
+    if (url.pathname === "/api/webhooks/endpoints") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const role = (session.user as { role?: string }).role ?? "";
+      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      // ── GET: list all endpoints ───────────────────────────────────────────
+      if (request.method === "GET") {
+        const orgId = url.searchParams.get("orgId") ?? undefined;
+        const endpoints = await listWebhookEndpoints(env.DB, { orgId });
+        return withHeaders(Response.json({ endpoints }), request);
+      }
+
+      // ── POST: create endpoint ─────────────────────────────────────────────
+      if (request.method === "POST") {
+        let body: { url?: string; events?: unknown; orgId?: string };
+        try {
+          body = await request.json() as { url?: string; events?: unknown; orgId?: string };
+        } catch {
+          return withHeaders(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+        }
+
+        if (!body.url || typeof body.url !== "string") {
+          return withHeaders(Response.json({ error: "'url' is required" }, { status: 400 }), request);
+        }
+        // Must be HTTPS in production; allow HTTP for localhost dev
+        try {
+          const parsed = new URL(body.url);
+          if (parsed.protocol !== "https:" && parsed.hostname !== "localhost" && !parsed.hostname.startsWith("127.")) {
+            return withHeaders(Response.json({ error: "Webhook URL must use HTTPS" }, { status: 400 }), request);
+          }
+        } catch {
+          return withHeaders(Response.json({ error: "Invalid URL" }, { status: 400 }), request);
+        }
+
+        const events = Array.isArray(body.events) && body.events.length > 0
+          ? body.events as AuditAction[]
+          : ["*"] as ["*"];
+
+        const { endpoint, rawSecret } = await createWebhookEndpoint(env.DB, {
+          userId: session.user.id,
+          orgId: body.orgId ?? null,
+          url: body.url,
+          events,
+        });
+
+        return withHeaders(Response.json({
+          endpoint,
+          // Raw secret shown ONCE — consumer must store it now
+          rawSecret,
+        }, { status: 201 }), request);
+      }
+
+      return withHeaders(new Response("Method Not Allowed", { status: 405 }), request);
+    }
+
+    // ── Webhook endpoint: delete ─────────────────────────────────────────────
+    //
+    // DELETE /api/webhooks/endpoints/:id
+    const webhookDeleteMatch = url.pathname.match(/^\/api\/webhooks\/endpoints\/([^/]+)$/);
+    if (webhookDeleteMatch && request.method === "DELETE") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const role = (session.user as { role?: string }).role ?? "";
+      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      const endpointId = webhookDeleteMatch[1]!;
+      const deleted = await deleteWebhookEndpoint(env.DB, endpointId);
+      if (!deleted) {
+        return withHeaders(Response.json({ error: "Endpoint not found" }, { status: 404 }), request);
+      }
+      return withHeaders(Response.json({ success: true }), request);
+    }
+
+    // ── Webhook endpoint: toggle enabled ─────────────────────────────────────
+    //
+    // PATCH /api/webhooks/endpoints/:id   body: { enabled: boolean }
+    const webhookPatchMatch = url.pathname.match(/^\/api\/webhooks\/endpoints\/([^/]+)$/);
+    if (webhookPatchMatch && request.method === "PATCH") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const role = (session.user as { role?: string }).role ?? "";
+      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      const endpointId = webhookPatchMatch[1]!;
+      let body: { enabled?: boolean };
+      try {
+        body = await request.json() as { enabled?: boolean };
+      } catch {
+        return withHeaders(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+      }
+      if (typeof body.enabled !== "boolean") {
+        return withHeaders(Response.json({ error: "'enabled' (boolean) is required" }, { status: 400 }), request);
+      }
+
+      const updated = await setWebhookEnabled(env.DB, endpointId, body.enabled);
+      if (!updated) {
+        return withHeaders(Response.json({ error: "Endpoint not found" }, { status: 404 }), request);
+      }
+      return withHeaders(Response.json({ success: true, enabled: body.enabled }), request);
+    }
+
+    // ── Webhook endpoint: test ping ──────────────────────────────────────────
+    //
+    // POST /api/webhooks/endpoints/:id/test
+    const webhookTestMatch = url.pathname.match(/^\/api\/webhooks\/endpoints\/([^/]+)\/test$/);
+    if (webhookTestMatch && request.method === "POST") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const role = (session.user as { role?: string }).role ?? "";
+      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      const endpointId = webhookTestMatch[1]!;
+      const result = await sendTestPing(env.DB, endpointId);
+      const statusCode = result.status === 404 ? 404 : 200;
+      return withHeaders(Response.json(result, { status: statusCode }), request);
     }
 
     return withHeaders(new Response("Not found", { status: 404 }), request);
