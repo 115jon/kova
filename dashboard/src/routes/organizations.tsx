@@ -1,3 +1,4 @@
+import { Modal } from "@/components/Modal";
 import { organization } from "@/lib/auth-client";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Building2, ChevronRight, Crown, Plus, Shield } from "lucide-react";
@@ -46,54 +47,52 @@ function CreateOrgModal({ onClose, onCreated }: { onClose: () => void; onCreated
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 440 }}>
-        <div className="modal-header">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 5,
-              background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <Building2 size={15} color="var(--color-accent)" />
-            </div>
-            <div>
-              <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "0.88rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>Create organization</h2>
-              <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>You'll be the owner</p>
-            </div>
+    <Modal onClose={onClose} maxWidth={440}>
+      <div className="modal-header">
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 5,
+            background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Building2 size={15} color="var(--color-accent)" />
+          </div>
+          <div>
+            <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "0.88rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>Create organization</h2>
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>You'll be the owner</p>
           </div>
         </div>
-
-        <form onSubmit={handleCreate} className="modal-body">
-          <div className="form-group">
-            <label className="form-label">Name</label>
-            <input className="input" placeholder="Acme Inc." value={name}
-              onChange={e => setName(e.target.value)} autoFocus />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Slug</label>
-            <input className="input" placeholder="acme-inc" value={slug}
-              onChange={e => { setSlug(e.target.value); setSlugTouched(true); }}
-              style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem" }} />
-            <p className="form-hint">Used in URLs — letters, numbers and hyphens only</p>
-          </div>
-          {error && (
-            <div style={{
-              background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-              borderRadius: 4, padding: "8px 12px",
-              fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.75rem",
-            }}>{error}</div>
-          )}
-          <div className="modal-footer" style={{ border: "none", padding: 0 }}>
-            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary"
-              disabled={loading || !name.trim()}>
-              <Building2 size={13} /> {loading ? "Creating…" : "Create"}
-            </button>
-          </div>
-        </form>
       </div>
-    </div>
+
+      <form onSubmit={handleCreate} className="modal-body">
+        <div className="form-group">
+          <label className="form-label">Name</label>
+          <input className="input" placeholder="Acme Inc." value={name}
+            onChange={e => setName(e.target.value)} autoFocus />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Slug</label>
+          <input className="input" placeholder="acme-inc" value={slug}
+            onChange={e => { setSlug(e.target.value); setSlugTouched(true); }}
+            style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem" }} />
+          <p className="form-hint">Used in URLs — letters, numbers and hyphens only</p>
+        </div>
+        {error && (
+          <div style={{
+            background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+            borderRadius: 4, padding: "8px 12px",
+            fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.75rem",
+          }}>{error}</div>
+        )}
+        <div className="modal-footer" style={{ border: "none", padding: 0 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary"
+            disabled={loading || !name.trim()}>
+            <Building2 size={13} /> {loading ? "Creating…" : "Create"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

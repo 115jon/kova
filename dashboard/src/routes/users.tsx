@@ -1,3 +1,4 @@
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { relativeTime } from "@/lib/utils";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -32,6 +33,9 @@ function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [actionUser, setActionUser] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const [confirmState, setConfirmState] = useState<{
+    title: string; body: string; confirmLabel: string; onConfirm: () => void;
+  } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -77,18 +81,39 @@ function UsersPage() {
   };
 
   const setRole = (id: string, role: string, e: React.MouseEvent) => action("set-role", { userId: id, role }, id, e);
-  const banUser = (id: string, e: React.MouseEvent) => action("ban-user", { userId: id, banReason: "Banned by admin" }, id, e);
-  const unbanUser = (id: string, e: React.MouseEvent) => action("unban-user", { userId: id }, id, e);
-  const deleteUser = (id: string, e: React.MouseEvent) => {
+  const banUser = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Delete this user permanently?")) return;
-    action("remove-user", { userId: id }, id, e);
+    setConfirmState({
+      title: "Ban this user?",
+      body: "They will be unable to sign in until unbanned.",
+      confirmLabel: "Ban user",
+      onConfirm: () => { setConfirmState(null); action("ban-user", { userId: id, banReason: "Banned by admin" }, id, e); },
+    });
+  };
+  const unbanUser = (id: string, e: React.MouseEvent) => action("unban-user", { userId: id }, id, e);
+  const deleteUser = (id: string, name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirmState({
+      title: `Delete ${name}'s account?`,
+      body: "This will permanently erase all data for this user and cannot be undone.",
+      confirmLabel: "Delete permanently",
+      onConfirm: () => { setConfirmState(null); action("remove-user", { userId: id }, id, e); },
+    });
   };
 
   const pages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div className="animate-in">
+      {confirmState && (
+        <ConfirmModal
+          title={confirmState.title}
+          body={confirmState.body}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onClose={() => setConfirmState(null)}
+        />
+      )}
       <div style={{ marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div>
           <p className="section-label" style={{ marginBottom: 4 }}>Platform</p>
@@ -222,7 +247,7 @@ function UsersPage() {
                         className="btn btn-danger"
                         style={{ padding: "4px 8px" }}
                         disabled={actionUser === u.id}
-                        onClick={e => deleteUser(u.id, e)}
+                        onClick={e => deleteUser(u.id, u.name, e)}
                         title="Delete user"
                       >
                         <Trash2 size={13} />

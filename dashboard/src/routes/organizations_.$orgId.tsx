@@ -1,3 +1,5 @@
+import { ConfirmModal } from "@/components/ConfirmModal";
+import { Modal } from "@/components/Modal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { organization } from "@/lib/auth-client";
 import { relativeTime } from "@/lib/utils";
@@ -51,52 +53,50 @@ function InviteModal({ orgId, onClose, onInvited }: { orgId: string; onClose: ()
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <p className="panel-title">Invite member</p>
-          <button className="btn btn-ghost" style={{ padding: 5, marginLeft: "auto" }} onClick={onClose}>
-            <X size={13} />
+    <Modal onClose={onClose} maxWidth={420}>
+      <div className="modal-header">
+        <p className="panel-title">Invite member</p>
+        <button className="btn btn-ghost" style={{ padding: 5, marginLeft: "auto" }} onClick={onClose}>
+          <X size={13} />
+        </button>
+      </div>
+      <form onSubmit={handle} className="modal-body">
+        <div className="form-group">
+          <label className="form-label">Email</label>
+          <input className="input" type="email" placeholder="colleague@example.com" value={email}
+            onChange={e => setEmail(e.target.value)} autoFocus required />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Role</label>
+          <select className="input" value={role} onChange={e => setRole(e.target.value as any)}
+            style={{ appearance: "none", cursor: "pointer" }}>
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        {error && (
+          <div style={{
+            background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+            borderRadius: 4, padding: "8px 12px", fontFamily: "var(--font-mono)",
+            color: "var(--color-red)", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 6,
+          }}><AlertCircle size={12} /> {error}</div>
+        )}
+        {success && (
+          <div style={{
+            background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
+            borderRadius: 4, padding: "8px 12px", fontFamily: "var(--font-mono)",
+            color: "var(--color-green)", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 6,
+          }}><CheckCircle size={12} /> Invitation sent!</div>
+        )}
+        <div className="modal-footer" style={{ border: "none", padding: 0 }}>
+          <button type="button" className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }}
+            disabled={loading || !email || success}>
+            <Mail size={13} /> {loading ? "Sending…" : "Send invite"}
           </button>
         </div>
-        <form onSubmit={handle} className="modal-body">
-          <div className="form-group">
-            <label className="form-label">Email</label>
-            <input className="input" type="email" placeholder="colleague@example.com" value={email}
-              onChange={e => setEmail(e.target.value)} autoFocus required />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Role</label>
-            <select className="input" value={role} onChange={e => setRole(e.target.value as any)}
-              style={{ appearance: "none", cursor: "pointer" }}>
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-          {error && (
-            <div style={{
-              background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-              borderRadius: 4, padding: "8px 12px", fontFamily: "var(--font-mono)",
-              color: "var(--color-red)", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 6,
-            }}><AlertCircle size={12} /> {error}</div>
-          )}
-          {success && (
-            <div style={{
-              background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
-              borderRadius: 4, padding: "8px 12px", fontFamily: "var(--font-mono)",
-              color: "var(--color-green)", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 6,
-            }}><CheckCircle size={12} /> Invitation sent!</div>
-          )}
-          <div className="modal-footer" style={{ border: "none", padding: 0 }}>
-            <button type="button" className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }}
-              disabled={loading || !email || success}>
-              <Mail size={13} /> {loading ? "Sending…" : "Send invite"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -288,6 +288,9 @@ function OrgDetailPage() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [saveErr, setSaveErr] = useState("");
+  const [confirmState, setConfirmState] = useState<{
+    title: string; body: string; confirmLabel: string; onConfirm: () => void;
+  } | null>(null);
 
   const fetchOrg = async () => {
     setLoading(true);
@@ -312,9 +315,17 @@ function OrgDetailPage() {
 
   useEffect(() => { fetchOrg(); }, [orgId]);
 
-  const handleRemoveMember = async (memberId: string) => {
-    await organization.removeMember({ memberIdOrEmail: memberId, organizationId: orgId });
-    setMembers(m => m.filter(x => x.id !== memberId));
+  const handleRemoveMember = (memberId: string, memberEmail: string) => {
+    setConfirmState({
+      title: "Remove member?",
+      body: `${memberEmail} will lose access to this organization immediately.`,
+      confirmLabel: "Remove",
+      onConfirm: async () => {
+        setConfirmState(null);
+        await organization.removeMember({ memberIdOrEmail: memberId, organizationId: orgId });
+        setMembers(m => m.filter(x => x.id !== memberId));
+      },
+    });
   };
 
   const handleChangeRole = async (memberId: string, role: string) => {
@@ -322,9 +333,30 @@ function OrgDetailPage() {
     setMembers(m => m.map(x => x.id === memberId ? { ...x, role } : x));
   };
 
-  const handleCancelInvite = async (inviteId: string) => {
-    await organization.cancelInvitation({ invitationId: inviteId });
-    setInvitations(i => i.filter(x => x.id !== inviteId));
+  const handleCancelInvite = (inviteId: string, email: string) => {
+    setConfirmState({
+      title: "Cancel invitation?",
+      body: `The invitation for ${email} will be revoked immediately.`,
+      confirmLabel: "Cancel invite",
+      onConfirm: async () => {
+        setConfirmState(null);
+        await organization.cancelInvitation({ invitationId: inviteId });
+        setInvitations(i => i.filter(x => x.id !== inviteId));
+      },
+    });
+  };
+
+  const handleDeleteOrg = () => {
+    setConfirmState({
+      title: `Delete "${org?.name}"?`,
+      body: "This will permanently delete the organization and all its members and data. This cannot be undone.",
+      confirmLabel: "Delete organization",
+      onConfirm: async () => {
+        setConfirmState(null);
+        await organization.delete({ organizationId: orgId });
+        navigate({ to: "/organizations" as any });
+      },
+    });
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -341,12 +373,6 @@ function OrgDetailPage() {
     } finally {
       setSaveLoading(false);
     }
-  };
-
-  const handleDeleteOrg = async () => {
-    if (!confirm(`Delete "${org?.name}"? This is irreversible.`)) return;
-    await organization.delete({ organizationId: orgId });
-    navigate({ to: "/organizations" as any });
   };
 
   if (loading) return (
@@ -370,6 +396,15 @@ function OrgDetailPage() {
     <div className="animate-in" style={{ maxWidth: 760 }}>
       {showInvite && (
         <InviteModal orgId={orgId} onClose={() => setShowInvite(false)} onInvited={fetchOrg} />
+      )}
+      {confirmState && (
+        <ConfirmModal
+          title={confirmState.title}
+          body={confirmState.body}
+          confirmLabel={confirmState.confirmLabel}
+          onConfirm={confirmState.onConfirm}
+          onClose={() => setConfirmState(null)}
+        />
       )}
 
       {/* Header */}
@@ -461,7 +496,7 @@ function OrgDetailPage() {
               </select>
               {m.role !== "owner" && (
                 <button className="btn btn-ghost" style={{ padding: "4px 6px", color: "var(--color-red)" }}
-                  onClick={() => handleRemoveMember(m.id)} title="Remove member">
+                  onClick={() => handleRemoveMember(m.id, m.user?.email ?? m.email ?? m.id)} title="Remove member">
                   <UserMinus size={12} />
                 </button>
               )}
@@ -500,7 +535,7 @@ function OrgDetailPage() {
               </div>
               {inv.status === "pending" && (
                 <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: "0.74rem", color: "var(--color-red)" }}
-                  onClick={() => handleCancelInvite(inv.id)}>
+                  onClick={() => handleCancelInvite(inv.id, inv.email)}>
                   <Trash2 size={12} /> Cancel
                 </button>
               )}

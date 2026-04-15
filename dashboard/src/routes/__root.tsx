@@ -19,7 +19,8 @@ import {
   Settings,
   Shield,
   UserCircle,
-  Users
+  Users,
+  Webhook,
 } from "lucide-react";
 import React from "react";
 
@@ -121,6 +122,7 @@ const NAV_ITEMS = [
   { to: "/organizations", label: "Organizations", icon: <Building2 size={14} /> },
   { to: "/oauth-apps", label: "OAuth Apps", icon: <Globe size={14} /> },
   { to: "/api-keys", label: "API Keys", icon: <Key size={14} /> },
+  { to: "/webhooks", label: "Webhooks", icon: <Webhook size={14} /> },
   { to: "/settings", label: "Settings", icon: <Settings size={14} /> },
 ];
 
@@ -330,6 +332,7 @@ const NAV = [
   { to: "/organizations", label: "Organizations", icon: Building2, exact: false },
   { to: "/oauth-apps", label: "OAuth Apps", icon: Globe, exact: false },
   { to: "/api-keys", label: "API Keys", icon: Key, exact: false },
+  { to: "/webhooks", label: "Webhooks", icon: Webhook, exact: false },
 ];
 
 // ── Org Switcher ──────────────────────────────────────────────────────────────
@@ -941,8 +944,8 @@ function RootComponent() {
       )}
       <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
         <Sidebar />
-        {/* Top bar with Cmd+K hint */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+        {/* Right column: topbar + scrollable main */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
           {/* Topbar */}
           <div style={{
             height: 42,
@@ -978,9 +981,9 @@ function RootComponent() {
             <div style={{ flex: 1 }} />
           </div>
 
-          {/* Main content */}
-          <main style={{ flex: 1, overflow: "auto", padding: "24px 28px", minWidth: 0 }}>
-            <div style={{ maxWidth: 960, margin: "0 auto" }}>
+          {/* Main scrollable content area — fills remaining height */}
+          <main style={{ flex: 1, overflowY: "auto", padding: "28px 32px 40px", minWidth: 0 }}>
+            <div style={{ maxWidth: 980, margin: "0 auto" }}>
               <ErrorBoundary>
                 <Outlet />
               </ErrorBoundary>

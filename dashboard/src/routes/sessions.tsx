@@ -1,3 +1,4 @@
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { relativeTime } from "@/lib/utils";
 import { createFileRoute } from "@tanstack/react-router";
@@ -344,6 +345,9 @@ function SessionsPage() {
   const [revoking, setRevoking] = useState<string | null>(null);
   const [revokingAll, setRevokingAll] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [confirmState, setConfirmState] = useState<{
+    title: string; body: string; confirmLabel: string; onConfirm: () => void;
+  } | null>(null);
   const toastCounter = useRef(0);
 
   const addToast = (type: "success" | "error", message: string) => {
@@ -399,11 +403,19 @@ function SessionsPage() {
     }
   };
 
-  const revokeAllOthers = async () => {
-    if (!window.confirm(
-      `Revoke ALL sessions except your current one?\n\nAll other users and all other browser sessions will be immediately signed out.`
-    )) return;
+  const revokeAllOthers = () => {
+    setConfirmState({
+      title: "Revoke all other sessions?",
+      body: "All other users and all other browser sessions will be immediately signed out. This cannot be undone.",
+      confirmLabel: "Revoke all",
+      onConfirm: () => {
+        setConfirmState(null);
+        void doRevokeAllOthers();
+      },
+    });
+  };
 
+  const doRevokeAllOthers = async () => {
     setRevokingAll(true);
     try {
       const res = await fetch("/api/admin/sessions/revoke-all-others", {
@@ -447,6 +459,16 @@ function SessionsPage() {
 
   return (
     <div className="animate-in" style={{ maxWidth: 780 }}>
+      {confirmState && (
+        <ConfirmModal
+          title={confirmState.title}
+          body={confirmState.body}
+          confirmLabel={confirmState.confirmLabel}
+          loading={revokingAll}
+          onConfirm={confirmState.onConfirm}
+          onClose={() => setConfirmState(null)}
+        />
+      )}
       {/* ── Global animation keyframe ── */}
       <style>{`
         @keyframes slideInRight {

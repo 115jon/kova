@@ -1,3 +1,5 @@
+import { ConfirmModal } from "@/components/ConfirmModal";
+import { Modal } from "@/components/Modal";
 import { apiKey, useActiveOrganization } from "@/lib/auth-client";
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertCircle, Building2, Check, Copy, Key, Plus, RotateCcw, Trash2, X } from "lucide-react";
@@ -17,6 +19,8 @@ type ApiKey = {
   createdAt: Date | string;
   lastRequest: Date | string | null;
   requestCount: number;
+  // Which config this key belongs to — needed for delete calls
+  configId?: string;
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -47,50 +51,48 @@ function KeyRevealModal({ keyValue, onClose }: { keyValue: string; onClose: () =
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
-        <div className="modal-header">
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 5, flexShrink: 0,
-              background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <Key size={15} color="var(--color-accent)" />
-            </div>
-            <div>
-              <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.88rem" }}>Save your API key</p>
-              <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>
-                This won't be shown again after you close this dialog.
-              </p>
-            </div>
+    <Modal onClose={onClose} maxWidth={520}>
+      <div className="modal-header">
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 5, flexShrink: 0,
+            background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Key size={15} color="var(--color-accent)" />
           </div>
-          <button className="btn btn-ghost" style={{ marginLeft: "auto", padding: 6 }} onClick={onClose}>
-            <X size={13} />
+          <div>
+            <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.88rem" }}>Save your API key</p>
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>
+              This won't be shown again after you close this dialog.
+            </p>
+          </div>
+        </div>
+        <button className="btn btn-ghost" style={{ marginLeft: "auto", padding: 6 }} onClick={onClose}>
+          <X size={13} />
+        </button>
+      </div>
+
+      <div className="modal-body">
+        <div style={{
+          background: "var(--color-surface-raised)", borderRadius: 4, padding: "11px 14px",
+          fontFamily: "var(--font-mono)", fontSize: "0.77rem", color: "var(--color-accent)",
+          wordBreak: "break-all", border: "1px solid var(--color-border)",
+          letterSpacing: "0.03em",
+        }}>
+          {keyValue}
+        </div>
+
+        <div className="modal-footer" style={{ border: "none", padding: 0 }}>
+          <button className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={copy}>
+            {copied ? <><Check size={13} /> Copied!</> : <><Copy size={13} /> Copy key</>}
+          </button>
+          <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>
+            Done — I've saved it
           </button>
         </div>
-
-        <div className="modal-body">
-          <div style={{
-            background: "var(--color-surface-raised)", borderRadius: 4, padding: "11px 14px",
-            fontFamily: "var(--font-mono)", fontSize: "0.77rem", color: "var(--color-accent)",
-            wordBreak: "break-all", border: "1px solid var(--color-border)",
-            letterSpacing: "0.03em",
-          }}>
-            {keyValue}
-          </div>
-
-          <div className="modal-footer" style={{ border: "none", padding: 0 }}>
-            <button className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={copy}>
-              {copied ? <><Check size={13} /> Copied!</> : <><Copy size={13} /> Copy key</>}
-            </button>
-            <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>
-              Done — I've saved it
-            </button>
-          </div>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -219,6 +221,7 @@ function ApiKeysPage() {
   const [error, setError] = useState("");
   const [revealKey, setRevealKey] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null);
 
   const loadKeys = useCallback(async (orgId: string | null) => {
     setLoading(true);
@@ -244,11 +247,16 @@ function ApiKeysPage() {
 
   useEffect(() => { loadKeys(activeOrgId); }, [loadKeys, activeOrgId]);
 
-  const handleDelete = async (id: string) => {
-    setDeletingId(id);
+  const handleDelete = async (key: ApiKey) => {
+    setRevokeTarget(null);
+    setDeletingId(key.id);
     try {
-      await apiKey.delete({ keyId: id });
-      setKeys(k => k.filter(x => x.id !== id));
+      // Must specify both `id` and `configId` — BA throws 400 when multiple
+      // configs exist and no default is set.
+      const configId = activeOrgId ? "organization" : "personal";
+      const res = await apiKey.delete({ id: key.id, configId } as any);
+      if ((res as any)?.error) throw new Error((res as any).error.message);
+      setKeys(k => k.filter(x => x.id !== key.id));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to revoke key";
       setError(msg);
@@ -261,6 +269,16 @@ function ApiKeysPage() {
     <div className="animate-in">
       {revealKey && (
         <KeyRevealModal keyValue={revealKey} onClose={() => { setRevealKey(null); loadKeys(activeOrgId); }} />
+      )}
+      {revokeTarget && (
+        <ConfirmModal
+          title="Revoke API key?"
+          body={`"${revokeTarget.name ?? "Unnamed key"}" will be permanently revoked. Any service using it will lose access immediately.`}
+          confirmLabel="Revoke key"
+          loading={deletingId === revokeTarget.id}
+          onConfirm={() => void handleDelete(revokeTarget)}
+          onClose={() => setRevokeTarget(null)}
+        />
       )}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
@@ -378,7 +396,7 @@ function ApiKeysPage() {
                       className="btn btn-danger"
                       style={{ padding: "4px 10px", fontSize: "0.75rem" }}
                       disabled={deletingId === k.id}
-                      onClick={() => handleDelete(k.id)}
+                      onClick={() => setRevokeTarget(k)}
                       title="Revoke key"
                     >
                       <Trash2 size={12} />

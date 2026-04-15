@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WebhooksRouteImport } from './routes/webhooks'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -23,6 +24,11 @@ import { Route as UsersUserIdRouteImport } from './routes/users_.$userId'
 import { Route as OrganizationsOrgIdRouteImport } from './routes/organizations_.$orgId'
 import { Route as AcceptInvitationInvitationIdRouteImport } from './routes/accept-invitation.$invitationId'
 
+const WebhooksRoute = WebhooksRouteImport.update({
+  id: '/webhooks',
+  path: '/webhooks',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/users': typeof UsersRoute
+  '/webhooks': typeof WebhooksRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
   '/users/$userId': typeof UsersUserIdRoute
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/users': typeof UsersRoute
+  '/webhooks': typeof WebhooksRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
   '/users/$userId': typeof UsersUserIdRoute
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
   '/users': typeof UsersRoute
+  '/webhooks': typeof WebhooksRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/organizations_/$orgId': typeof OrganizationsOrgIdRoute
   '/users_/$userId': typeof UsersUserIdRoute
@@ -149,6 +158,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sign-in'
     | '/users'
+    | '/webhooks'
     | '/accept-invitation/$invitationId'
     | '/organizations/$orgId'
     | '/users/$userId'
@@ -164,6 +174,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sign-in'
     | '/users'
+    | '/webhooks'
     | '/accept-invitation/$invitationId'
     | '/organizations/$orgId'
     | '/users/$userId'
@@ -179,6 +190,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sign-in'
     | '/users'
+    | '/webhooks'
     | '/accept-invitation/$invitationId'
     | '/organizations_/$orgId'
     | '/users_/$userId'
@@ -195,6 +207,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
   UsersRoute: typeof UsersRoute
+  WebhooksRoute: typeof WebhooksRoute
   AcceptInvitationInvitationIdRoute: typeof AcceptInvitationInvitationIdRoute
   OrganizationsOrgIdRoute: typeof OrganizationsOrgIdRoute
   UsersUserIdRoute: typeof UsersUserIdRoute
@@ -202,6 +215,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/webhooks': {
+      id: '/webhooks'
+      path: '/webhooks'
+      fullPath: '/webhooks'
+      preLoaderRoute: typeof WebhooksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/users': {
       id: '/users'
       path: '/users'
@@ -307,6 +327,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
   UsersRoute: UsersRoute,
+  WebhooksRoute: WebhooksRoute,
   AcceptInvitationInvitationIdRoute: AcceptInvitationInvitationIdRoute,
   OrganizationsOrgIdRoute: OrganizationsOrgIdRoute,
   UsersUserIdRoute: UsersUserIdRoute,

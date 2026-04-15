@@ -1,5 +1,6 @@
 import { AvatarUpload } from "@/components/AvatarUpload";
 import { ProviderIcon } from "@/components/BrandIcons";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import type { ProviderId } from "@/lib/providers";
 import { relativeTime } from "@/lib/utils";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -114,21 +115,17 @@ function StatCard({ icon, label, value, color }: {
 }
 
 function AdminAction({
-  label, icon, danger = false, disabled = false, onClick, confirm: confirmMsg,
+  label, icon, danger = false, disabled = false, onClick,
 }: {
   label: string; icon: React.ReactNode; danger?: boolean;
-  disabled?: boolean; onClick: () => void; confirm?: string;
+  disabled?: boolean; onClick: () => void;
 }) {
-  const handler = () => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
-    onClick();
-  };
   return (
     <button
       className={danger ? "btn btn-danger" : "btn btn-ghost"}
       style={{ width: "100%", justifyContent: "flex-start", fontSize: "0.8rem" }}
       disabled={disabled}
-      onClick={handler}
+      onClick={onClick}
     >
       {icon} {label}
     </button>
@@ -148,6 +145,9 @@ function UserDetailPage() {
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
   const [localImage, setLocalImage] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    title: string; body: string; confirmLabel: string; onConfirm: () => void;
+  } | null>(null);
 
   const load = async () => {
     setLoading(true); setError("");
@@ -168,7 +168,7 @@ function UserDetailPage() {
 
   useEffect(() => { load(); }, [userId]);
 
-  const adminAction = async (endpoint: string, body: object) => {
+  const adminAction = async (endpoint: string, body: object): Promise<boolean> => {
     setActionLoading(true); setActionError(""); setActionSuccess("");
     try {
       const res = await fetch(`/api/auth/admin/${endpoint}`, {
@@ -180,16 +180,23 @@ function UserDetailPage() {
       if (!res.ok) {
         const b = await res.json().catch(() => ({})) as { message?: string };
         setActionError(b.message ?? `Action failed (${res.status})`);
-        return;
+        return false;
       }
       setActionSuccess("Done!");
       setTimeout(() => setActionSuccess(""), 3000);
       await load();
+      return true;
     } catch (e: any) {
       setActionError(e?.message ?? "Network error");
+      return false;
     } finally {
       setActionLoading(false);
     }
+  };
+
+  /** Show a ConfirmModal and execute fn only if user confirms. */
+  const withConfirm = (title: string, body: string, confirmLabel: string, fn: () => void) => {
+    setConfirmState({ title, body, confirmLabel, onConfirm: () => { setConfirmState(null); fn(); } });
   };
 
   // ── Loading / error states ────────────────
@@ -222,6 +229,16 @@ function UserDetailPage() {
 
   return (
     <div className="animate-in" style={{ maxWidth: 900 }}>
+      {confirmState && (
+        <ConfirmModal
+          title={confirmState.title}
+          body={confirmState.body}
+          confirmLabel={confirmState.confirmLabel}
+          loading={actionLoading}
+          onConfirm={confirmState.onConfirm}
+          onClose={() => setConfirmState(null)}
+        />
+      )}
       {/* Back nav */}
       <Link
         to="/users"
@@ -425,16 +442,24 @@ function UserDetailPage() {
                   label="Promote to admin"
                   icon={<ShieldCheck size={13} />}
                   disabled={actionLoading}
-                  confirm="Promote this user to admin? They will have full dashboard access."
-                  onClick={() => adminAction("set-role", { userId, role: "admin" })}
+                  onClick={() => withConfirm(
+                    "Promote to admin?",
+                    "This user will have full dashboard access.",
+                    "Promote",
+                    () => void adminAction("set-role", { userId, role: "admin" })
+                  )}
                 />
               ) : (
                 <AdminAction
                   label="Demote to user"
                   icon={<UserX size={13} />}
                   disabled={actionLoading}
-                  confirm="Remove admin role from this user?"
-                  onClick={() => adminAction("set-role", { userId, role: "user" })}
+                  onClick={() => withConfirm(
+                    "Remove admin role?",
+                    "This user will lose dashboard access.",
+                    "Demote",
+                    () => void adminAction("set-role", { userId, role: "user" })
+                  )}
                 />
               )}
             </div>
@@ -457,7 +482,7 @@ function UserDetailPage() {
                     label="Unban user"
                     icon={<CheckCircle size={13} />}
                     disabled={actionLoading}
-                    onClick={() => adminAction("unban-user", { userId })}
+                    onClick={() => void adminAction("unban-user", { userId })}
                   />
                 </>
               ) : (
@@ -466,8 +491,12 @@ function UserDetailPage() {
                   icon={<Ban size={13} />}
                   danger
                   disabled={actionLoading}
-                  confirm="Ban this user? They will be unable to sign in."
-                  onClick={() => adminAction("ban-user", { userId, banReason: "Banned by admin" })}
+                  onClick={() => withConfirm(
+                    "Ban this user?",
+                    "They will be unable to sign in until unbanned.",
+                    "Ban user",
+                    () => void adminAction("ban-user", { userId, banReason: "Banned by admin" })
+                  )}
                 />
               )}
             </div>
@@ -484,11 +513,15 @@ function UserDetailPage() {
                 icon={<Trash2 size={13} />}
                 danger
                 disabled={actionLoading}
-                confirm={`Permanently delete ${user.name}'s account? This cannot be undone.`}
-                onClick={async () => {
-                  await adminAction("remove-user", { userId });
-                  navigate({ to: "/users" });
-                }}
+                onClick={() => withConfirm(
+                  `Delete ${user.name}'s account?`,
+                  "This will permanently erase all data for this user. This cannot be undone.",
+                  "Delete permanently",
+                  async () => {
+                    const ok = await adminAction("remove-user", { userId });
+                    if (ok) navigate({ to: "/users" });
+                  }
+                )}
               />
             </div>
           </div>
