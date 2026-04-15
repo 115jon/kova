@@ -91,8 +91,9 @@ function UsersPage() {
     <div className="animate-in">
       <div style={{ marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, color: "#e2e8f0", letterSpacing: "-0.02em" }}>Users</h1>
-          <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 2 }}>{total.toLocaleString()} total</p>
+          <p className="section-label" style={{ marginBottom: 4 }}>Platform</p>
+          <h1 className="page-title">Users</h1>
+          <p className="page-subtitle">{total.toLocaleString()} total</p>
         </div>
         <button className="btn btn-ghost" onClick={load} title="Refresh">
           <RefreshCw size={14} />
@@ -101,11 +102,11 @@ function UsersPage() {
 
       {/* Search */}
       <div style={{ position: "relative", marginBottom: 16 }}>
-        <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#475569" }} />
+        <Search size={13} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--color-text-tertiary)", pointerEvents: "none" }} />
         <input
           id="user-search"
           className="input"
-          style={{ paddingLeft: 36 }}
+          style={{ paddingLeft: 34 }}
           placeholder="Search by email…"
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(0); }}
@@ -116,17 +117,19 @@ function UsersPage() {
       {actionError && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-          borderRadius: 8, padding: "10px 14px", color: "#f87171", fontSize: "0.83rem",
+          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+          borderRadius: 4, padding: "9px 13px",
+          color: "var(--color-red)",
+          fontFamily: "var(--font-mono)", fontSize: "0.78rem",
         }}>
-          <Ban size={14} /> {actionError}
+          <Ban size={13} /> {actionError}
         </div>
       )}
 
       {/* Table */}
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
-          <div className="loading" style={{ padding: 32, textAlign: "center", color: "#475569", fontSize: "0.85rem" }}>Loading…</div>
+          <div className="loading" style={{ padding: 32, textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>Loading…</div>
         ) : (
           <table className="data-table">
             <thead>
@@ -149,10 +152,10 @@ function UsersPage() {
                 >
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <UserAvatar src={u.image} name={u.name} size={32} />
+                      <UserAvatar src={u.image} name={u.name} size={28} />
                       <div>
-                        <p style={{ fontWeight: 500, color: "#e2e8f0", fontSize: "0.875rem" }}>{u.name}</p>
-                        <p style={{ color: "#64748b", fontSize: "0.75rem" }}>{u.email}</p>
+                        <p style={{ fontFamily: "var(--font-sans)", fontWeight: 500, color: "var(--color-text-primary)", fontSize: "0.84rem" }}>{u.name}</p>
+                        <p style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-secondary)", fontSize: "0.72rem" }}>{u.email}</p>
                       </div>
                     </div>
                   </td>
@@ -169,7 +172,7 @@ function UsersPage() {
                       ? <span className="badge badge-red">banned</span>
                       : <span className="badge badge-green">active</span>}
                   </td>
-                  <td style={{ color: "#64748b", fontSize: "0.8rem" }}>{relativeTime(u.createdAt)}</td>
+                  <td style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.74rem" }}>{relativeTime(u.createdAt)}</td>
                   <td>
                     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }} onClick={e => e.stopPropagation()}>
                       {u.role !== "admin" && (
@@ -229,7 +232,7 @@ function UsersPage() {
                 </tr>
               ))}
               {users.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: "center", color: "#475569", padding: 32 }}>No users found</td></tr>
+                <tr><td colSpan={6}><div className="empty-state">No users found</div></td></tr>
               )}
             </tbody>
           </table>
@@ -238,7 +241,7 @@ function UsersPage() {
         {/* Pagination */}
         {pages > 1 && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "12px 16px", borderTop: "1px solid var(--color-border)" }}>
-            <span style={{ fontSize: "0.8rem", color: "#64748b" }}>Page {page + 1} of {pages}</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)" }}>Page {page + 1} of {pages}</span>
             <button className="btn btn-ghost" style={{ padding: "4px 8px" }} disabled={page === 0} onClick={() => setPage(p => p - 1)}>
               <ChevronLeft size={14} />
             </button>

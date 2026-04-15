@@ -16,7 +16,6 @@ function AcceptInvitationPage() {
 
   useEffect(() => {
     const accept = async () => {
-      // Validate format before hitting the API — prevents garbage/enumeration attempts.
       const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!UUID_RE.test(invitationId)) {
         setErrorMsg("Invalid invitation link.");
@@ -26,8 +25,6 @@ function AcceptInvitationPage() {
       try {
         const res = await organization.acceptInvitation({ invitationId });
         if (res.error) throw new Error(res.error.message);
-        // acceptInvitation returns { invitation, member } — organization name
-        // isn't in the response, so show a generic success message.
         setOrgName("the organization");
         setStatus("success");
         setTimeout(() => navigate({ to: "/organizations" as any }), 2500);
@@ -42,35 +39,41 @@ function AcceptInvitationPage() {
   return (
     <div style={{
       minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: "var(--color-surface-900)", padding: 24,
+      background: "var(--color-bg)", padding: 24,
     }}>
-      <div style={{
-        width: "100%", maxWidth: 420,
-        background: "var(--color-surface-800)",
-        border: "1px solid var(--color-border)",
-        borderRadius: 16, padding: 36, textAlign: "center",
-        boxShadow: "0 24px 48px rgba(0,0,0,0.4)",
-      }}>
-        {/* Logo */}
-        <div style={{ marginBottom: 24 }}>
-          <span style={{ fontWeight: 700, fontSize: "1.1rem", color: "#e2e8f0" }}>
-            ralph<span style={{ color: "#818cf8" }}>auth</span>
-          </span>
+      {/* Logo wordmark */}
+      <div style={{ position: "fixed", top: 22, left: 28, display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{
+          width: 22, height: 22, borderRadius: 4,
+          background: "var(--color-accent)", display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontWeight: 800, color: "#fff", fontSize: "0.65rem" }}>R</span>
         </div>
+        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.88rem", letterSpacing: "-0.02em" }}>
+          ralphauth
+        </span>
+      </div>
 
+      <div style={{
+        width: "100%", maxWidth: 400,
+        background: "var(--color-surface)",
+        border: "1px solid var(--color-border-strong)",
+        borderRadius: 6, padding: 36, textAlign: "center",
+        boxShadow: "0 32px 64px rgba(0,0,0,0.6)",
+      }}>
         {status === "loading" && (
           <>
             <div style={{
-              width: 52, height: 52, borderRadius: 14, margin: "0 auto 16px",
-              background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.2)",
+              width: 48, height: 48, borderRadius: 5, margin: "0 auto 16px",
+              background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <Building2 size={22} color="#818cf8" />
+              <Building2 size={20} color="var(--color-accent)" />
             </div>
-            <h1 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#e2e8f0", marginBottom: 8 }}>
+            <h1 style={{ fontFamily: "var(--font-mono)", fontSize: "1rem", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 8 }}>
               Accepting invitation…
             </h1>
-            <div className="loading" style={{ color: "#818cf8", margin: "16px auto", fontSize: "0.85rem" }}>
+            <div className="loading" style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", margin: "16px auto", fontSize: "0.78rem" }}>
               Please wait
             </div>
           </>
@@ -79,16 +82,16 @@ function AcceptInvitationPage() {
         {status === "success" && (
           <>
             <div style={{
-              width: 52, height: 52, borderRadius: 14, margin: "0 auto 16px",
-              background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)",
+              width: 48, height: 48, borderRadius: 5, margin: "0 auto 16px",
+              background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <CheckCircle size={22} color="#22c55e" />
+              <CheckCircle size={20} color="var(--color-green)" />
             </div>
-            <h1 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#e2e8f0", marginBottom: 8 }}>
+            <h1 style={{ fontFamily: "var(--font-mono)", fontSize: "1rem", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 8 }}>
               Welcome to {orgName}!
             </h1>
-            <p style={{ fontSize: "0.85rem", color: "#64748b" }}>
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-tertiary)" }}>
               You've successfully joined. Redirecting to organizations…
             </p>
           </>
@@ -97,16 +100,16 @@ function AcceptInvitationPage() {
         {status === "error" && (
           <>
             <div style={{
-              width: 52, height: 52, borderRadius: 14, margin: "0 auto 16px",
-              background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
+              width: 48, height: 48, borderRadius: 5, margin: "0 auto 16px",
+              background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <XCircle size={22} color="#f87171" />
+              <XCircle size={20} color="var(--color-red)" />
             </div>
-            <h1 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#e2e8f0", marginBottom: 8 }}>
+            <h1 style={{ fontFamily: "var(--font-mono)", fontSize: "1rem", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 8 }}>
               Invitation failed
             </h1>
-            <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: 20 }}>{errorMsg}</p>
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-tertiary)", marginBottom: 20 }}>{errorMsg}</p>
             <button className="btn btn-primary" style={{ margin: "0 auto" }}
               onClick={() => navigate({ to: "/sign-in" as any })}>
               Go to sign in

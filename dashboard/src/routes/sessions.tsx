@@ -126,7 +126,7 @@ function BrowserIcon({ name, size = 20 }: { name: string; size?: number }) {
 
 // ── Device icon ───────────────────────────────────────────────────────────────
 
-function DeviceIcon({ type, color = "#94a3b8" }: { type: string; color?: string }) {
+function DeviceIcon({ type, color = "var(--color-text-secondary)" }: { type: string; color?: string }) {
   const props = { size: 18, color };
   switch (type) {
     case "Mobile": return <Smartphone {...props} />;
@@ -151,16 +151,17 @@ function ToastGroup({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: nu
           key={t.id}
           style={{
             display: "flex", alignItems: "center", gap: 10,
-            padding: "12px 16px", borderRadius: 10, fontSize: "0.84rem",
-            background: t.type === "success" ? "rgba(15,23,42,0.95)" : "rgba(127,29,29,0.95)",
+            padding: "11px 14px", borderRadius: 5, fontSize: "0.8rem",
+            background: t.type === "success" ? "var(--color-surface)" : "rgba(248,113,113,0.08)",
             border: t.type === "success"
-              ? "1px solid rgba(34,197,94,0.3)"
-              : "1px solid rgba(239,68,68,0.3)",
-            color: t.type === "success" ? "#4ade80" : "#f87171",
+              ? "1px solid rgba(52,211,153,0.25)"
+              : "1px solid rgba(248,113,113,0.25)",
+            color: t.type === "success" ? "var(--color-green)" : "var(--color-red)",
+            fontFamily: "var(--font-mono)",
             backdropFilter: "blur(8px)",
             boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
             pointerEvents: "auto",
-            animation: "slideInRight 0.25s ease",
+            animation: "slideInRight 0.2s ease",
           }}
         >
           {t.type === "success"
@@ -191,19 +192,19 @@ function SessionCard({
   revoking: boolean;
   onRevoke: (token: string) => void;
 }) {
-  const deviceColor = session.isCurrent ? "#818cf8" : "#64748b";
+  const deviceColor = session.isCurrent ? "var(--color-accent)" : "var(--color-text-secondary)";
 
   return (
     <div
       style={{
         background: session.isCurrent
-          ? "linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.05) 100%)"
-          : "var(--color-surface-800, #0f172a)",
+          ? "var(--color-accent-glow)"
+          : "var(--color-surface)",
         border: session.isCurrent
-          ? "1px solid rgba(99,102,241,0.25)"
-          : "1px solid var(--color-border, rgba(255,255,255,0.06))",
-        borderRadius: 12,
-        padding: "16px 18px",
+          ? "1px solid var(--color-border-accent)"
+          : "1px solid var(--color-border)",
+        borderRadius: 6,
+        padding: "14px 16px",
         display: "grid",
         gridTemplateColumns: "auto 1fr auto",
         gap: 14,
@@ -213,9 +214,9 @@ function SessionCard({
     >
       {/* Left — device + browser icons */}
       <div style={{
-        width: 48, height: 48, borderRadius: 12,
-        background: session.isCurrent ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.04)",
-        border: "1px solid " + (session.isCurrent ? "rgba(99,102,241,0.3)" : "rgba(255,255,255,0.06)"),
+        width: 40, height: 40, borderRadius: 5,
+        background: session.isCurrent ? "var(--color-accent-dim)" : "var(--color-surface-raised)",
+        border: "1px solid " + (session.isCurrent ? "var(--color-border-accent)" : "var(--color-border)"),
         display: "flex", alignItems: "center", justifyContent: "center",
         position: "relative", flexShrink: 0,
       }}>
@@ -223,9 +224,9 @@ function SessionCard({
         {/* Small browser badge */}
         <div style={{
           position: "absolute", bottom: -3, right: -3,
-          width: 22, height: 22, borderRadius: 6,
-          background: "var(--color-surface-900, #020617)",
-          border: "1px solid rgba(255,255,255,0.06)",
+          width: 20, height: 20, borderRadius: 4,
+          background: "var(--color-bg)",
+          border: "1px solid var(--color-border)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
           <BrowserIcon name={session.browser} size={14} />
@@ -238,22 +239,23 @@ function SessionCard({
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <UserAvatar src={session.userImage ?? null} name={session.userName} size={22} />
-            <span style={{ fontSize: "0.84rem", fontWeight: 600, color: "#e2e8f0" }}>
+            <span style={{ fontSize: "0.84rem", fontFamily: "var(--font-sans)", fontWeight: 600, color: "var(--color-text-primary)" }}>
               {session.userName}
             </span>
-            <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)" }}>
               {session.userEmail}
             </span>
           </div>
           {session.isCurrent && (
             <span style={{
               display: "inline-flex", alignItems: "center", gap: 4,
-              fontSize: "0.68rem", fontWeight: 600, letterSpacing: "0.04em",
-              padding: "2px 8px", borderRadius: 20,
-              background: "rgba(99,102,241,0.2)", border: "1px solid rgba(99,102,241,0.4)",
-              color: "#a5b4fc", textTransform: "uppercase",
+              fontFamily: "var(--font-mono)",
+              fontSize: "0.62rem", fontWeight: 600, letterSpacing: "0.06em",
+              padding: "2px 7px", borderRadius: 3,
+              background: "var(--color-accent-dim)", border: "1px solid var(--color-border-accent)",
+              color: "var(--color-accent)", textTransform: "uppercase",
             }}>
-              <Zap size={9} fill="currentColor" /> Current session
+              <Zap size={9} fill="currentColor" /> Current
             </span>
           )}
         </div>
@@ -282,14 +284,14 @@ function SessionCard({
         {/* Bottom row: IP + timestamps */}
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           {session.ipAddress && (
-            <span style={{ fontSize: "0.7rem", color: "#475569", fontFamily: "monospace" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
               {session.ipAddress}
             </span>
           )}
-          <span style={{ fontSize: "0.7rem", color: "#475569" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
             Active {relativeTime(new Date(session.updatedAt).toISOString())}
           </span>
-          <span style={{ fontSize: "0.7rem", color: "#334155" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", opacity: 0.6 }}>
             Expires {relativeTime(new Date(session.expiresAt).toISOString())}
           </span>
         </div>
@@ -299,10 +301,10 @@ function SessionCard({
       <button
         style={{
           display: "flex", alignItems: "center", justifyContent: "center",
-          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-          background: session.isCurrent ? "none" : "rgba(239,68,68,0.08)",
-          border: session.isCurrent ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(239,68,68,0.2)",
-          color: session.isCurrent ? "#334155" : "#f87171",
+          width: 30, height: 30, borderRadius: 4, flexShrink: 0,
+          background: session.isCurrent ? "transparent" : "var(--color-red-dim)",
+          border: session.isCurrent ? "1px solid var(--color-border)" : "1px solid rgba(248,113,113,0.2)",
+          color: session.isCurrent ? "var(--color-text-tertiary)" : "var(--color-red)",
           cursor: revoking ? "not-allowed" : "pointer",
           transition: "all 0.15s",
           opacity: revoking ? 0.5 : 1,
@@ -312,14 +314,14 @@ function SessionCard({
         title={session.isCurrent ? "You cannot revoke your own current session" : "Revoke this session"}
         onMouseEnter={e => {
           if (!session.isCurrent && !revoking) {
-            (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.15)";
-            (e.currentTarget as HTMLElement).style.borderColor = "rgba(239,68,68,0.4)";
+            (e.currentTarget as HTMLElement).style.background = "rgba(248,113,113,0.2)";
+            (e.currentTarget as HTMLElement).style.borderColor = "rgba(248,113,113,0.35)";
           }
         }}
         onMouseLeave={e => {
           if (!session.isCurrent) {
-            (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.08)";
-            (e.currentTarget as HTMLElement).style.borderColor = "rgba(239,68,68,0.2)";
+            (e.currentTarget as HTMLElement).style.background = "var(--color-red-dim)";
+            (e.currentTarget as HTMLElement).style.borderColor = "rgba(248,113,113,0.2)";
           }
         }}
       >
@@ -459,10 +461,9 @@ function SessionsPage() {
       {/* ── Page header ────────────────────────────────────────── */}
       <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
-          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, color: "#e2e8f0", letterSpacing: "-0.02em" }}>
-            Sessions
-          </h1>
-          <p style={{ fontSize: "0.84rem", color: "#64748b", marginTop: 3 }}>
+          <p className="section-label" style={{ marginBottom: 4 }}>Platform</p>
+          <h1 className="page-title">Sessions</h1>
+          <p className="page-subtitle">
             {loading
               ? "Loading…"
               : `${sessions.length} active session${sessions.length !== 1 ? "s" : ""} across ${Object.keys(userGroups).length + (currentSession ? 1 : 0)} user${Object.keys(userGroups).length + (currentSession ? 1 : 0) !== 1 ? "s" : ""}`
@@ -471,29 +472,11 @@ function SessionsPage() {
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
-          {/* Revoke all others */}
           {!loading && otherCount > 0 && (
             <button
-              style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "8px 14px", borderRadius: 8, fontSize: "0.8rem",
-                background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)",
-                color: "#f87171", cursor: revokingAll ? "not-allowed" : "pointer",
-                fontWeight: 500, transition: "all 0.15s",
-                opacity: revokingAll ? 0.6 : 1,
-              }}
+              className="btn btn-danger"
               disabled={revokingAll}
               onClick={revokeAllOthers}
-              onMouseEnter={e => {
-                if (!revokingAll) {
-                  (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.14)";
-                  (e.currentTarget as HTMLElement).style.borderColor = "rgba(239,68,68,0.35)";
-                }
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.background = "rgba(239,68,68,0.08)";
-                (e.currentTarget as HTMLElement).style.borderColor = "rgba(239,68,68,0.2)";
-              }}
             >
               {revokingAll ? <RefreshCw size={12} style={{ animation: "spin 0.8s linear infinite" }} /> : <Shield size={13} />}
               Revoke all other sessions
@@ -502,12 +485,8 @@ function SessionsPage() {
 
           {/* Refresh */}
           <button
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, borderRadius: 8,
-              background: "none", border: "1px solid rgba(255,255,255,0.07)",
-              color: "#64748b", cursor: loading ? "not-allowed" : "pointer",
-            }}
+            className="btn btn-ghost"
+            style={{ padding: "6px 10px" }}
             onClick={load}
             disabled={loading}
             title="Refresh"
@@ -519,40 +498,25 @@ function SessionsPage() {
 
       {/* ── Loading skeleton ──────────────────────────────────── */}
       {loading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {[1, 2, 3].map(i => (
-            <div key={i} style={{
-              height: 80, borderRadius: 12,
-              background: "var(--color-surface-800, #0f172a)",
-              border: "1px solid rgba(255,255,255,0.04)",
-              animation: "pulse 1.5s ease-in-out infinite",
-            }} />
+            <div key={i} className="card loading" style={{ height: 70 }} />
           ))}
         </div>
       )}
 
       {/* ── Empty state ───────────────────────────────────────── */}
       {!loading && sessions.length === 0 && (
-        <div style={{
-          textAlign: "center", padding: "56px 24px",
-          color: "#475569", fontSize: "0.88rem",
-          border: "1px dashed rgba(255,255,255,0.06)",
-          borderRadius: 12,
-        }}>
-          <Laptop size={28} style={{ margin: "0 auto 12px", opacity: 0.3, display: "block" }} />
+        <div className="empty-state" style={{ border: "1px dashed var(--color-border)", borderRadius: 6 }}>
+          <Laptop size={24} style={{ margin: "0 auto 12px", opacity: 0.3, display: "block" }} />
           No active sessions
         </div>
       )}
 
       {/* ── Current session section ───────────────────────────── */}
       {!loading && currentSession && (
-        <div style={{ marginBottom: 24 }}>
-          <p style={{
-            fontSize: "0.7rem", fontWeight: 600, color: "#64748b",
-            textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10,
-          }}>
-            Your current session
-          </p>
+        <div style={{ marginBottom: 20 }}>
+          <p className="section-label" style={{ marginBottom: 8 }}>Your current session</p>
           <SessionCard
             session={currentSession}
             revoking={revoking === currentSession.token}
@@ -564,13 +528,8 @@ function SessionsPage() {
       {/* ── Other sessions ─────────────────────────────────────── */}
       {!loading && otherCount > 0 && (
         <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <p style={{
-              fontSize: "0.7rem", fontWeight: 600, color: "#64748b",
-              textTransform: "uppercase", letterSpacing: "0.08em",
-            }}>
-              Other sessions ({otherCount})
-            </p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <p className="section-label">Other sessions ({otherCount})</p>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -580,10 +539,10 @@ function SessionsPage() {
                 {Object.keys(userGroups).length > 1 && (
                   <div style={{
                     display: "flex", alignItems: "center", gap: 8,
-                    marginBottom: 6, marginTop: 8,
+                    marginBottom: 5, marginTop: 6,
                   }}>
                     <UserAvatar src={groupUser.userImage ?? null} name={groupUser.userName} size={18} />
-                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-secondary)" }}>
                       {groupUser.userName} · {groupSessions.length} session{groupSessions.length !== 1 ? "s" : ""}
                     </span>
                   </div>

@@ -51,28 +51,33 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, EBSta
       }}>
         <div style={{
           width: "100%", maxWidth: 460,
-          background: "var(--color-surface-800)",
-          border: "1px solid rgba(239,68,68,0.25)",
-          borderRadius: 16, padding: 36, textAlign: "center",
-          boxShadow: "0 24px 48px rgba(0,0,0,0.4)",
+          background: "var(--color-surface)",
+          border: "1px solid rgba(248,113,113,0.2)",
+          borderRadius: 6, padding: 36, textAlign: "center",
+          boxShadow: "0 24px 48px rgba(0,0,0,0.5)",
         }}>
           <div style={{
-            width: 52, height: 52, borderRadius: 14, margin: "0 auto 20px",
-            background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
+            width: 44, height: 44, borderRadius: 6, margin: "0 auto 20px",
+            background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <AlertTriangle size={22} color="#f87171" strokeWidth={2} />
+            <AlertTriangle size={20} color="var(--color-red)" strokeWidth={2} />
           </div>
-          <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#e2e8f0", marginBottom: 8 }}>
+          <h2 style={{
+            fontFamily: "var(--font-mono)", fontSize: "1rem",
+            fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 8,
+            letterSpacing: "-0.02em",
+          }}>
             Something went wrong
           </h2>
-          <p style={{ fontSize: "0.82rem", color: "#64748b", lineHeight: 1.65, marginBottom: 6 }}>
+          <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)", lineHeight: 1.65, marginBottom: 6 }}>
             An unexpected error occurred in this view.
           </p>
           {import.meta.env.DEV && this.state.message && (
             <pre style={{
-              fontSize: "0.72rem", color: "#f87171",
-              background: "rgba(239,68,68,0.07)", borderRadius: 8,
+              fontFamily: "var(--font-mono)",
+              fontSize: "0.72rem", color: "var(--color-red)",
+              background: "rgba(248,113,113,0.07)", borderRadius: 4,
               padding: "10px 12px", textAlign: "left",
               whiteSpace: "pre-wrap", wordBreak: "break-word",
               maxHeight: 160, overflow: "auto", marginBottom: 20,
@@ -83,13 +88,13 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, EBSta
               className="btn btn-ghost"
               onClick={() => this.setState({ hasError: false, message: "" })}
             >
-              <RefreshCw size={14} /> Reload
+              <RefreshCw size={13} /> Reload
             </button>
             <button
               className="btn btn-danger"
               onClick={async () => { await signOut(); window.location.href = "/sign-in"; }}
             >
-              <LogOut size={14} /> Sign out
+              <LogOut size={13} /> Sign out
             </button>
           </div>
         </div>
@@ -109,14 +114,14 @@ interface PaletteItem {
 }
 
 const NAV_ITEMS = [
-  { to: "/", label: "Overview", icon: <BarChart3 size={15} /> },
-  { to: "/users", label: "Users", icon: <Users size={15} /> },
-  { to: "/sessions", label: "Sessions", icon: <Activity size={15} /> },
-  { to: "/audit-logs", label: "Audit Logs", icon: <ClipboardList size={15} /> },
-  { to: "/organizations", label: "Organizations", icon: <Building2 size={15} /> },
-  { to: "/oauth-apps", label: "OAuth Apps", icon: <Globe size={15} /> },
-  { to: "/api-keys", label: "API Keys", icon: <Key size={15} /> },
-  { to: "/settings", label: "Settings", icon: <Settings size={15} /> },
+  { to: "/", label: "Overview", icon: <BarChart3 size={14} /> },
+  { to: "/users", label: "Users", icon: <Users size={14} /> },
+  { to: "/sessions", label: "Sessions", icon: <Activity size={14} /> },
+  { to: "/audit-logs", label: "Audit Logs", icon: <ClipboardList size={14} /> },
+  { to: "/organizations", label: "Organizations", icon: <Building2 size={14} /> },
+  { to: "/oauth-apps", label: "OAuth Apps", icon: <Globe size={14} /> },
+  { to: "/api-keys", label: "API Keys", icon: <Key size={14} /> },
+  { to: "/settings", label: "Settings", icon: <Settings size={14} /> },
 ];
 
 function CommandPalette({ onClose, currentUserId }: { onClose: () => void; currentUserId?: string }) {
@@ -132,7 +137,6 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
 
   React.useEffect(() => { inputRef.current?.focus(); }, []);
 
-  // Live user search
   React.useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (!query.trim()) { setUserResults([]); return; }
@@ -150,7 +154,6 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
     return () => { if (searchTimeout.current) clearTimeout(searchTimeout.current); };
   }, [query]);
 
-  // Build items list
   const items = React.useMemo<PaletteItem[]>(() => {
     const navItems: PaletteItem[] = NAV_ITEMS
       .filter(n => !query || n.label.toLowerCase().includes(query.toLowerCase()))
@@ -165,7 +168,7 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
       id: `user:${u.id}`,
       label: u.name,
       sublabel: u.email,
-      icon: <UserAvatar src={u.image} name={u.name} size={20} style={{ flexShrink: 0 }} />,
+      icon: <UserAvatar src={u.image} name={u.name} size={18} style={{ flexShrink: 0 }} />,
       action: () => { window.location.href = `/users/${u.id}`; onClose(); },
     }));
 
@@ -175,7 +178,7 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
         id: "copy-id",
         label: copied ? "Copied!" : "Copy my user ID",
         sublabel: currentUserId,
-        icon: <Copy size={15} />,
+        icon: <Copy size={14} />,
         action: () => {
           navigator.clipboard.writeText(currentUserId);
           setCopied(true);
@@ -196,7 +199,6 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
     if (e.key === "Enter") { e.preventDefault(); items[activeIdx]?.action(); }
   };
 
-  // Close on backdrop
   const handleBackdropClick = (e: React.MouseEvent) => { if (e.target === e.currentTarget) onClose(); };
 
   void router;
@@ -206,21 +208,21 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
       onClick={handleBackdropClick}
       style={{
         position: "fixed", inset: 0, zIndex: 9999,
-        background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)",
+        background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)",
         display: "flex", alignItems: "flex-start", justifyContent: "center",
         paddingTop: "12vh",
       }}
     >
       <div style={{
-        width: "100%", maxWidth: 540,
-        background: "var(--color-surface-800)",
-        border: "1px solid var(--color-border)",
-        borderRadius: 14, overflow: "hidden",
-        boxShadow: "0 32px 64px rgba(0,0,0,0.6)",
+        width: "100%", maxWidth: 520,
+        background: "var(--color-surface)",
+        border: "1px solid var(--color-border-strong)",
+        borderRadius: 6, overflow: "hidden",
+        boxShadow: "0 32px 64px rgba(0,0,0,0.7)",
       }}>
         {/* Search input */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--color-border)" }}>
-          <Search size={15} color="#475569" style={{ flexShrink: 0 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--color-border)" }}>
+          <Search size={14} color="var(--color-text-tertiary)" style={{ flexShrink: 0 }} />
           <input
             ref={inputRef}
             value={query}
@@ -229,22 +231,24 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
             placeholder="Navigate, search users…"
             style={{
               flex: 1, background: "none", border: "none", outline: "none",
-              color: "#e2e8f0", fontSize: "0.92rem",
+              fontFamily: "var(--font-mono)", color: "var(--color-text-primary)",
+              fontSize: "0.85rem",
             }}
           />
-          {searching && <div className="loading" style={{ width: 14, height: 14, flexShrink: 0 }} />}
+          {searching && <div className="loading" style={{ width: 12, height: 12, borderRadius: 2, background: "var(--color-border-strong)", flexShrink: 0 }} />}
           <kbd style={{
-            fontSize: "0.65rem", color: "#475569",
-            background: "var(--color-surface-700)", border: "1px solid var(--color-border)",
-            borderRadius: 4, padding: "2px 6px", flexShrink: 0,
+            fontFamily: "var(--font-mono)",
+            fontSize: "0.62rem", color: "var(--color-text-tertiary)",
+            background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
+            borderRadius: 3, padding: "2px 6px", flexShrink: 0,
           }}>esc</kbd>
         </div>
 
         {/* Results */}
-        <div style={{ maxHeight: 360, overflowY: "auto", padding: 4 }}>
+        <div style={{ maxHeight: 340, overflowY: "auto", padding: "4px" }}>
           {items.length === 0 && (
-            <div style={{ padding: "24px", textAlign: "center", color: "#475569", fontSize: "0.83rem" }}>
-              {query ? "No results" : "Type to search or navigate…"}
+            <div style={{ padding: "20px", textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>
+              {query ? "no results" : "type to search or navigate…"}
             </div>
           )}
           {items.map((item, idx) => (
@@ -254,37 +258,59 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
               onMouseEnter={() => setActiveIdx(idx)}
               style={{
                 width: "100%", display: "flex", alignItems: "center", gap: 10,
-                padding: "9px 12px", borderRadius: 8, marginBottom: 2,
-                background: activeIdx === idx ? "rgba(99,102,241,0.12)" : "transparent",
-                border: "none", cursor: "pointer", transition: "background 0.1s",
+                padding: "8px 10px", borderRadius: 4, marginBottom: 1,
+                background: activeIdx === idx ? "var(--color-accent-glow)" : "transparent",
+                border: activeIdx === idx ? "1px solid rgba(59,130,246,0.15)" : "1px solid transparent",
+                cursor: "pointer", transition: "background 0.1s, border-color 0.1s",
                 textAlign: "left",
               }}
             >
-              <span style={{ color: activeIdx === idx ? "#818cf8" : "#475569", flexShrink: 0 }}>
+              <span style={{ color: activeIdx === idx ? "var(--color-accent)" : "var(--color-text-tertiary)", flexShrink: 0 }}>
                 {item.icon}
               </span>
               <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", fontSize: "0.85rem", color: activeIdx === idx ? "#e2e8f0" : "#94a3b8", fontWeight: 500 }}>
+                <span style={{
+                  display: "block",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.8rem",
+                  color: activeIdx === idx ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+                  fontWeight: 500,
+                }}>
                   {item.label}
                 </span>
                 {item.sublabel && (
-                  <span style={{ display: "block", fontSize: "0.72rem", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{
+                    display: "block",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "0.68rem",
+                    color: "var(--color-text-tertiary)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
                     {item.sublabel}
                   </span>
                 )}
               </span>
               {activeIdx === idx && (
-                <kbd style={{ fontSize: "0.65rem", color: "#475569", background: "var(--color-surface-700)", border: "1px solid var(--color-border)", borderRadius: 4, padding: "2px 6px", flexShrink: 0 }}>↵</kbd>
+                <kbd style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.62rem", color: "var(--color-text-tertiary)",
+                  background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
+                  borderRadius: 3, padding: "2px 5px", flexShrink: 0,
+                }}>↵</kbd>
               )}
             </button>
           ))}
         </div>
 
-        {/* Footer hint */}
-        <div style={{ borderTop: "1px solid var(--color-border)", padding: "8px 16px", display: "flex", gap: 14 }}>
+        {/* Footer */}
+        <div style={{ borderTop: "1px solid var(--color-border)", padding: "7px 14px", display: "flex", gap: 14 }}>
           {[["↑↓", "navigate"], ["↵", "select"], ["esc", "close"]].map(([key, hint]) => (
-            <span key={key} style={{ fontSize: "0.69rem", color: "#334155", display: "flex", alignItems: "center", gap: 4 }}>
-              <kbd style={{ background: "var(--color-surface-700)", border: "1px solid var(--color-border)", borderRadius: 3, padding: "1px 5px" }}>{key}</kbd>
+            <span key={key} style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "0.65rem", color: "var(--color-text-tertiary)",
+              display: "flex", alignItems: "center", gap: 4,
+            }}>
+              <kbd style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: 2, padding: "1px 4px" }}>{key}</kbd>
               {hint}
             </span>
           ))}
@@ -308,13 +334,15 @@ const NAV = [
 
 // ── Org Switcher ──────────────────────────────────────────────────────────────
 
-function OrgAvatar({ name, size = 26 }: { name: string; size?: number }) {
+function OrgAvatar({ name, size = 24 }: { name: string; size?: number }) {
   return (
     <div style={{
-      width: size, height: size, borderRadius: 7, flexShrink: 0,
-      background: "linear-gradient(135deg, #6366f1, #7c3aed)",
+      width: size, height: size, borderRadius: 4, flexShrink: 0,
+      background: "var(--color-accent-dim)",
+      border: "1px solid rgba(59,130,246,0.2)",
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontWeight: 700, fontSize: size * 0.42, color: "#fff",
+      fontFamily: "var(--font-mono)",
+      fontWeight: 700, fontSize: size * 0.44, color: "var(--color-accent)",
     }}>
       {name[0]?.toUpperCase() ?? "O"}
     </div>
@@ -351,60 +379,63 @@ function OrgSwitcher() {
   if (!orgs || orgs.length === 0) return null;
 
   return (
-    <div ref={ref} style={{ position: "relative", marginBottom: 12 }}>
+    <div ref={ref} style={{ position: "relative", marginBottom: 10 }}>
       <button
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen(v => !v)}
         style={{
           width: "100%", display: "flex", alignItems: "center", gap: 8,
-          background: open ? "var(--color-surface-700)" : "transparent",
+          background: open ? "var(--color-surface-hover)" : "transparent",
           border: "1px solid", borderColor: open ? "var(--color-border)" : "transparent",
-          borderRadius: 8, padding: "7px 10px", cursor: "pointer",
-          transition: "background 0.15s, border-color 0.15s",
+          borderRadius: 4, padding: "6px 8px", cursor: "pointer",
+          transition: "background 0.12s, border-color 0.12s",
         }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
         onMouseLeave={e => { if (!open) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
       >
         {activeOrg
           ? <OrgAvatar name={activeOrg.name} />
           : <div style={{
-            width: 26, height: 26, borderRadius: 7, flexShrink: 0,
-            background: "var(--color-surface-600)",
+            width: 24, height: 24, borderRadius: 4, flexShrink: 0,
+            background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
             display: "flex", alignItems: "center", justifyContent: "center",
-          }}><Building2 size={13} color="#475569" /></div>
+          }}><Building2 size={12} color="var(--color-text-tertiary)" /></div>
         }
         <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
           <p style={{
-            fontSize: "0.78rem", fontWeight: 600, color: "#e2e8f0",
+            fontFamily: "var(--font-mono)",
+            fontSize: "0.75rem", fontWeight: 600,
+            color: "var(--color-text-primary)",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            letterSpacing: "-0.01em",
           }}>
             {activeOrg?.name ?? "Select org"}
           </p>
           {activeOrg && (
-            <p style={{ fontSize: "0.65rem", color: "#475569", fontFamily: "monospace" }}>
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--color-text-tertiary)" }}>
               {activeOrg.slug}
             </p>
           )}
         </div>
-        <ChevronDown size={13} color="#475569"
+        <ChevronDown size={11} color="var(--color-text-tertiary)"
           style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
         />
       </button>
 
       {open && (
         <div role="listbox" style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
-          background: "var(--color-surface-800)", border: "1px solid var(--color-border)",
-          borderRadius: 10, padding: 4, boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
+          position: "absolute", top: "calc(100% + 3px)", left: 0, right: 0, zIndex: 100,
+          background: "var(--color-surface)", border: "1px solid var(--color-border-strong)",
+          borderRadius: 5, padding: 3, boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
         }}>
           <p style={{
-            fontSize: "0.6rem", color: "#475569", fontWeight: 600,
-            letterSpacing: "0.08em", textTransform: "uppercase",
-            padding: "6px 10px 4px",
+            fontFamily: "var(--font-mono)",
+            fontSize: "0.58rem", color: "var(--color-text-tertiary)", fontWeight: 600,
+            letterSpacing: "0.1em", textTransform: "uppercase",
+            padding: "6px 8px 4px",
           }}>Switch organization</p>
 
-          {/* Personal / no-org escape hatch */}
           {(() => {
             const isPersonal = activeOrg === null;
             const isSwitching = switching === "__personal__";
@@ -416,37 +447,39 @@ function OrgSwitcher() {
                 onClick={() => handleSetActive(null)}
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 8,
-                  padding: "7px 10px", borderRadius: 7,
+                  padding: "6px 8px", borderRadius: 4,
                   cursor: isPersonal ? "default" : "pointer",
-                  background: isPersonal ? "rgba(99,102,241,0.12)" : "transparent",
-                  border: "none", transition: "background 0.12s", marginBottom: 2,
+                  background: isPersonal ? "var(--color-accent-glow)" : "transparent",
+                  border: isPersonal ? "1px solid rgba(59,130,246,0.15)" : "1px solid transparent",
+                  transition: "background 0.1s", marginBottom: 1,
                   opacity: isSwitching ? 0.6 : 1,
                 }}
-                onMouseEnter={e => { if (!isPersonal) (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
+                onMouseEnter={e => { if (!isPersonal) (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
                 onMouseLeave={e => { if (!isPersonal) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
               >
                 <div style={{
-                  width: 26, height: 26, borderRadius: 7, flexShrink: 0,
-                  background: "var(--color-surface-600)",
+                  width: 24, height: 24, borderRadius: 4, flexShrink: 0,
+                  background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
-                  <UserCircle size={14} color="#475569" />
+                  <UserCircle size={13} color="var(--color-text-tertiary)" />
                 </div>
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                   <p style={{
-                    fontSize: "0.8rem", fontWeight: 600,
-                    color: isPersonal ? "#818cf8" : "#94a3b8",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "0.76rem", fontWeight: 600,
+                    color: isPersonal ? "var(--color-accent)" : "var(--color-text-secondary)",
+                    letterSpacing: "-0.01em",
                   }}>
                     {isSwitching ? "Switching…" : "No organization"}
                   </p>
                 </div>
-                {isPersonal && <Check size={12} color="#818cf8" />}
+                {isPersonal && <Check size={11} color="var(--color-accent)" />}
               </button>
             );
           })()}
 
-          {/* Divider */}
-          <div style={{ height: 1, background: "var(--color-border)", margin: "4px 0" }} />
+          <div style={{ height: 1, background: "var(--color-border)", margin: "3px 0" }} />
 
           {orgs.map(org => {
             const isActive = org.id === activeOrg?.id;
@@ -460,26 +493,29 @@ function OrgSwitcher() {
                 onClick={() => handleSetActive(org.id)}
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 8,
-                  padding: "7px 10px", borderRadius: 7,
+                  padding: "6px 8px", borderRadius: 4,
                   cursor: isActive ? "default" : "pointer",
-                  background: isActive ? "rgba(99,102,241,0.12)" : "transparent",
-                  border: "none", transition: "background 0.12s", marginBottom: 2,
+                  background: isActive ? "var(--color-accent-glow)" : "transparent",
+                  border: isActive ? "1px solid rgba(59,130,246,0.15)" : "1px solid transparent",
+                  transition: "background 0.1s", marginBottom: 1,
                   opacity: isSwitching ? 0.6 : 1,
                 }}
-                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
+                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
                 onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
               >
                 <OrgAvatar name={org.name} />
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                   <p style={{
-                    fontSize: "0.8rem", fontWeight: 600,
-                    color: isActive ? "#818cf8" : "#e2e8f0",
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "0.76rem", fontWeight: 600,
+                    color: isActive ? "var(--color-accent)" : "var(--color-text-primary)",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    letterSpacing: "-0.01em",
                   }}>
                     {isSwitching ? "Switching…" : org.name}
                   </p>
                 </div>
-                {isActive && <Check size={12} color="#818cf8" />}
+                {isActive && <Check size={11} color="var(--color-accent)" />}
               </button>
             );
           })}
@@ -503,7 +539,6 @@ function SessionSwitcher() {
   const [switching, setSwitching] = React.useState<string | null>(null);
   const ref = React.useRef<HTMLDivElement>(null);
 
-  // Load device sessions whenever the dropdown opens
   React.useEffect(() => {
     if (!open) return;
     multiSession.listDeviceSessions().then((res: Awaited<ReturnType<typeof multiSession.listDeviceSessions>>) => {
@@ -511,7 +546,6 @@ function SessionSwitcher() {
     }).catch(() => setSessions([]));
   }, [open]);
 
-  // Close on outside click
   React.useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -526,7 +560,7 @@ function SessionSwitcher() {
     setSwitching(token);
     try {
       await multiSession.setActive({ sessionToken: token });
-      window.location.reload(); // full reload to pick up new session cookie
+      window.location.reload();
     } catch {
       setSwitching(null);
     }
@@ -535,63 +569,65 @@ function SessionSwitcher() {
   const others = sessions.filter(s => s.user.id !== currentSession?.user.id);
 
   return (
-    <div ref={ref} style={{ position: "relative", marginBottom: 4 }}>
+    <div ref={ref} style={{ position: "relative", marginBottom: 3 }}>
       <button
         onClick={() => setOpen(v => !v)}
         style={{
-          width: "100%", display: "flex", alignItems: "center", gap: 8,
-          background: "transparent", border: "none",
-          borderRadius: 8, padding: "5px 10px", cursor: "pointer",
-          color: "#475569", fontSize: "0.72rem", transition: "background 0.15s",
+          width: "100%", display: "flex", alignItems: "center", gap: 7,
+          background: "transparent", border: "1px solid transparent",
+          borderRadius: 4, padding: "5px 8px", cursor: "pointer",
+          fontFamily: "var(--font-mono)",
+          color: "var(--color-text-tertiary)", fontSize: "0.7rem", transition: "background 0.12s",
         }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
         onMouseLeave={e => { if (!open) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
       >
-        <UserCircle size={13} />
+        <UserCircle size={12} />
         <span style={{ flex: 1, textAlign: "left" }}>
           Accounts{others.length > 0 ? ` (${others.length + 1})` : ""}
         </span>
-        <ChevronDown size={11} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+        <ChevronDown size={10} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
       </button>
 
       {open && (
         <div style={{
-          position: "absolute", bottom: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
-          background: "var(--color-surface-800)", border: "1px solid var(--color-border)",
-          borderRadius: 10, padding: 4, boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
+          position: "absolute", bottom: "calc(100% + 3px)", left: 0, right: 0, zIndex: 100,
+          background: "var(--color-surface)", border: "1px solid var(--color-border-strong)",
+          borderRadius: 5, padding: 3, boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
         }}>
           <p style={{
-            fontSize: "0.6rem", color: "#475569", fontWeight: 600,
-            letterSpacing: "0.08em", textTransform: "uppercase",
-            padding: "6px 10px 4px",
+            fontFamily: "var(--font-mono)",
+            fontSize: "0.58rem", color: "var(--color-text-tertiary)", fontWeight: 600,
+            letterSpacing: "0.1em", textTransform: "uppercase",
+            padding: "6px 8px 4px",
           }}>Switch account</p>
 
-          {/* Current session */}
           {currentSession && (
             <div style={{
               display: "flex", alignItems: "center", gap: 8,
-              padding: "7px 10px", borderRadius: 7,
-              background: "rgba(99,102,241,0.12)", marginBottom: 2,
+              padding: "6px 8px", borderRadius: 4,
+              background: "var(--color-accent-glow)",
+              border: "1px solid rgba(59,130,246,0.15)",
+              marginBottom: 1,
             }}>
               <UserAvatar
                 src={(currentSession.user as any).image as string | null}
                 name={currentSession.user.name}
-                size={24}
+                size={22}
                 style={{ flexShrink: 0 }}
               />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: "0.78rem", fontWeight: 600, color: "#818cf8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", fontWeight: 600, color: "var(--color-accent)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>
                   {currentSession.user.name ?? currentSession.user.email}
                 </p>
-                <p style={{ fontSize: "0.65rem", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--color-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {currentSession.user.email}
                 </p>
               </div>
-              <Check size={11} color="#818cf8" />
+              <Check size={10} color="var(--color-accent)" />
             </div>
           )}
 
-          {/* Other sessions */}
           {others.map(s => {
             const isSwitching = switching === s.session.token;
             return (
@@ -601,24 +637,25 @@ function SessionSwitcher() {
                 disabled={!!switching}
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 8,
-                  padding: "7px 10px", borderRadius: 7, marginBottom: 2,
-                  background: "transparent", border: "none", cursor: "pointer",
-                  opacity: isSwitching ? 0.6 : 1, transition: "background 0.12s",
+                  padding: "6px 8px", borderRadius: 4, marginBottom: 1,
+                  background: "transparent", border: "1px solid transparent",
+                  cursor: "pointer",
+                  opacity: isSwitching ? 0.6 : 1, transition: "background 0.1s",
                 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
               >
                 <UserAvatar
                   src={(s.user as any).image as string | null}
                   name={s.user.name}
-                  size={24}
+                  size={22}
                   style={{ flexShrink: 0 }}
                 />
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                  <p style={{ fontSize: "0.78rem", fontWeight: 600, color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>
                     {isSwitching ? "Switching..." : (s.user.name ?? s.user.email)}
                   </p>
-                  <p style={{ fontSize: "0.65rem", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--color-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {s.user.email}
                   </p>
                 </div>
@@ -627,24 +664,26 @@ function SessionSwitcher() {
           })}
 
           {others.length === 0 && sessions.length > 0 && (
-            <p style={{ padding: "8px 10px", fontSize: "0.75rem", color: "#475569" }}>
+            <p style={{ fontFamily: "var(--font-mono)", padding: "7px 8px", fontSize: "0.72rem", color: "var(--color-text-tertiary)" }}>
               Only one account signed in
             </p>
           )}
 
-          <div style={{ height: 1, background: "var(--color-border)", margin: "4px 0" }} />
+          <div style={{ height: 1, background: "var(--color-border)", margin: "3px 0" }} />
           <button
             onClick={() => { setOpen(false); window.location.href = "/sign-in"; }}
             style={{
-              width: "100%", display: "flex", alignItems: "center", gap: 8,
-              padding: "7px 10px", borderRadius: 7,
-              background: "transparent", border: "none", cursor: "pointer",
-              color: "#64748b", fontSize: "0.78rem", transition: "background 0.12s",
+              width: "100%", display: "flex", alignItems: "center", gap: 7,
+              padding: "6px 8px", borderRadius: 4,
+              background: "transparent", border: "1px solid transparent",
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              color: "var(--color-text-tertiary)", fontSize: "0.75rem", transition: "background 0.1s",
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-700)"; }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
           >
-            <PlusCircle size={13} /> Add account
+            <PlusCircle size={12} /> Add account
           </button>
         </div>
       )}
@@ -667,79 +706,113 @@ function Sidebar() {
 
   return (
     <aside style={{
-      width: 220,
+      width: 216,
       flexShrink: 0,
-      background: "var(--color-surface-800)",
+      background: "var(--color-surface)",
       borderRight: "1px solid var(--color-border)",
       display: "flex",
       flexDirection: "column",
-      padding: "20px 12px",
-      gap: 4,
+      padding: "16px 10px",
+      gap: 2,
     }}>
-      {/* Logo */}
-      <div style={{ padding: "4px 12px 20px", display: "flex", alignItems: "center", gap: 8 }}>
+      {/* Logo — maple-style square icon + wordmark */}
+      <div style={{ padding: "4px 10px 18px", display: "flex", alignItems: "center", gap: 9 }}>
         <div style={{
-          width: 28, height: 28, borderRadius: 8,
-          background: "linear-gradient(135deg, #6366f1, #7c3aed)",
+          width: 26, height: 26, borderRadius: 5,
+          background: "var(--color-accent)",
           display: "flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0,
         }}>
-          <Shield size={14} color="#fff" strokeWidth={2.5} />
+          <Shield size={13} color="#fff" strokeWidth={2.5} />
         </div>
-        <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "#e2e8f0", letterSpacing: "-0.02em" }}>
-          ralph<span style={{ color: "#818cf8" }}>auth</span>
+        <span style={{
+          fontFamily: "var(--font-mono)",
+          fontWeight: 700, fontSize: "0.88rem",
+          color: "var(--color-text-primary)",
+          letterSpacing: "-0.03em",
+        }}>
+          ralph<span style={{ color: "var(--color-accent)" }}>auth</span>
         </span>
       </div>
 
       {/* Org Switcher */}
       <OrgSwitcher />
 
+      {/* Nav section label */}
+      <p style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: "0.58rem", color: "var(--color-text-tertiary)",
+        fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase",
+        padding: "2px 10px 6px",
+      }}>
+        Navigation
+      </p>
+
       {/* Nav */}
-      <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-        <p style={{ fontSize: "0.65rem", color: "#475569", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", padding: "4px 12px 8px" }}>
-          Platform
-        </p>
+      <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 1 }}>
         {NAV.map(({ to, label, icon: Icon, exact }) => {
           const active = exact ? path === to : path.startsWith(to);
           return (
             <Link key={to} to={to as any} className={`nav-item${active ? " active" : ""}`}>
-              <Icon size={15} strokeWidth={active ? 2.5 : 2} />
+              <Icon size={14} strokeWidth={active ? 2.5 : 1.75} />
               {label}
             </Link>
           );
         })}
 
-        <div style={{ height: 1, background: "var(--color-border)", margin: "12px 4px" }} />
-        <p style={{ fontSize: "0.65rem", color: "#475569", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", padding: "4px 12px 8px" }}>
+        <div style={{ height: 1, background: "var(--color-border)", margin: "10px 2px" }} />
+        <p style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: "0.58rem", color: "var(--color-text-tertiary)",
+          fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase",
+          padding: "2px 10px 6px",
+        }}>
           Config
         </p>
         <Link to="/settings" className={`nav-item${path.startsWith("/settings") ? " active" : ""}`}>
-          <Settings size={15} />
+          <Settings size={14} strokeWidth={path.startsWith("/settings") ? 2.5 : 1.75} />
           Settings
         </Link>
       </nav>
 
-      {/* Session / Account Switcher (multi-session) */}
+      {/* Session / Account Switcher */}
       <SessionSwitcher />
 
-      {/* User */}
+      {/* User footer */}
       {session && (
-        <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 12, marginTop: 4 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px" }}>
+        <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 10, marginTop: 2 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px" }}>
             <UserAvatar
               src={(session.user as any).image as string | null}
               name={session.user.name}
-              size={28}
+              size={26}
             />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: "0.8rem", fontWeight: 600, color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <p style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "0.76rem", fontWeight: 600,
+                color: "var(--color-text-primary)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                letterSpacing: "-0.01em",
+              }}>
                 {session.user.name}
               </p>
-              <p style={{ fontSize: "0.7rem", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <p style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "0.62rem", color: "var(--color-text-tertiary)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
                 {session.user.email}
               </p>
             </div>
-            <button className="btn btn-ghost" style={{ padding: "4px", borderRadius: 6 }} onClick={handleSignOut} title="Sign out">
-              <LogOut size={14} />
+            <button
+              className="btn btn-ghost"
+              style={{ padding: "4px 6px", borderRadius: 4, minWidth: 28 }}
+              onClick={handleSignOut}
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <LogOut size={13} />
             </button>
           </div>
         </div>
@@ -748,39 +821,45 @@ function Sidebar() {
   );
 }
 
-function AccessRestricted({ name, email, onSignOut }: { name: string; email: string; onSignOut: () => void }) {
+function AccessRestricted({ name: _name, email, onSignOut }: { name: string; email: string; onSignOut: () => void }) {
   return (
     <div style={{
       height: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: "var(--color-surface-900)", padding: 24,
+      background: "var(--color-bg)", padding: 24,
     }}>
       <div style={{
-        width: "100%", maxWidth: 420,
-        background: "var(--color-surface-800)",
-        borderRadius: 16, border: "1px solid var(--color-border)",
+        width: "100%", maxWidth: 400,
+        background: "var(--color-surface)",
+        borderRadius: 6, border: "1px solid rgba(248,113,113,0.2)",
         padding: 36, textAlign: "center",
-        boxShadow: "0 24px 48px rgba(0,0,0,0.4)",
+        boxShadow: "0 24px 48px rgba(0,0,0,0.5)",
       }}>
         <div style={{
-          width: 52, height: 52, borderRadius: 14, margin: "0 auto 20px",
-          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
+          width: 44, height: 44, borderRadius: 6, margin: "0 auto 20px",
+          background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <Shield size={22} color="#f87171" strokeWidth={2} />
+          <Shield size={20} color="var(--color-red)" strokeWidth={2} />
         </div>
-        <h1 style={{ fontSize: "1.2rem", fontWeight: 700, color: "#e2e8f0", marginBottom: 10 }}>
+        <h1 style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: "1rem", fontWeight: 700,
+          color: "var(--color-text-primary)", marginBottom: 10,
+          letterSpacing: "-0.02em",
+        }}>
           Admin access required
         </h1>
-        <p style={{ fontSize: "0.875rem", color: "#64748b", lineHeight: 1.65, marginBottom: 24 }}>
+        <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)", lineHeight: 1.65, marginBottom: 24 }}>
           This dashboard is restricted to administrators. You're signed in as{" "}
-          <strong style={{ color: "#94a3b8" }}>{email}</strong>, which doesn't have admin privileges.
+          <strong style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>{email}</strong>,
+          which doesn't have admin privileges.
         </p>
         <button
           className="btn btn-danger"
           style={{ width: "100%", justifyContent: "center" }}
           onClick={onSignOut}
         >
-          <LogOut size={14} /> Sign out
+          <LogOut size={13} /> Sign out
         </button>
       </div>
     </div>
@@ -788,7 +867,6 @@ function AccessRestricted({ name, email, onSignOut }: { name: string; email: str
 }
 
 function isAdmin(role: string | undefined | null) {
-  // roles can be comma-separated for multi-role support
   return role?.split(",").map(r => r.trim()).includes("admin") ?? false;
 }
 
@@ -804,7 +882,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   if (isPending) {
     return (
       <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div className="loading" style={{ color: "#818cf8", fontSize: "0.9rem" }}>Loading…</div>
+        <div className="loading" style={{
+          fontFamily: "var(--font-mono)",
+          color: "var(--color-text-tertiary)", fontSize: "0.8rem",
+        }}>Loading…</div>
       </div>
     );
   }
@@ -814,7 +895,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  // Signed in but not an admin — show access restricted page
   if (!isAdmin(session.user.role)) {
     return (
       <AccessRestricted
@@ -835,7 +915,6 @@ function RootComponent() {
   const isPublic = ["/sign-in", "/auth-error"].some(p => location.pathname === p)
     || location.pathname.startsWith("/accept-invitation");
 
-  // Global Cmd+K / Ctrl+K listener
   React.useEffect(() => {
     if (isPublic) return;
     const handler = (e: KeyboardEvent) => {
@@ -862,13 +941,52 @@ function RootComponent() {
       )}
       <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
         <Sidebar />
-        <main style={{ flex: 1, overflow: "auto", padding: 28, minWidth: 0 }}>
-          <div style={{ maxWidth: 900, margin: "0 auto" }}>
-            <ErrorBoundary>
-              <Outlet />
-            </ErrorBoundary>
+        {/* Top bar with Cmd+K hint */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+          {/* Topbar */}
+          <div style={{
+            height: 42,
+            borderBottom: "1px solid var(--color-border)",
+            display: "flex", alignItems: "center",
+            padding: "0 24px", gap: 12,
+            flexShrink: 0,
+          }}>
+            <button
+              onClick={() => setPaletteOpen(true)}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                background: "var(--color-surface-raised)",
+                border: "1px solid var(--color-border)",
+                borderRadius: 4, padding: "4px 10px",
+                cursor: "pointer", color: "var(--color-text-tertiary)",
+                fontFamily: "var(--font-mono)", fontSize: "0.72rem",
+                transition: "border-color 0.15s",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--color-border-strong)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--color-border)"; }}
+            >
+              <Search size={11} />
+              <span>Search…</span>
+              <kbd style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "0.6rem", background: "var(--color-surface)",
+                border: "1px solid var(--color-border)", borderRadius: 2,
+                padding: "1px 4px", marginLeft: 4,
+              }}>⌘K</kbd>
+            </button>
+            {/* Spacer */}
+            <div style={{ flex: 1 }} />
           </div>
-        </main>
+
+          {/* Main content */}
+          <main style={{ flex: 1, overflow: "auto", padding: "24px 28px", minWidth: 0 }}>
+            <div style={{ maxWidth: 960, margin: "0 auto" }}>
+              <ErrorBoundary>
+                <Outlet />
+              </ErrorBoundary>
+            </div>
+          </main>
+        </div>
       </div>
     </AuthGuard>
   );

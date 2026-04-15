@@ -47,59 +47,47 @@ function KeyRevealModal({ keyValue, onClose }: { keyValue: string; onClose: () =
   };
 
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 50,
-      background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
-    }}
-      onClick={onClose}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: "var(--color-surface-800)", border: "1px solid var(--color-border)",
-          borderRadius: 16, padding: 32, maxWidth: 520, width: "100%",
-          boxShadow: "0 32px 64px rgba(0,0,0,0.5)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-            background: "rgba(99,102,241,0.15)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Key size={18} color="#818cf8" />
-          </div>
-          <div>
-            <p style={{ fontWeight: 700, color: "#e2e8f0" }}>Save your API key</p>
-            <p style={{ fontSize: "0.78rem", color: "#64748b" }}>
-              This won't be shown again after you close this dialog.
-            </p>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+        <div className="modal-header">
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 5, flexShrink: 0,
+              background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Key size={15} color="var(--color-accent)" />
+            </div>
+            <div>
+              <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.88rem" }}>Save your API key</p>
+              <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>
+                This won't be shown again after you close this dialog.
+              </p>
+            </div>
           </div>
           <button className="btn btn-ghost" style={{ marginLeft: "auto", padding: 6 }} onClick={onClose}>
-            <X size={14} />
+            <X size={13} />
           </button>
         </div>
 
-        <div style={{
-          background: "var(--color-surface-700)", borderRadius: 8, padding: "12px 14px",
-          fontFamily: "monospace", fontSize: "0.8rem", color: "#c4b5fd",
-          wordBreak: "break-all", marginBottom: 16, border: "1px solid var(--color-border)",
-        }}>
-          {keyValue}
-        </div>
+        <div className="modal-body">
+          <div style={{
+            background: "var(--color-surface-raised)", borderRadius: 4, padding: "11px 14px",
+            fontFamily: "var(--font-mono)", fontSize: "0.77rem", color: "var(--color-accent)",
+            wordBreak: "break-all", border: "1px solid var(--color-border)",
+            letterSpacing: "0.03em",
+          }}>
+            {keyValue}
+          </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="btn btn-primary"
-            style={{ flex: 1, justifyContent: "center" }}
-            onClick={copy}
-          >
-            {copied ? <><Check size={14} /> Copied!</> : <><Copy size={14} /> Copy key</>}
-          </button>
-          <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>
-            Done — I've saved it
-          </button>
+          <div className="modal-footer" style={{ border: "none", padding: 0 }}>
+            <button className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={copy}>
+              {copied ? <><Check size={13} /> Copied!</> : <><Copy size={13} /> Copy key</>}
+            </button>
+            <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>
+              Done — I've saved it
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -136,7 +124,6 @@ function CreateKeyForm({ organizationId, onCreated }: { organizationId: string |
         ...(organizationId ? { organizationId } : {}),
       });
       if (result.error) throw new Error(result.error.message ?? "Failed to create key");
-      // `key` is the plaintext secret — only present on creation response
       const rawKey = result.data?.key;
       if (!rawKey) throw new Error("Key created but server did not return the plaintext value — check the API key plugin version");
       onCreated(rawKey);
@@ -167,15 +154,16 @@ function CreateKeyForm({ organizationId, onCreated }: { organizationId: string |
 
   return (
     <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-      <p style={{ fontWeight: 600, color: "#e2e8f0", marginBottom: 16, fontSize: "0.95rem" }}>
+      <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 14, fontSize: "0.88rem", letterSpacing: "-0.02em" }}>
         New API key
       </p>
 
       {error && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-          borderRadius: 8, padding: "8px 12px", color: "#f87171", fontSize: "0.8rem",
+          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+          borderRadius: 4, padding: "8px 12px",
+          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
         }}>
           <AlertCircle size={13} /> {error}
         </div>
@@ -183,9 +171,7 @@ function CreateKeyForm({ organizationId, onCreated }: { organizationId: string |
 
       <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
         <div style={{ flex: 1 }}>
-          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>
-            Name
-          </label>
+          <label className="form-label">Name</label>
           <input
             ref={nameRef}
             className="input"
@@ -196,9 +182,7 @@ function CreateKeyForm({ organizationId, onCreated }: { organizationId: string |
           />
         </div>
         <div style={{ width: 140 }}>
-          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>
-            Expires
-          </label>
+          <label className="form-label">Expires</label>
           <select
             className="input"
             value={expiry}
@@ -281,12 +265,11 @@ function ApiKeysPage() {
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, color: "#e2e8f0", letterSpacing: "-0.02em" }}>
-            API Keys
-          </h1>
-          <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
+          <p className="section-label" style={{ marginBottom: 4 }}>Security</p>
+          <h1 className="page-title">API Keys</h1>
+          <p className="page-subtitle" style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {activeOrg
-              ? (<><Building2 size={13} /><span>Keys for <strong style={{ color: "#94a3b8" }}>{activeOrg.name}</strong></span></>)
+              ? (<><Building2 size={11} /><span>Keys for <strong style={{ color: "var(--color-text-primary)" }}>{activeOrg.name}</strong></span></>)
               : "Server-to-server access tokens — shown once on creation"
             }
           </p>
@@ -301,22 +284,30 @@ function ApiKeysPage() {
       {error && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 16,
-          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-          borderRadius: 8, padding: "10px 14px", color: "#f87171", fontSize: "0.83rem",
+          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+          borderRadius: 4, padding: "9px 13px",
+          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
         }}>
-          <AlertCircle size={14} /> {error}
+          <AlertCircle size={13} /> {error}
         </div>
       )}
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 48, color: "#475569" }}>Loading…</div>
+        <div style={{ textAlign: "center", padding: 48 }}>
+          <div className="loading" style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>Loading…</div>
+        </div>
       ) : keys.length === 0 ? (
-        <div className="card" style={{ padding: 40, textAlign: "center" }}>
-          <Key size={28} color="#334155" style={{ margin: "0 auto 12px" }} />
-          <p style={{ fontWeight: 600, color: "#64748b", marginBottom: 6 }}>No API keys yet</p>
-          <p style={{ fontSize: "0.82rem", color: "#475569" }}>
-            API keys allow your backend services to authenticate against this platform
-            without a browser session.
+        <div className="card empty-state">
+          <div style={{
+            width: 36, height: 36, borderRadius: 5, margin: "0 auto 12px",
+            background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <Key size={16} color="var(--color-accent)" />
+          </div>
+          <p style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 5, letterSpacing: "-0.02em" }}>No API keys yet</p>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)" }}>
+            API keys allow your backend services to authenticate against this platform without a browser session.
           </p>
         </div>
       ) : (
@@ -326,9 +317,10 @@ function ApiKeysPage() {
               <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
                 {["Name", "Key prefix", "Created", "Expires", "Last used", ""].map(h => (
                   <th key={h} style={{
-                    padding: "10px 16px", textAlign: "left",
-                    fontSize: "0.7rem", fontWeight: 600, color: "#475569",
-                    textTransform: "uppercase", letterSpacing: "0.06em",
+                    padding: "9px 16px", textAlign: "left",
+                    fontFamily: "var(--font-mono)", fontSize: "0.62rem", fontWeight: 600,
+                    color: "var(--color-text-tertiary)",
+                    textTransform: "uppercase", letterSpacing: "0.08em",
                   }}>{h}</th>
                 ))}
               </tr>
@@ -341,41 +333,42 @@ function ApiKeysPage() {
                     borderBottom: i < keys.length - 1 ? "1px solid var(--color-border)" : "none",
                     transition: "background 0.1s",
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-700)")}
+                  onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-hover)")}
                   onMouseLeave={e => (e.currentTarget.style.background = "")}
                 >
                   <td style={{ padding: "12px 16px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{
-                        width: 7, height: 7, borderRadius: "50%",
-                        background: k.enabled ? "#22c55e" : "#475569", flexShrink: 0,
+                        width: 6, height: 6, borderRadius: 2,
+                        background: k.enabled ? "var(--color-green)" : "var(--color-text-tertiary)", flexShrink: 0,
                       }} />
-                      <span style={{ color: "#e2e8f0", fontWeight: 500, fontSize: "0.87rem" }}>
+                      <span style={{ fontFamily: "var(--font-sans)", color: "var(--color-text-primary)", fontWeight: 500, fontSize: "0.84rem" }}>
                         {k.name ?? "Unnamed key"}
                       </span>
                     </div>
                   </td>
                   <td style={{ padding: "12px 16px" }}>
                     <code style={{
-                      fontFamily: "monospace", fontSize: "0.8rem", color: "#94a3b8",
-                      background: "var(--color-surface-700)", padding: "2px 8px", borderRadius: 4,
+                      fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)",
+                      background: "var(--color-surface-raised)", padding: "2px 6px", borderRadius: 3,
+                      border: "1px solid var(--color-border)",
                     }}>
                       {k.prefix ? `${k.prefix}_` : ""}{k.start ?? "••••••••"}…
                     </code>
                   </td>
-                  <td style={{ padding: "12px 16px", fontSize: "0.82rem", color: "#64748b" }}>
+                  <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-tertiary)" }}>
                     {fmt(String(k.createdAt))}
                   </td>
-                  <td style={{ padding: "12px 16px", fontSize: "0.82rem", color: "#64748b" }}>
+                  <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-tertiary)" }}>
                     {k.expiresAt
-                      ? <span style={{ color: new Date(k.expiresAt) < new Date() ? "#f87171" : "#64748b" }}>{fmt(String(k.expiresAt))}</span>
+                      ? <span style={{ color: new Date(k.expiresAt) < new Date() ? "var(--color-red)" : "var(--color-text-tertiary)" }}>{fmt(String(k.expiresAt))}</span>
                       : <span className="badge badge-gray">Never</span>
                     }
                   </td>
-                  <td style={{ padding: "12px 16px", fontSize: "0.82rem", color: "#64748b" }}>
+                  <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-tertiary)" }}>
                     {relativeTime(k.lastRequest ? String(k.lastRequest) : null)}
                     {k.requestCount > 0 && (
-                      <span style={{ marginLeft: 6, fontSize: "0.72rem", color: "#475569" }}>
+                      <span style={{ marginLeft: 6, fontSize: "0.68rem", color: "var(--color-text-tertiary)", opacity: 0.7 }}>
                         ({k.requestCount.toLocaleString()} reqs)
                       </span>
                     )}
@@ -401,13 +394,12 @@ function ApiKeysPage() {
 
       {/* Usage info */}
       <div className="card" style={{ marginTop: 20, padding: 20 }}>
-        <p style={{ fontSize: "0.7rem", color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
-          Using an API key
-        </p>
+        <p className="section-label" style={{ marginBottom: 8 }}>Using an API key</p>
         <code style={{
-          display: "block", background: "var(--color-surface-700)", borderRadius: 8,
-          padding: "12px 14px", fontSize: "0.78rem", color: "#94a3b8",
-          fontFamily: "monospace", lineHeight: 1.7,
+          display: "block", background: "var(--color-surface-raised)", borderRadius: 4,
+          border: "1px solid var(--color-border)",
+          padding: "12px 14px", fontFamily: "var(--font-mono)", fontSize: "0.75rem",
+          color: "var(--color-text-secondary)", lineHeight: 1.8,
         }}>
           {`// In your backend service:\nconst res = await fetch("${window.location.origin}/api/auth/api-key/verify", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({ key: "your_api_key_here" }),\n});\nconst { valid, key } = await res.json();`}
         </code>

@@ -118,7 +118,10 @@ function ActionBadge({ action }: { action: string }) {
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 4,
       background: meta.color, color: meta.textColor,
-      borderRadius: 5, padding: "2px 8px", fontSize: "0.72rem", fontWeight: 600,
+      borderRadius: 3, padding: "2px 7px",
+      fontFamily: "var(--font-mono)",
+      fontSize: "0.65rem", fontWeight: 500,
+      letterSpacing: "0.04em",
     }}>
       {meta.icon}
       {meta.label}
@@ -134,14 +137,14 @@ function ActorCell({ row }: { row: AuditLogRow }) {
       <UserAvatar
         src={(row as any).actorImage ?? null}
         name={name}
-        size={26}
-        style={{ flexShrink: 0, borderRadius: 8 }}
+        size={24}
+        style={{ flexShrink: 0 }}
       />
       <div style={{ minWidth: 0 }}>
-        <p style={{ fontSize: "0.8rem", fontWeight: 500, color: "#e2e8f0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.8rem", fontWeight: 500, color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {name}
         </p>
-        <p style={{ fontSize: "0.7rem", color: "#475569", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {email}
         </p>
       </div>
@@ -255,14 +258,12 @@ function AuditLogsPage() {
       {/* Header */}
       <div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: "1.4rem", fontWeight: 700, color: "#e2e8f0", letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: 8 }}>
-            <ClipboardList size={20} color="#818cf8" />
-            Audit Logs
-          </h1>
-          <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 2 }}>
+          <p className="section-label" style={{ marginBottom: 4 }}>Security</p>
+          <h1 className="page-title">Audit Logs</h1>
+          <p className="page-subtitle">
             {activeOrg ? (
-              <><Building2 size={12} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />
-                Events for <strong style={{ color: "#94a3b8" }}>{activeOrg.name}</strong></>
+              <><Building2 size={11} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />
+                Events for <strong style={{ color: "var(--color-text-primary)" }}>{activeOrg.name}</strong></>
             ) : "All platform events — sign-ins, key operations, org changes, admin actions"}
           </p>
         </div>
@@ -329,8 +330,9 @@ function AuditLogsPage() {
       {error && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-          borderRadius: 8, padding: "10px 14px", color: "#f87171", fontSize: "0.83rem",
+          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+          borderRadius: 4, padding: "9px 13px",
+          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.78rem",
         }}>
           {error}
         </div>
@@ -339,20 +341,20 @@ function AuditLogsPage() {
       {/* Table */}
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
-          <div className="loading" style={{ padding: 48, textAlign: "center", color: "#475569", fontSize: "0.85rem" }}>
+          <div className="loading" style={{ padding: 48, textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>
             Loading audit logs…
           </div>
         ) : logs.length === 0 ? (
-          <div style={{ padding: "48px 24px", textAlign: "center" }}>
+          <div className="empty-state">
             <div style={{
-              width: 48, height: 48, borderRadius: 12, margin: "0 auto 14px",
-              background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.15)",
+              width: 40, height: 40, borderRadius: 5, margin: "0 auto 14px",
+              background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <ClipboardList size={20} color="#818cf8" strokeWidth={1.5} />
+              <ClipboardList size={18} color="var(--color-accent)" strokeWidth={1.5} />
             </div>
-            <p style={{ color: "#475569", fontSize: "0.85rem" }}>No audit events found</p>
-            <p style={{ color: "#334155", fontSize: "0.78rem", marginTop: 6 }}>
+            <p style={{ color: "var(--color-text-secondary)", marginBottom: 6, fontFamily: "var(--font-mono)" }}>No audit events found</p>
+            <p style={{ color: "var(--color-text-tertiary)", fontSize: "0.72rem" }}>
               Events are written automatically as users sign in and perform actions.
             </p>
           </div>
@@ -370,7 +372,7 @@ function AuditLogsPage() {
             <tbody>
               {logs.map(row => (
                 <tr key={row.id}>
-                  <td style={{ color: "#64748b", fontSize: "0.78rem", whiteSpace: "nowrap" }}>
+                  <td style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.74rem", whiteSpace: "nowrap" }}>
                     <TimestampCell ts={row.createdAt} />
                   </td>
                   <td>
@@ -379,21 +381,21 @@ function AuditLogsPage() {
                   <td>
                     <ActorCell row={row} />
                   </td>
-                  <td style={{ fontSize: "0.78rem", color: "#64748b", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-secondary)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {row.targetLabel
                       ? <span title={row.targetLabel}>{row.targetLabel}</span>
                       : row.targetId
-                        ? <code style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "#475569" }}>{row.targetId.slice(0, 12)}…</code>
-                        : <span style={{ color: "#334155" }}>—</span>
+                        ? <code style={{ color: "var(--color-accent)" }}>{row.targetId.slice(0, 12)}…</code>
+                        : <span style={{ color: "var(--color-text-tertiary)" }}>—</span>
                     }
                   </td>
-                  <td style={{ fontSize: "0.75rem", color: "#475569" }}>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)" }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       {row.ipAddress && (
-                        <code style={{ fontFamily: "monospace", fontSize: "0.7rem" }}>{row.ipAddress}</code>
+                        <code style={{ color: "var(--color-text-secondary)" }}>{row.ipAddress}</code>
                       )}
                       {row.userAgent && (
-                        <span style={{ color: "#334155" }}>{parseUA(row.userAgent)}</span>
+                        <span>{parseUA(row.userAgent)}</span>
                       )}
                       {!row.ipAddress && !row.userAgent && <span>—</span>}
                     </div>
@@ -416,7 +418,7 @@ function AuditLogsPage() {
 
       {/* Row count */}
       {!loading && logs.length > 0 && (
-        <p style={{ fontSize: "0.75rem", color: "#334155", marginTop: 10, textAlign: "right" }}>
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 10, textAlign: "right" }}>
           Showing {logs.length} event{logs.length !== 1 ? "s" : ""}
           {nextCursor ? " — more available" : ""}
         </p>

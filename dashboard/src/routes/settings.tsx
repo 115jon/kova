@@ -48,9 +48,9 @@ function SectionCard({ icon, color, title, children }: {
 }) {
   return (
     <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-      <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="panel-header">
         <span style={{ color }}>{icon}</span>
-        <h2 style={{ fontSize: "0.9rem", fontWeight: 600, color: "#e2e8f0" }}>{title}</h2>
+        <h2 className="panel-title">{title}</h2>
       </div>
       {children}
     </div>
@@ -59,9 +59,9 @@ function SectionCard({ icon, color, title, children }: {
 
 function InfoRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 20px", borderBottom: "1px solid var(--color-border)" }}>
-      <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>{label}</span>
-      <span style={{ fontSize: "0.85rem", color: "#e2e8f0", fontFamily: mono ? "monospace" : undefined }}>{value}</span>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", borderBottom: "1px solid var(--color-border)" }}>
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)" }}>{label}</span>
+      <span style={{ fontFamily: mono ? "var(--font-mono)" : "var(--font-sans)", fontSize: "0.78rem", color: "var(--color-text-primary)" }}>{value}</span>
     </div>
   );
 }
@@ -177,8 +177,9 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
       {error && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-          borderRadius: 8, padding: "8px 12px", color: "#f87171", fontSize: "0.8rem",
+          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+          borderRadius: 4, padding: "8px 12px",
+          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
         }}>
           <AlertCircle size={13} /> {error}
         </div>
@@ -190,8 +191,9 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
       {step === "idle" && !hasCredential && (
         <div style={{
           display: "flex", alignItems: "flex-start", gap: 10,
-          background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.2)",
-          borderRadius: 8, padding: "10px 14px", fontSize: "0.82rem", color: "#94a3b8",
+          background: "var(--color-amber-dim)", border: "1px solid rgba(251,191,36,0.2)",
+          borderRadius: 4, padding: "10px 14px",
+          fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)",
         }}>
           <AlertCircle size={14} color="#facc15" style={{ flexShrink: 0, marginTop: 2 }} />
           <p style={{ lineHeight: 1.6 }}>
@@ -326,10 +328,11 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
           </div>
           <div style={{
             display: "grid", gridTemplateColumns: "1fr 1fr",
-            gap: 6, background: "var(--color-surface-700)", borderRadius: 8, padding: 14,
+            gap: 6, background: "var(--color-surface-raised)", borderRadius: 4,
+            padding: 14, border: "1px solid var(--color-border)",
           }}>
             {backupCodes.map((c, i) => (
-              <code key={i} style={{ fontFamily: "monospace", fontSize: "0.82rem", color: "#94a3b8" }}>{c}</code>
+              <code key={i} style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>{c}</code>
             ))}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -397,8 +400,8 @@ function PasskeysSection() {
     <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <p style={{ fontSize: "0.88rem", fontWeight: 600, color: "#e2e8f0" }}>Registered passkeys</p>
-          <p style={{ fontSize: "0.76rem", color: "#64748b", marginTop: 2 }}>Sign in with Touch ID, Face ID, or a hardware security key.</p>
+          <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.86rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Registered passkeys</p>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-secondary)", marginTop: 2 }}>Sign in with Touch ID, Face ID, or a hardware security key.</p>
         </div>
         <button
           id="add-passkey-btn"
@@ -414,8 +417,9 @@ function PasskeysSection() {
       {error && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-          borderRadius: 8, padding: "8px 12px", color: "#f87171", fontSize: "0.8rem",
+          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+          borderRadius: 4, padding: "8px 12px",
+          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
         }}>
           <AlertCircle size={13} /> {error}
         </div>
@@ -423,8 +427,9 @@ function PasskeysSection() {
       {success && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)",
-          borderRadius: 8, padding: "8px 12px", color: "#22c55e", fontSize: "0.8rem",
+          background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
+          borderRadius: 4, padding: "8px 12px",
+          fontFamily: "var(--font-mono)", color: "var(--color-green)", fontSize: "0.76rem",
         }}>
           <CheckCircle size={13} /> {success}
         </div>
@@ -432,8 +437,9 @@ function PasskeysSection() {
 
       {passkeys.length === 0 ? (
         <div style={{
-          background: "var(--color-surface-700)", borderRadius: 8, padding: "14px 16px",
-          fontSize: "0.82rem", color: "#475569", textAlign: "center",
+          background: "var(--color-surface-raised)", borderRadius: 4, padding: "12px 16px",
+          fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-tertiary)",
+          textAlign: "center", border: "1px solid var(--color-border)",
         }}>
           No passkeys registered yet.
         </div>
@@ -444,23 +450,24 @@ function PasskeysSection() {
               key={pk.id}
               style={{
                 display: "flex", alignItems: "center", gap: 10,
-                background: "var(--color-surface-700)", borderRadius: 8, padding: "10px 14px",
+                background: "var(--color-surface-raised)", borderRadius: 4,
+                padding: "9px 12px", border: "1px solid var(--color-border)",
               }}
             >
-              <Fingerprint size={16} color="#818cf8" style={{ flexShrink: 0 }} />
+              <Fingerprint size={14} color="var(--color-accent)" style={{ flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: "0.85rem", color: "#e2e8f0", fontWeight: 500 }}>
+                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.82rem", color: "var(--color-text-primary)", fontWeight: 500 }}>
                   {pk.name ?? "Passkey"}
                 </p>
                 {pk.createdAt && (
-                  <p style={{ fontSize: "0.72rem", color: "#475569", marginTop: 1 }}>
+                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 1 }}>
                     Added {new Date(pk.createdAt).toLocaleDateString()}
                   </p>
                 )}
               </div>
               <button
                 className="btn btn-ghost"
-                style={{ padding: "4px 8px", fontSize: "0.76rem", color: "#f87171" }}
+                style={{ padding: "4px 8px", fontSize: "0.76rem", color: "var(--color-red)" }}
                 onClick={() => handleDelete(pk.id)}
                 title="Remove passkey"
               >
@@ -507,8 +514,9 @@ function UsernameSection({ currentUsername }: { currentUsername?: string | null 
       {success && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)",
-          borderRadius: 8, padding: "8px 12px", color: "#22c55e", fontSize: "0.8rem",
+          background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
+          borderRadius: 4, padding: "8px 12px",
+          fontFamily: "var(--font-mono)", color: "var(--color-green)", fontSize: "0.76rem",
         }}>
           <CheckCircle size={13} /> Username updated!
         </div>
@@ -516,17 +524,16 @@ function UsernameSection({ currentUsername }: { currentUsername?: string | null 
       {error && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-          borderRadius: 8, padding: "8px 12px", color: "#f87171", fontSize: "0.8rem",
+          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+          borderRadius: 4, padding: "8px 12px",
+          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
         }}>
           <AlertCircle size={13} /> {error}
         </div>
       )}
       <form onSubmit={handleSave} style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
         <div style={{ flex: 1 }}>
-          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>
-            Username <span style={{ color: "#475569" }}>(3–32 chars, letters/digits/_ -)</span>
-          </label>
+          <label className="form-label">Username <span style={{ color: "var(--color-text-tertiary)" }}>(3–32 chars)</span></label>
           <input
             id="username-input"
             className="input"
@@ -624,8 +631,9 @@ function CredentialsSection({ hasCredential, userId, onPasswordSet }: {
       {!hasCredential && (
         <div style={{
           display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 16,
-          background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)",
-          borderRadius: 8, padding: "10px 14px", fontSize: "0.82rem", color: "#94a3b8",
+          background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
+          borderRadius: 4, padding: "10px 14px",
+          fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)",
         }}>
           <PlusCircle size={14} color="#818cf8" style={{ flexShrink: 0, marginTop: 2 }} />
           <p style={{ lineHeight: 1.6 }}>
@@ -638,8 +646,9 @@ function CredentialsSection({ hasCredential, userId, onPasswordSet }: {
       {success && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)",
-          borderRadius: 8, padding: "8px 12px", color: "#22c55e", fontSize: "0.8rem",
+          background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
+          borderRadius: 4, padding: "8px 12px",
+          fontFamily: "var(--font-mono)", color: "var(--color-green)", fontSize: "0.76rem",
         }}>
           <CheckCircle size={13} />
           {hasCredential ? "Password changed. All other sessions revoked." : "Password set! You can now sign in with email + password."}
@@ -663,15 +672,13 @@ function CredentialsSection({ hasCredential, userId, onPasswordSet }: {
               required autoComplete="current-password" />
           </div>
         )}
-        <div>
-          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>
-            {hasCredential ? "New password" : "Password"}
-          </label>
+        <div className="form-group">
+          <label className="form-label">{hasCredential ? "New password" : "Password"}</label>
           <input className="input" type="password" value={next} onChange={e => setNext(e.target.value)}
             required autoComplete="new-password" minLength={8} />
         </div>
-        <div>
-          <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>Confirm password</label>
+        <div className="form-group">
+          <label className="form-label">Confirm password</label>
           <input className="input" type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
             required autoComplete="new-password" />
         </div>
@@ -725,15 +732,16 @@ function SettingsPage() {
   return (
     <div className="animate-in">
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: "1.4rem", fontWeight: 700, color: "#e2e8f0", letterSpacing: "-0.02em" }}>Settings</h1>
-        <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 2 }}>Account security &amp; platform configuration</p>
+        <p className="section-label" style={{ marginBottom: 4 }}>Account</p>
+        <h1 className="page-title">Settings</h1>
+        <p className="page-subtitle">Account security &amp; platform configuration</p>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
         {/* Profile */}
         {session && (
-          <SectionCard icon={<Shield size={14} />} color="#818cf8" title="Profile">
+          <SectionCard icon={<Shield size={14} />} color="var(--color-accent)" title="Profile">
             <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 14, borderBottom: "1px solid var(--color-border)" }}>
               <AvatarUpload
                 src={localImage ?? ((session.user as any).image as string | null)}
@@ -748,10 +756,10 @@ function SettingsPage() {
                 }}
               />
               <div>
-                <p style={{ fontWeight: 600, color: "#e2e8f0" }}>{session.user.name}</p>
-                <p style={{ fontSize: "0.8rem", color: "#64748b" }}>{session.user.email}</p>
+                <p style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: "var(--color-text-primary)" }}>{session.user.name}</p>
+                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)" }}>{session.user.email}</p>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                  <p style={{ fontSize: "0.7rem", color: "#475569" }}>Click avatar to change photo</p>
+                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>Click avatar to change photo</p>
                   {hasCustomAvatar() && (
                     <button
                       onClick={handleRemoveAvatar}
@@ -777,13 +785,13 @@ function SettingsPage() {
             {currentUsername && <InfoRow label="Username" value={currentUsername} mono />}
             {/* Linked OAuth providers */}
             {ready && oauthProviders.length > 0 && (
-              <div style={{ padding: "11px 20px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.85rem", color: "#94a3b8" }}>Linked providers</span>
+              <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-secondary)" }}>Linked providers</span>
                 <div style={{ display: "flex", gap: 6 }}>
                   {oauthProviders.map(a => (
                     <div key={a.providerId} title={a.providerId} style={{
-                      width: 24, height: 24, borderRadius: 6,
-                      background: "var(--color-surface-700)",
+                      width: 24, height: 24, borderRadius: 4,
+                      background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                     }}>
                       <ProviderIcon id={a.providerId as ProviderId} size={13} />
@@ -801,24 +809,24 @@ function SettingsPage() {
         )}
 
         {/* Username */}
-        <SectionCard icon={<User size={14} />} color="#34d399" title="Username">
+        <SectionCard icon={<User size={14} />} color="var(--color-green)" title="Username">
           <UsernameSection currentUsername={currentUsername} />
         </SectionCard>
 
         {/* Passkeys */}
-        <SectionCard icon={<Fingerprint size={14} />} color="#818cf8" title="Passkeys">
+        <SectionCard icon={<Fingerprint size={14} />} color="var(--color-accent)" title="Passkeys">
           <PasskeysSection />
         </SectionCard>
 
         {/* 2FA */}
-        <SectionCard icon={<KeyRound size={14} />} color="#818cf8" title="Two-Factor Authentication">
+        <SectionCard icon={<KeyRound size={14} />} color="var(--color-accent)" title="Two-Factor Authentication">
           <TwoFactorSection hasCredential={ready ? hasCredential : true} />
         </SectionCard>
 
         {/* Password / Set password */}
         <SectionCard
           icon={<Lock size={14} />}
-          color="#34d399"
+          color="var(--color-green)"
           title={hasCredential ? "Change Password" : "Set a Password"}
         >
           <CredentialsSection
@@ -829,7 +837,7 @@ function SettingsPage() {
         </SectionCard>
 
         {/* Server info */}
-        <SectionCard icon={<Server size={14} />} color="#818cf8" title="Server">
+        <SectionCard icon={<Server size={14} />} color="var(--color-accent)" title="Server">
           <InfoRow label="Auth Server URL" value={AUTH_URL || "(proxied via Vite)"} mono />
           <InfoRow label="Auth Base Path" value="/api/auth" mono />
           <InfoRow label="Email Verification" value="Enabled (Resend)" />
@@ -842,7 +850,7 @@ function SettingsPage() {
         </SectionCard>
 
         {/* Session */}
-        <SectionCard icon={<Clock size={14} />} color="#34d399" title="Session">
+        <SectionCard icon={<Clock size={14} />} color="var(--color-green)" title="Session">
           <InfoRow label="Session Expiry" value="7 days" />
           <InfoRow label="Sliding Window" value="Disabled (fixed duration)" />
           <InfoRow label="Cookie Cache TTL" value="5 minutes (JWE encrypted)" />
@@ -851,7 +859,7 @@ function SettingsPage() {
         </SectionCard>
 
         {/* Cloudflare resources */}
-        <SectionCard icon={<Settings size={14} />} color="#facc15" title="Cloudflare Resources">
+        <SectionCard icon={<Settings size={14} />} color="var(--color-amber)" title="Cloudflare Resources">
           <InfoRow label="Database" value="D1 — ralph-auth-db" />
           <InfoRow label="Session / Rate-limit Cache" value="KV — ralph-auth-kv" />
           <InfoRow label="File Storage" value="R2 — ralph-auth-avatars" />

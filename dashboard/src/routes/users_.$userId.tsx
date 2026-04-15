@@ -78,25 +78,17 @@ const PROVIDER_LABELS: Record<string, string> = {
   twitter: "Twitter / X",
 };
 
-const PROVIDER_COLORS: Record<string, string> = {
-  credential: "#64748b",
-  google: "#ea4335",
-  discord: "#5865f2",
-  github: "#e2e8f0",
-  twitter: "#1da1f2",
-};
-
 function actionLabel(action: string): { label: string; color: string } {
-  if (action.startsWith("user.signIn")) return { label: "Signed in", color: "#22c55e" };
-  if (action.startsWith("user.signOut")) return { label: "Signed out", color: "#64748b" };
-  if (action.startsWith("user.signUp")) return { label: "Account created", color: "#818cf8" };
-  if (action.startsWith("user.password")) return { label: "Password changed", color: "#f59e0b" };
-  if (action.startsWith("user.ban")) return { label: "Banned", color: "#ef4444" };
-  if (action.startsWith("user.unban")) return { label: "Unbanned", color: "#22c55e" };
-  if (action.startsWith("apiKey")) return { label: "API key action", color: "#f59e0b" };
-  if (action.startsWith("org.")) return { label: "Org action", color: "#a78bfa" };
-  if (action.startsWith("session.")) return { label: "Session action", color: "#38bdf8" };
-  return { label: action, color: "#94a3b8" };
+  if (action.startsWith("user.signIn")) return { label: "Signed in", color: "var(--color-green)" };
+  if (action.startsWith("user.signOut")) return { label: "Signed out", color: "var(--color-text-tertiary)" };
+  if (action.startsWith("user.signUp")) return { label: "Account created", color: "var(--color-accent)" };
+  if (action.startsWith("user.password")) return { label: "Password changed", color: "var(--color-amber)" };
+  if (action.startsWith("user.ban")) return { label: "Banned", color: "var(--color-red)" };
+  if (action.startsWith("user.unban")) return { label: "Unbanned", color: "var(--color-green)" };
+  if (action.startsWith("apiKey")) return { label: "API key action", color: "var(--color-amber)" };
+  if (action.startsWith("org.")) return { label: "Org action", color: "var(--color-accent)" };
+  if (action.startsWith("session.")) return { label: "Session action", color: "var(--color-accent)" };
+  return { label: action, color: "var(--color-text-secondary)" };
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -105,20 +97,17 @@ function StatCard({ icon, label, value, color }: {
   icon: React.ReactNode; label: string; value: string | number; color: string;
 }) {
   return (
-    <div style={{
-      background: "var(--color-surface-700)", borderRadius: 10,
-      padding: "14px 18px", display: "flex", alignItems: "center", gap: 12,
-    }}>
+    <div className="card" style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
       <div style={{
-        width: 36, height: 36, borderRadius: 9,
-        background: `${color}20`, border: `1px solid ${color}40`,
+        width: 34, height: 34, borderRadius: 5,
+        background: `${color}18`, border: `1px solid ${color}30`,
         display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
       }}>
         <span style={{ color }}>{icon}</span>
       </div>
       <div>
-        <p style={{ fontSize: "1.2rem", fontWeight: 700, color: "#e2e8f0", lineHeight: 1 }}>{value}</p>
-        <p style={{ fontSize: "0.72rem", color: "#64748b", marginTop: 3 }}>{label}</p>
+        <p className="stat-value" style={{ fontSize: "1.15rem" }}>{value}</p>
+        <p className="stat-label" style={{ marginBottom: 0, marginTop: 2 }}>{label}</p>
       </div>
     </div>
   );
@@ -137,7 +126,7 @@ function AdminAction({
   return (
     <button
       className={danger ? "btn btn-danger" : "btn btn-ghost"}
-      style={{ width: "100%", justifyContent: "flex-start", fontSize: "0.82rem" }}
+      style={{ width: "100%", justifyContent: "flex-start", fontSize: "0.8rem" }}
       disabled={disabled}
       onClick={handler}
     >
@@ -206,8 +195,8 @@ function UserDetailPage() {
   // ── Loading / error states ────────────────
   if (loading) {
     return (
-      <div className="animate-in" style={{ display: "flex", alignItems: "center", gap: 12, color: "#475569", padding: 40 }}>
-        <RefreshCw size={16} style={{ animation: "spin 1s linear infinite" }} /> Loading user…
+      <div className="animate-in loading" style={{ display: "flex", alignItems: "center", gap: 10, padding: 40, fontFamily: "var(--font-mono)", fontSize: "0.78rem", color: "var(--color-text-tertiary)" }}>
+        <RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} /> Loading user…
       </div>
     );
   }
@@ -215,15 +204,15 @@ function UserDetailPage() {
   if (error || !data) {
     return (
       <div className="animate-in">
-        <Link to="/users" style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#64748b", fontSize: "0.85rem", textDecoration: "none", marginBottom: 20 }}>
-          <ArrowLeft size={14} /> Back to Users
+        <Link to="/users" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem", textDecoration: "none", marginBottom: 20 }}>
+          <ArrowLeft size={13} /> Back to Users
         </Link>
         <div style={{
-          display: "flex", alignItems: "center", gap: 10, padding: "14px 18px",
-          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-          borderRadius: 10, color: "#f87171",
+          display: "flex", alignItems: "center", gap: 10, padding: "12px 16px",
+          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+          borderRadius: 4, fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.78rem",
         }}>
-          <AlertCircle size={16} /> {error || "User not found"}
+          <AlertCircle size={14} /> {error || "User not found"}
         </div>
       </div>
     );
@@ -236,27 +225,25 @@ function UserDetailPage() {
       {/* Back nav */}
       <Link
         to="/users"
-        style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#64748b", fontSize: "0.82rem", textDecoration: "none", marginBottom: 20 }}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.76rem", textDecoration: "none", marginBottom: 20 }}
       >
-        <ArrowLeft size={13} /> All users
+        <ArrowLeft size={12} /> All users
       </Link>
 
       {/* ── Hero header ─────────────────────────────────────── */}
-      <div className="card" style={{ padding: 28, marginBottom: 20, display: "flex", alignItems: "flex-start", gap: 20 }}>
+      <div className="card" style={{ padding: 24, marginBottom: 20, display: "flex", alignItems: "flex-start", gap: 20 }}>
         <AvatarUpload
           src={localImage ?? user.image}
           name={user.name}
-          size={72}
+          size={68}
           uploadUrl={`/api/admin/users/${userId}/avatar`}
           onSuccess={(url) => setLocalImage(url)}
           onError={(msg) => setActionError(msg)}
         />
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <h1 style={{ fontSize: "1.3rem", fontWeight: 700, color: "#e2e8f0", letterSpacing: "-0.02em" }}>
-              {user.name}
-            </h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <h1 className="page-title">{user.name}</h1>
             {user.role === "admin" && (
               <span className="badge badge-blue"><Shield size={9} /> admin</span>
             )}
@@ -268,20 +255,20 @@ function UserDetailPage() {
             )}
           </div>
 
-          <p style={{ color: "#64748b", fontSize: "0.85rem", marginTop: 4 }}>{user.email}</p>
+          <p className="page-subtitle" style={{ marginTop: 3 }}>{user.email}</p>
 
           {user.username && (
-            <p style={{ color: "#475569", fontSize: "0.78rem", marginTop: 2, fontFamily: "monospace" }}>
+            <p style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.72rem", marginTop: 3 }}>
               @{user.username}
             </p>
           )}
 
           <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
-            <span style={{ fontSize: "0.75rem", color: "#475569" }}>
-              <span style={{ color: "#64748b" }}>User ID: </span>
-              <code style={{ fontFamily: "monospace", color: "#94a3b8" }}>{user.id}</code>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
+              <span style={{ color: "var(--color-text-secondary)" }}>ID: </span>
+              <code>{user.id}</code>
             </span>
-            <span style={{ fontSize: "0.75rem", color: "#475569" }}>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
               Joined {relativeTime(new Date(user.createdAt).toISOString())}
             </span>
           </div>
@@ -289,65 +276,66 @@ function UserDetailPage() {
 
         <button
           className="btn btn-ghost"
-          style={{ padding: "6px 10px", fontSize: "0.78rem", flexShrink: 0 }}
+          style={{ padding: "5px 9px", fontSize: "0.76rem", flexShrink: 0 }}
           onClick={load} title="Refresh"
         >
-          <RefreshCw size={13} />
+          <RefreshCw size={12} />
         </button>
       </div>
 
       {/* ── Two-column layout ───────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 20, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 20, alignItems: "start" }}>
 
         {/* Left column */}
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
           {/* Stats row */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-            <StatCard icon={<Activity size={16} />} label="Active sessions" value={sessionCount} color="#22c55e" />
-            <StatCard icon={<Key size={16} />} label="API keys" value={apiKeyCount} color="#f59e0b" />
-            <StatCard icon={<Clock size={16} />} label="Last updated" value={relativeTime(new Date(user.updatedAt).toISOString())} color="#818cf8" />
+            <StatCard icon={<Activity size={15} />} label="Active sessions" value={sessionCount} color="var(--color-green)" />
+            <StatCard icon={<Key size={15} />} label="API keys" value={apiKeyCount} color="var(--color-amber)" />
+            <StatCard icon={<Clock size={15} />} label="Last updated" value={relativeTime(new Date(user.updatedAt).toISOString())} color="var(--color-accent)" />
           </div>
 
           {/* Linked accounts */}
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--color-border)" }}>
-              <p style={{ fontSize: "0.85rem", fontWeight: 600, color: "#e2e8f0" }}>Identity providers</p>
-              <p style={{ fontSize: "0.75rem", color: "#64748b", marginTop: 2 }}>
-                Authentication methods linked to this account
-              </p>
+            <div className="panel-header">
+              <div>
+                <p className="panel-title">Identity providers</p>
+                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 2 }}>
+                  Authentication methods linked to this account
+                </p>
+              </div>
             </div>
             {accounts.length === 0 ? (
-              <div style={{ padding: "20px", color: "#475569", fontSize: "0.82rem", textAlign: "center" }}>No linked providers</div>
+              <div style={{ padding: "16px 20px", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.76rem", textAlign: "center" }}>No linked providers</div>
             ) : (
-              <div style={{ padding: "12px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
                 {accounts.map(acc => {
-                  const color = PROVIDER_COLORS[acc.providerId] ?? "#94a3b8";
                   const label = PROVIDER_LABELS[acc.providerId] ?? acc.providerId;
                   return (
                     <div key={acc.id} style={{
                       display: "flex", alignItems: "center", gap: 12,
-                      padding: "10px 14px", borderRadius: 8,
-                      background: "var(--color-surface-700)",
+                      padding: "9px 12px", borderRadius: 4,
+                      background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
                     }}>
                       <div style={{
-                        width: 28, height: 28, borderRadius: 7,
-                        background: `${color}20`, border: `1px solid ${color}40`,
+                        width: 26, height: 26, borderRadius: 4,
+                        background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
                         display: "flex", alignItems: "center", justifyContent: "center",
                       }}>
                         {acc.providerId === "credential" ? (
-                          <KeyRound size={13} color={color} />
+                          <KeyRound size={12} color="var(--color-accent)" />
                         ) : (
-                          <ProviderIcon id={acc.providerId as ProviderId} size={15} />
+                          <ProviderIcon id={acc.providerId as ProviderId} size={13} />
                         )}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: "0.83rem", fontWeight: 600, color: "#e2e8f0" }}>{label}</p>
-                        <p style={{ fontSize: "0.7rem", color: "#64748b" }}>
+                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.82rem", fontWeight: 600, color: "var(--color-text-primary)" }}>{label}</p>
+                        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.66rem", color: "var(--color-text-tertiary)" }}>
                           Linked {new Date(acc.createdAt).toLocaleDateString()}
                         </p>
                       </div>
-                      <span className="badge badge-green" style={{ fontSize: "0.6rem" }}>connected</span>
+                      <span className="badge badge-green">connected</span>
                     </div>
                   );
                 })}
@@ -357,20 +345,20 @@ function UserDetailPage() {
 
           {/* Recent activity */}
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div className="panel-header">
               <div>
-                <p style={{ fontSize: "0.85rem", fontWeight: 600, color: "#e2e8f0" }}>Recent activity</p>
-                <p style={{ fontSize: "0.75rem", color: "#64748b", marginTop: 2 }}>Last 10 audit log entries</p>
+                <p className="panel-title">Recent activity</p>
+                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 2 }}>Last 10 audit log entries</p>
               </div>
               <Link
                 to="/audit-logs"
-                style={{ fontSize: "0.75rem", color: "#818cf8", textDecoration: "none" }}
+                style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-accent)", textDecoration: "none" }}
               >
                 View all →
               </Link>
             </div>
             {recentActivity.length === 0 ? (
-              <div style={{ padding: 20, color: "#475569", fontSize: "0.82rem", textAlign: "center" }}>No activity recorded</div>
+              <div style={{ padding: 20, fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.76rem", textAlign: "center" }}>No activity recorded</div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column" }}>
                 {recentActivity.map((entry, i) => {
@@ -378,22 +366,22 @@ function UserDetailPage() {
                   return (
                     <div key={entry.id} style={{
                       display: "flex", alignItems: "flex-start", gap: 12,
-                      padding: "11px 20px",
-                      borderBottom: i < recentActivity.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
+                      padding: "10px 20px",
+                      borderBottom: i < recentActivity.length - 1 ? "1px solid var(--color-border)" : "none",
                     }}>
                       <div style={{
-                        width: 8, height: 8, borderRadius: "50%",
+                        width: 6, height: 6, borderRadius: 2,
                         background: color, flexShrink: 0, marginTop: 5,
                       }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: "0.82rem", color: "#e2e8f0", fontWeight: 500 }}>{label}</p>
+                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.81rem", color: "var(--color-text-primary)", fontWeight: 500 }}>{label}</p>
                         {entry.ipAddress && (
-                          <p style={{ fontSize: "0.7rem", color: "#475569", fontFamily: "monospace", marginTop: 2 }}>
+                          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.66rem", color: "var(--color-text-tertiary)", marginTop: 2 }}>
                             {entry.ipAddress}
                           </p>
                         )}
                       </div>
-                      <p style={{ fontSize: "0.72rem", color: "#475569", flexShrink: 0, marginTop: 1 }}>
+                      <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.66rem", color: "var(--color-text-tertiary)", flexShrink: 0, marginTop: 2 }}>
                         {relativeTime(new Date(entry.createdAt).toISOString())}
                       </p>
                     </div>
@@ -409,29 +397,29 @@ function UserDetailPage() {
 
           {actionError && (
             <div style={{
-              display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
-              background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-              borderRadius: 8, color: "#f87171", fontSize: "0.8rem",
+              display: "flex", alignItems: "center", gap: 8, padding: "9px 12px",
+              background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+              borderRadius: 4, fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
             }}>
               <AlertCircle size={13} /> {actionError}
             </div>
           )}
           {actionSuccess && (
             <div style={{
-              display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
-              background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.2)",
-              borderRadius: 8, color: "#22c55e", fontSize: "0.8rem",
+              display: "flex", alignItems: "center", gap: 8, padding: "9px 12px",
+              background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
+              borderRadius: 4, fontFamily: "var(--font-mono)", color: "var(--color-green)", fontSize: "0.76rem",
             }}>
               <CheckCircle size={13} /> {actionSuccess}
             </div>
           )}
 
           {/* Role */}
-          <div className="card" style={{ padding: "14px 16px" }}>
-            <p style={{ fontSize: "0.7rem", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
-              Role
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <div className="panel-header">
+              <p className="section-label">Role</p>
+            </div>
+            <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
               {user.role !== "admin" ? (
                 <AdminAction
                   label="Promote to admin"
@@ -453,15 +441,15 @@ function UserDetailPage() {
           </div>
 
           {/* Status */}
-          <div className="card" style={{ padding: "14px 16px" }}>
-            <p style={{ fontSize: "0.7rem", fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
-              Account status
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <div className="panel-header">
+              <p className="section-label">Account status</p>
+            </div>
+            <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
               {user.banned ? (
                 <>
                   {user.banReason && (
-                    <p style={{ fontSize: "0.75rem", color: "#f87171", marginBottom: 4 }}>
+                    <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-red)", marginBottom: 4 }}>
                       Reason: {user.banReason}
                     </p>
                   )}
@@ -486,11 +474,11 @@ function UserDetailPage() {
           </div>
 
           {/* Danger zone */}
-          <div className="card" style={{ padding: "14px 16px", borderColor: "rgba(239,68,68,0.2)" }}>
-            <p style={{ fontSize: "0.7rem", fontWeight: 600, color: "#f87171", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
-              Danger zone
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="card" style={{ padding: 0, overflow: "hidden", borderColor: "rgba(248,113,113,0.18)" }}>
+            <div className="panel-header" style={{ borderBottomColor: "rgba(248,113,113,0.14)" }}>
+              <p className="section-label" style={{ color: "var(--color-red)" }}>Danger zone</p>
+            </div>
+            <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
               <AdminAction
                 label="Delete account"
                 icon={<Trash2 size={13} />}

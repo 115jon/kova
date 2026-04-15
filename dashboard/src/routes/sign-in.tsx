@@ -66,16 +66,16 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ textAlign: "center", marginBottom: 4 }}>
         <div style={{
-          width: 44, height: 44, borderRadius: 12, margin: "0 auto 12px",
-          background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.2)",
+          width: 40, height: 40, borderRadius: 5, margin: "0 auto 12px",
+          background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.25)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <KeyRound size={20} color="#818cf8" />
+          <KeyRound size={18} color="var(--color-accent)" />
         </div>
-        <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#e2e8f0" }}>
+        <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "1rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>
           Two-factor authentication
         </h2>
-        <p style={{ fontSize: "0.8rem", color: "#64748b", marginTop: 4 }}>
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)", marginTop: 4 }}>
           {method === "totp"
             ? "Enter the 6-digit code from your authenticator app"
             : otpSent ? "Enter the code sent to your email" : "We'll send a code to your email"}
@@ -85,15 +85,16 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
       {error && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-          borderRadius: 8, padding: "10px 12px", color: "#f87171", fontSize: "0.8rem",
+          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+          borderRadius: 4, padding: "9px 12px",
+          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.77rem",
         }}>
-          <AlertCircle size={14} /> {error}
+          <AlertCircle size={13} /> {error}
         </div>
       )}
 
       {/* Method tabs */}
-      <div style={{ display: "flex", gap: 4, background: "var(--color-surface-700)", borderRadius: 8, padding: 4 }}>
+      <div style={{ display: "flex", gap: 4, background: "var(--color-surface-raised)", borderRadius: 4, padding: 3, border: "1px solid var(--color-border)" }}>
         {([
           ["totp", "Authenticator app", Smartphone],
           ["otp", "Email code", KeyRound],
@@ -211,14 +212,14 @@ function MagicLinkPanel({ onBack }: { onBack: () => void }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ textAlign: "center" }}>
         <div style={{
-          width: 44, height: 44, borderRadius: 12, margin: "0 auto 12px",
-          background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.2)",
+          width: 40, height: 40, borderRadius: 5, margin: "0 auto 12px",
+          background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.25)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <Link size={20} color="#818cf8" />
+          <Link size={18} color="var(--color-accent)" />
         </div>
-        <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#e2e8f0" }}>Email sign-in link</h2>
-        <p style={{ fontSize: "0.8rem", color: "#64748b", marginTop: 4 }}>
+        <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "1rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>Email sign-in link</h2>
+        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)", marginTop: 4 }}>
           No password needed — we'll email you a secure link
         </p>
       </div>
@@ -234,10 +235,8 @@ function MagicLinkPanel({ onBack }: { onBack: () => void }) {
       )}
 
       <form onSubmit={handleSend} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div>
-          <label style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 6 }}>
-            Email
-          </label>
+        <div className="form-group">
+          <label className="form-label">Email</label>
           <input
             id="magic-link-email"
             type="email"
@@ -393,25 +392,24 @@ function SignInPage() {
     }}>
       <div style={{
         position: "fixed", inset: 0, pointerEvents: "none",
-        background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99,102,241,0.12), transparent)",
+        background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(59,130,246,0.08), transparent)",
       }} />
 
       <div className="card animate-in" style={{ width: "100%", maxWidth: 380, padding: 36 }}>
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{
-            width: 44, height: 44, borderRadius: 12,
-            background: "linear-gradient(135deg, #6366f1, #7c3aed)",
+            width: 32, height: 32, borderRadius: 6,
+            background: "var(--color-accent)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            margin: "0 auto 12px",
-            boxShadow: "0 0 24px rgba(99,102,241,0.35)",
+            margin: "0 auto 10px",
           }}>
-            <Shield size={20} color="#fff" strokeWidth={2.5} />
+            <Shield size={16} color="#fff" strokeWidth={2.5} />
           </div>
-          <h1 style={{ fontSize: "1.3rem", fontWeight: 700, color: "#e2e8f0", letterSpacing: "-0.02em" }}>
-            ralph<span style={{ color: "#818cf8" }}>auth</span>
+          <h1 style={{ fontFamily: "var(--font-mono)", fontSize: "1.1rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.03em" }}>
+            ralph<span style={{ color: "var(--color-accent)" }}>auth</span>
           </h1>
-          <p style={{ fontSize: "0.8rem", color: "#64748b", marginTop: 4 }}>Admin Dashboard</p>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-secondary)", marginTop: 3 }}>Admin Dashboard</p>
         </div>
 
         {error && (
@@ -427,10 +425,8 @@ function SignInPage() {
         )}
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div>
-            <label style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 6 }}>
-              Email
-            </label>
+          <div className="form-group">
+            <label className="form-label">Email</label>
             <input
               id="email"
               type="email"
@@ -442,10 +438,8 @@ function SignInPage() {
               autoComplete="email"
             />
           </div>
-          <div>
-            <label style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 6 }}>
-              Password
-            </label>
+          <div className="form-group">
+            <label className="form-label">Password</label>
             <input
               id="password"
               type="password"
@@ -471,7 +465,7 @@ function SignInPage() {
         {/* Divider + alternative sign-in methods */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "16px 0" }}>
           <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
-          <span style={{ fontSize: "0.75rem", color: "#475569" }}>or</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)" }}>or</span>
           <div style={{ flex: 1, height: 1, background: "var(--color-border)" }} />
         </div>
 
