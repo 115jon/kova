@@ -1,18 +1,21 @@
+import { AvatarUpload } from "@/components/AvatarUpload";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { Modal } from "@/components/Modal";
+import { OrgAvatar } from "@/components/OrgAvatar";
 import { UserAvatar } from "@/components/UserAvatar";
 import { organization } from "@/lib/auth-client";
 import { relativeTime } from "@/lib/utils";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
-  AlertCircle, ArrowLeft, CheckCircle,
+  AlertCircle, ArrowLeft,
+  CheckCircle,
   ClipboardList,
   Mail,
   Plus,
   RefreshCw,
   Settings,
   Shield,
-  Trash2, UserMinus, UserPlus, Users, UsersRound, X,
+  Trash2, UserMinus, UserPlus, Users, UsersRound, X
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -865,6 +868,111 @@ function RolesTab({ orgId }: { orgId: string }) {
   );
 }
 
+// ── LogoCard ──────────────────────────────────────────────────────────────────
+// Self-contained card for the org logo in the Settings tab.
+// Has its own loading/error/success state entirely decoupled from the General form.
+
+interface LogoCardProps {
+  orgId: string;
+  /** Current logo URL, or null if none uploaded yet. */
+  logo: string | null;
+  /** Org name — used as the monogram fallback label inside OrgAvatar. */
+  name: string;
+  /** Called after a successful upload or removal with the new logo URL (or null). */
+  onLogoChange: (newLogo: string | null) => void;
+}
+
+function LogoCard({ orgId, logo, name, onLogoChange }: LogoCardProps) {
+  const [logoRemoving, setLogoRemoving] = useState(false);
+  const [logoMsg, setLogoMsg] = useState("");
+  const [logoErr, setLogoErr] = useState("");
+
+  const clearFeedback = () => { setLogoMsg(""); setLogoErr(""); };
+
+  const handleUploadSuccess = (imageUrl: string) => {
+    clearFeedback();
+    onLogoChange(imageUrl);
+    setLogoMsg("Logo updated successfully");
+    setTimeout(() => setLogoMsg(""), 3500);
+  };
+
+  const handleUploadError = (msg: string) => {
+    clearFeedback();
+    setLogoErr(msg);
+  };
+
+  const handleRemoveLogo = async () => {
+    clearFeedback();
+    setLogoRemoving(true);
+    try {
+      const res = await fetch(`/api/org/avatar/${orgId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (res.ok) {
+        onLogoChange(null);
+        setLogoMsg("Logo removed");
+        setTimeout(() => setLogoMsg(""), 3500);
+      } else {
+        const body = await res.json().catch(() => ({ error: "Request failed" })) as { error?: string };
+        setLogoErr(body.error ?? "Failed to remove logo");
+      }
+    } catch {
+      setLogoErr("Network error — could not remove logo");
+    } finally {
+      setLogoRemoving(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="panel-header">
+        <p className="section-label">Logo</p>
+      </div>
+
+      <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Single interactive element — hover to reveal camera icon, click to crop & upload */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <AvatarUpload
+            src={logo}
+            name={name}
+            size={72}
+            type="org"
+            uploadUrl={`/api/org/avatar/${orgId}`}
+            onSuccess={handleUploadSuccess}
+            onError={handleUploadError}
+          />
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)", lineHeight: 1.6 }}>
+            Hover the logo to change it.<br />
+            JPEG, PNG or WebP · Max 10 MB<br />
+            Recommended 256 × 256 px
+          </p>
+        </div>
+
+        {/* Feedback banners — scoped to this card only */}
+        {logoMsg && <OkBanner msg={logoMsg} />}
+        {logoErr && <ErrBanner msg={logoErr} />}
+
+        {/* Remove action — only visible when a logo URL is set */}
+        {logo && (
+          <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 12 }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={logoRemoving}
+              onClick={handleRemoveLogo}
+              style={{ fontSize: "0.77rem", color: "var(--color-red)", display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <Trash2 size={12} />
+              {logoRemoving ? "Removing…" : "Remove logo"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Org Detail Page ───────────────────────────────────────────────────────────
 
 function OrgDetailPage() {
@@ -1016,15 +1124,12 @@ function OrgDetailPage() {
           <ArrowLeft size={12} /> Organizations
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: 5, flexShrink: 0,
-            background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: "1.1rem",
-            color: "var(--color-accent)",
-          }}>
-            {org.name?.[0]?.toUpperCase()}
-          </div>
+          {/* Read-only logo in the header — upload lives in Settings tab */}
+          <OrgAvatar
+            name={org.name ?? "O"}
+            logo={(org as any).logo ?? null}
+            size={44}
+          />
           <div>
             <h1 className="page-title">{org.name}</h1>
             {org.slug && <p className="page-subtitle" style={{ fontFamily: "var(--font-mono)" }}>{org.slug}</p>}
@@ -1154,6 +1259,13 @@ function OrgDetailPage() {
       {/* Settings tab */}
       {activeTab === "settings" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <LogoCard
+            orgId={orgId}
+            logo={(org as any).logo ?? null}
+            name={org.name ?? "O"}
+            onLogoChange={(newLogo) => setOrg((o: any) => ({ ...o, logo: newLogo }))}
+          />
+
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             <div className="panel-header">
               <p className="section-label">General</p>

@@ -337,13 +337,36 @@ const NAV = [
 
 // ── Org Switcher ──────────────────────────────────────────────────────────────
 
-function OrgAvatar({ name, size = 24 }: { name: string; size?: number }) {
+function OrgAvatar({ name, logo, size = 24 }: { name: string; logo?: string | null; size?: number }) {
+  const [imgError, setImgError] = React.useState(false);
+  const borderRadius = 4;
+  const baseStyle: React.CSSProperties = {
+    width: size, height: size, borderRadius, flexShrink: 0,
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    overflow: "hidden",
+  };
+
+  if (logo && !imgError) {
+    return (
+      <div style={baseStyle}>
+        <img
+          src={logo}
+          alt={name}
+          width={size}
+          height={size}
+          referrerPolicy="no-referrer"
+          onError={() => setImgError(true)}
+          style={{ width: size, height: size, objectFit: "cover", borderRadius }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div style={{
-      width: size, height: size, borderRadius: 4, flexShrink: 0,
+      ...baseStyle,
       background: "var(--color-accent-dim)",
       border: "1px solid rgba(59,130,246,0.2)",
-      display: "flex", alignItems: "center", justifyContent: "center",
       fontFamily: "var(--font-mono)",
       fontWeight: 700, fontSize: size * 0.44, color: "var(--color-accent)",
     }}>
@@ -398,7 +421,7 @@ function OrgSwitcher() {
         onMouseLeave={e => { if (!open) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
       >
         {activeOrg
-          ? <OrgAvatar name={activeOrg.name} />
+          ? <OrgAvatar name={activeOrg.name} logo={(activeOrg as any).logo ?? null} />
           : <div style={{
             width: 24, height: 24, borderRadius: 4, flexShrink: 0,
             background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
@@ -506,7 +529,7 @@ function OrgSwitcher() {
                 onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
                 onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
               >
-                <OrgAvatar name={org.name} />
+                <OrgAvatar name={org.name} logo={(org as any).logo ?? null} />
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                   <p style={{
                     fontFamily: "var(--font-mono)",

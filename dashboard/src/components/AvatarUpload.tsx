@@ -2,6 +2,7 @@
  * AvatarUpload.tsx — crop tool with pure-black design system tokens.
  */
 
+import { OrgAvatar } from "@/components/OrgAvatar";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Camera, Check, Image as ImageIcon, Loader2, RotateCw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -18,6 +19,8 @@ interface AvatarUploadProps {
   uploadUrl: string;
   onSuccess: (imageUrl: string) => void;
   onError?: (message: string) => void;
+  /** Controls shape and fallback display. Default is "user" (circle). "org" is square. */
+  type?: "user" | "org";
 }
 
 interface PickedImage {
@@ -56,10 +59,12 @@ async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<Blob> {
 
 function CropModal({
   picked,
+  type = "user",
   onConfirm,
   onCancel,
 }: {
   picked: PickedImage;
+  type?: "user" | "org";
   onConfirm: (blob: Blob) => void;
   onCancel: () => void;
 }) {
@@ -131,7 +136,7 @@ function CropModal({
             minZoom={1}
             maxZoom={4}
             aspect={1}
-            cropShape="round"
+            cropShape={type === "org" ? "rect" : "round"}
             showGrid={false}
             onCropChange={setCrop}
             onZoomChange={setZoom}
@@ -216,6 +221,7 @@ export function AvatarUpload({
   uploadUrl,
   onSuccess,
   onError,
+  type = "user",
 }: AvatarUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -319,7 +325,11 @@ export function AvatarUpload({
           flexShrink: 0,
         }}
       >
-        <UserAvatar src={currentSrc} name={name} size={size} />
+        {type === "org" ? (
+          <OrgAvatar logo={currentSrc} name={name} size={size} />
+        ) : (
+          <UserAvatar src={currentSrc} name={name} size={size} />
+        )}
 
         <span
           className="avatar-overlay"
@@ -347,6 +357,7 @@ export function AvatarUpload({
       {picked && (
         <CropModal
           picked={picked}
+          type={type}
           onConfirm={handleCropConfirm}
           onCancel={handleCropCancel}
         />

@@ -1,4 +1,5 @@
 import { Modal } from "@/components/Modal";
+import { OrgAvatar } from "@/components/OrgAvatar";
 import { organization } from "@/lib/auth-client";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Building2, ChevronRight, Crown, Plus, Shield } from "lucide-react";
@@ -166,14 +167,12 @@ function OrganizationsPage() {
               }}
               onClick={() => navigate({ to: "/organizations/$orgId", params: { orgId: org.id } } as any)}
             >
-              <div style={{
-                width: 36, height: 36, borderRadius: 5, flexShrink: 0,
-                background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: "0.9rem", color: "var(--color-accent)",
-              }}>
-                {org.name?.[0]?.toUpperCase() ?? "O"}
-              </div>
+              <OrgAvatar
+                name={org.name ?? "O"}
+                logo={org.logo ?? null}
+                size={36}
+                style={{ flexShrink: 0 }}
+              />
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.88rem", fontWeight: 600, color: "var(--color-text-primary)" }}>{org.name}</p>

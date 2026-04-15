@@ -374,6 +374,186 @@ export default {
       return Response.redirect(cdnUrl, 301);
     }
 
+    // ── Org logo upload ───────────────────────────────────────────────────────
+    //
+    // POST /api/org/avatar/:orgId   (multipart/form-data, field "avatar")
+    //
+    // Uploads an org logo to R2 via CDN, stores the absolute URL in
+    // organization.logo.  Caller must be authenticated and an owner/admin
+    // of the target org (verified via D1 member lookup).
+    //
+    // Mirrors the user avatar pipeline exactly:
+    //   - Accepts image/jpeg | image/png | image/webp, ≤ 10 MB
+    //   - Content-addressed key: org-logos/{orgId}/{uploadId}.webp
+    //   - Old logo deleted from CDN fire-and-forget
+    const orgAvatarUploadMatch = url.pathname.match(/^\/api\/org\/avatar\/([^/]+)$/);
+    if (orgAvatarUploadMatch && request.method === "POST") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+
+      const targetOrgId = orgAvatarUploadMatch[1]!;
+
+      // Verify caller is owner or admin of this org (or global admin)
+      const callerRole = (session.user as { role?: string }).role ?? "";
+      const isGlobalAdmin = callerRole.split(",").map((r: string) => r.trim()).includes("admin");
+      if (!isGlobalAdmin) {
+        const membership = await env.DB
+          .prepare(`SELECT role FROM member WHERE organizationId = ? AND userId = ? LIMIT 1`)
+          .bind(targetOrgId, session.user.id)
+          .first<{ role: string }>()
+          .catch(() => null);
+        if (!membership || !["owner", "admin"].includes(membership.role)) {
+          return withHeaders(Response.json({ error: "Only org owners and admins can update the org logo" }, { status: 403 }), request);
+        }
+      }
+
+      // Fetch current logo for cleanup
+      const orgRow = await env.DB
+        .prepare(`SELECT id, name, logo FROM organization WHERE id = ? LIMIT 1`)
+        .bind(targetOrgId)
+        .first<{ id: string; name: string; logo: string | null }>()
+        .catch(() => null);
+      if (!orgRow) {
+        return withHeaders(Response.json({ error: "Organization not found" }, { status: 404 }), request);
+      }
+
+      const form = await request.formData().catch(() => null);
+      const file = form?.get("avatar");
+      const isFile = (v: unknown): v is { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> } =>
+        typeof v === "object" && v !== null && "arrayBuffer" in v && "type" in v && "size" in v;
+      if (!isFile(file)) {
+        return withHeaders(Response.json({ error: "No file provided — send a multipart field named 'avatar'" }, { status: 400 }), request);
+      }
+
+      const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+      if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
+        return withHeaders(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        return withHeaders(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
+      }
+
+      const uploadId = crypto.randomUUID().replace(/-/g, "");
+      const cdnKey = `org-logos/${targetOrgId}/${uploadId}.webp`;
+      const oldLogo = orgRow.logo ?? null;
+
+      const cdnForm = new FormData();
+      cdnForm.append("file", new File([await file.arrayBuffer()], "logo.webp", { type: file.type }));
+      cdnForm.append("app", "ralph-auth");
+      cdnForm.append("key", cdnKey);
+      cdnForm.append("uploader", session.user.id);
+      cdnForm.append("tags", "org-logo");
+      cdnForm.append("cacheControl", "immutable");
+
+      const cdnRes = await fetch(`${env.CDN_URL}/upload`, {
+        method: "POST",
+        headers: { "CDN-API-Key": env.CDN_API_KEY },
+        body: cdnForm,
+      });
+      if (!cdnRes.ok) {
+        const detail = await cdnRes.text().catch(() => "");
+        return withHeaders(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
+      }
+      const { url: logoUrl } = await cdnRes.json() as { url: string };
+
+      await env.DB
+        .prepare(`UPDATE organization SET logo = ? WHERE id = ?`)
+        .bind(logoUrl, targetOrgId)
+        .run();
+
+      // Fire-and-forget: delete old logo from CDN
+      if (oldLogo && oldLogo.startsWith(env.CDN_URL)) {
+        const oldKey = oldLogo.replace(`${env.CDN_URL}/`, "").split("?")[0];
+        fetch(`${env.CDN_URL}/files/${oldKey}`, {
+          method: "DELETE",
+          headers: { "CDN-API-Key": env.CDN_API_KEY },
+        }).catch(() => { });
+      }
+
+      await logAudit(env.DB, {
+        userId: session.user.id,
+        orgId: targetOrgId,
+        actor: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        action: "org.updated" as AuditAction,
+        targetType: "org",
+        targetId: targetOrgId,
+        targetLabel: orgRow.name,
+        ipAddress: request.headers.get("CF-Connecting-IP"),
+        userAgent: request.headers.get("User-Agent"),
+        metadata: { field: "logo" },
+      }).catch(() => { });
+
+      return withHeaders(Response.json({ imageUrl: logoUrl }), request);
+    }
+
+    // ── Org logo remove ───────────────────────────────────────────────────────
+    //
+    // DELETE /api/org/avatar/:orgId
+    //
+    // Nulls organization.logo in D1 and deletes the CDN asset.
+    // Same permission check as upload.
+    if (orgAvatarUploadMatch && request.method === "DELETE") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+
+      const targetOrgId = orgAvatarUploadMatch[1]!;
+      const callerRole = (session.user as { role?: string }).role ?? "";
+      const isGlobalAdmin = callerRole.split(",").map((r: string) => r.trim()).includes("admin");
+      if (!isGlobalAdmin) {
+        const membership = await env.DB
+          .prepare(`SELECT role FROM member WHERE organizationId = ? AND userId = ? LIMIT 1`)
+          .bind(targetOrgId, session.user.id)
+          .first<{ role: string }>()
+          .catch(() => null);
+        if (!membership || !["owner", "admin"].includes(membership.role)) {
+          return withHeaders(Response.json({ error: "Only org owners and admins can update the org logo" }, { status: 403 }), request);
+        }
+      }
+
+      const orgRow2 = await env.DB
+        .prepare(`SELECT logo, name FROM organization WHERE id = ? LIMIT 1`)
+        .bind(targetOrgId)
+        .first<{ logo: string | null; name: string }>()
+        .catch(() => null);
+
+      await env.DB
+        .prepare(`UPDATE organization SET logo = NULL WHERE id = ?`)
+        .bind(targetOrgId)
+        .run();
+
+      if (orgRow2?.logo && orgRow2.logo.startsWith(env.CDN_URL)) {
+        const oldKey = orgRow2.logo.replace(`${env.CDN_URL}/`, "").split("?")[0];
+        fetch(`${env.CDN_URL}/files/${oldKey}`, {
+          method: "DELETE",
+          headers: { "CDN-API-Key": env.CDN_API_KEY },
+        }).catch(() => { });
+      }
+
+      await logAudit(env.DB, {
+        userId: session.user.id,
+        orgId: targetOrgId,
+        actor: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        action: "org.updated" as AuditAction,
+        targetType: "org",
+        targetId: targetOrgId,
+        targetLabel: orgRow2?.name ?? null,
+        ipAddress: request.headers.get("CF-Connecting-IP"),
+        userAgent: request.headers.get("User-Agent"),
+        metadata: { field: "logo", removed: true },
+      }).catch(() => { });
+
+      return withHeaders(Response.json({ ok: true, previous: orgRow2?.logo ?? null }), request);
+    }
 
     // Better Auth's admin.setUserPassword doesn't create a credential
     // account entry â€” it only updates an existing one. For OAuth-only
