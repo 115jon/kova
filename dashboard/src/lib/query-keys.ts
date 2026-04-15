@@ -94,6 +94,21 @@ export const overviewKeys = {
   stats: () => [...overviewKeys.all, "stats"] as const,
 } as const;
 
+// ── Additional Fields (user profile metadata) ──────────────────────────────────
+//
+// Two sub-trees:
+//   profileKeys.schema()       — the field definitions (rarely changes)
+//   profileKeys.self()         — current user's field values
+//   profileKeys.user(id)       — any user's field values (admin view)
+
+export const profileKeys = {
+  all: ["profile-fields"] as const,
+  schema: () => [...profileKeys.all, "schema"] as const,
+  self: () => [...profileKeys.all, "self"] as const,
+  users: () => [...profileKeys.all, "user"] as const,
+  user: (userId: string) => [...profileKeys.users(), userId] as const,
+} as const;
+
 // ── Re-export all keys in a single namespace for convenience ──────────────────
 
 export const queryKeys = {
@@ -104,4 +119,5 @@ export const queryKeys = {
   auditLogs: auditKeys,
   webhooks: webhookKeys,
   overview: overviewKeys,
+  profile: profileKeys,
 } as const;

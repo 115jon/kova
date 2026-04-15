@@ -316,6 +316,14 @@ code, .mono {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+}
+/* Icon + title are always grouped together on the left */
+.panel-header > :first-child + .panel-title,
+.panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .panel-title {
   font-family: var(--font-mono);
@@ -408,6 +416,8 @@ code, .mono {
 
 @keyframes pulse-soft { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 .loading { animation: pulse-soft 1.4s ease-in-out infinite; }
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* ─────────────────────────────────────────────────────────────
    REDUCED MOTION

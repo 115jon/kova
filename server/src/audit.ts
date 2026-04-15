@@ -22,6 +22,7 @@ export type AuditAction =
   | "user.passwordSet"          // OAuth-only user adds a password for the first time
   | "user.emailVerified"
   | "user.avatarUpdated"        // user or admin changed the profile photo
+  | "user.fieldsUpdated"        // additional metadata fields updated (self or admin)
   // Two-factor
   | "twoFactor.enabled"
   | "twoFactor.disabled"

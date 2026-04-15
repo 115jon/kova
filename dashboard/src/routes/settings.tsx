@@ -1,13 +1,15 @@
 import { AvatarUpload } from "@/components/AvatarUpload";
 import { ProviderIcon } from "@/components/BrandIcons";
+import { CustomFieldsSection } from "@/components/CustomFieldsSection";
 import { AUTH_URL, authClient, listAccounts, passkey, signOut, twoFactor, updateUser, useSession } from "@/lib/auth-client";
 import { validatePassword } from "@/lib/password";
 import type { ProviderId } from "@/lib/providers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
-  AlertCircle, Check, CheckCircle, Clock, Copy,
+  AlertCircle, Check, CheckCircle, Clock,
+  Copy,
   Eye, EyeOff, Fingerprint, KeyRound, Lock, LogOut, PlusCircle,
-  Server, Settings, Shield, Smartphone, Trash2, User, X,
+  Server, Settings, Shield, Sliders, Smartphone, Trash2, User, X,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
@@ -49,13 +51,17 @@ function SectionCard({ icon, color, title, children }: {
   return (
     <div className="card" style={{ padding: 0, overflow: "hidden" }}>
       <div className="panel-header">
-        <span style={{ color }}>{icon}</span>
-        <h2 className="panel-title">{title}</h2>
+        {/* Icon + title grouped left — prevents space-between from splitting them */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color, display: "flex", alignItems: "center" }}>{icon}</span>
+          <h2 className="panel-title">{title}</h2>
+        </div>
       </div>
       {children}
     </div>
   );
 }
+
 
 function InfoRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
@@ -811,6 +817,11 @@ function SettingsPage() {
         {/* Username */}
         <SectionCard icon={<User size={14} />} color="var(--color-green)" title="Username">
           <UsernameSection currentUsername={currentUsername} />
+        </SectionCard>
+
+        {/* Custom Fields */}
+        <SectionCard icon={<Sliders size={14} />} color="var(--color-accent)" title="Custom Fields">
+          <CustomFieldsSection />
         </SectionCard>
 
         {/* Passkeys */}

@@ -1,4 +1,12 @@
 ﻿﻿import { hashPassword } from "better-auth/crypto";
+import {
+  FIELD_DEFINITIONS,
+  getAdditionalFields,
+  hydrateFields,
+  setAdditionalFields,
+  toPublicDef,
+  validatePatch
+} from "./additional-fields";
 import type { AuditAction } from "./audit";
 import { logAudit, queryAuditLogs } from "./audit";
 import { createAuth } from "./auth";
@@ -12,6 +20,7 @@ import {
   sendTestPing,
   setWebhookEnabled,
 } from "./webhook";
+
 
 // â”€â”€ Allowed CORS origins â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
@@ -1079,7 +1088,225 @@ export default {
       return withHeaders(Response.json(result, { status: statusCode }), request);
     }
 
+    // ── Additional Fields: schema introspection ───────────────────────────────
+    //
+    // GET /api/user/fields/schema
+    //
+    // Returns the public field definitions array so the dashboard can build
+    // its form dynamically without hardcoding field metadata client-side.
+    // No authentication required — definitions are not sensitive.
+    if (url.pathname === "/api/user/fields/schema" && request.method === "GET") {
+      const publicDefs = FIELD_DEFINITIONS.map(toPublicDef);
+      return withHeaders(Response.json({ fields: publicDefs }), request);
+    }
+
+    // ── Additional Fields: self-service read ──────────────────────────────────
+    //
+    // GET /api/user/fields
+    //
+    // Returns the authenticated user's additional field values, hydrated with
+    // defaults for any fields not yet stored.
+    if (url.pathname === "/api/user/fields" && request.method === "GET") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const storedMap = await getAdditionalFields(env.DB, session.user.id);
+      const fields = hydrateFields(storedMap);
+      return withHeaders(Response.json({ fields }), request);
+    }
+
+    // ── Additional Fields: self-service write ─────────────────────────────────
+    //
+    // PATCH /api/user/fields
+    // Body: Record<fieldKey, value | null>
+    //
+    // Allows authenticated users to update their own self-editable fields.
+    // Admin-only fields are rejected with a 403-equivalent error entry.
+    // Returns { fields: FieldMap } — the caller receives the post-save hydrated state.
+    if (url.pathname === "/api/user/fields" && request.method === "PATCH") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+
+      let patch: Record<string, unknown>;
+      try {
+        patch = await request.json() as Record<string, unknown>;
+      } catch {
+        return withHeaders(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+      }
+
+      if (typeof patch !== "object" || Array.isArray(patch) || patch === null) {
+        return withHeaders(Response.json({ error: "Body must be a JSON object" }, { status: 400 }), request);
+      }
+
+      if (Object.keys(patch).length === 0) {
+        return withHeaders(Response.json({ error: "Patch must contain at least one field" }, { status: 400 }), request);
+      }
+
+      // Validate — reject unknown keys AND admin-only keys (selfEditableOnly: true)
+      const validation = validatePatch(patch, /* selfEditableOnly */ true);
+      if (!validation.valid) {
+        return withHeaders(
+          Response.json({ error: "Validation failed", fieldErrors: validation.errors }, { status: 422 }),
+          request,
+        );
+      }
+
+      // Cast validated patch — values have already been type-checked
+      const typedPatch = patch as import("./additional-fields").FieldMap;
+      const { saved, errors } = await setAdditionalFields(env.DB, session.user.id, typedPatch);
+
+      // Audit log the field update
+      await logAudit(env.DB, {
+        userId: session.user.id,
+        actor: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        action: "user.fieldsUpdated" as AuditAction,
+        ipAddress: request.headers.get("CF-Connecting-IP"),
+        userAgent: request.headers.get("User-Agent"),
+        metadata: { updatedKeys: Object.keys(saved) },
+      }).catch(() => { }); // non-fatal
+
+      // Return the full hydrated state so the client can update its cache
+      const storedMap = await getAdditionalFields(env.DB, session.user.id);
+      const fields = hydrateFields(storedMap);
+
+      if (errors.length > 0) {
+        // Partial success — some fields saved, some had errors
+        return withHeaders(
+          Response.json({ fields, partialErrors: errors }, { status: 207 }),
+          request,
+        );
+      }
+      return withHeaders(Response.json({ fields }), request);
+    }
+
+    // ── Additional Fields: admin read (any user) ──────────────────────────────
+    //
+    // GET /api/admin/users/:userId/fields
+    //
+    // Returns the full hydrated field map for any user. Admin-only.
+    const adminFieldsReadMatch = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/fields$/);
+    if (adminFieldsReadMatch && request.method === "GET") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const callerRole = (session.user as { role?: string }).role ?? "";
+      if (!callerRole.split(",").map((r: string) => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      const targetUserId = adminFieldsReadMatch[1]!;
+
+      // Verify the target user exists
+      const userExists = await env.DB
+        .prepare(`SELECT id FROM "user" WHERE id = ? LIMIT 1`)
+        .bind(targetUserId)
+        .first<{ id: string }>()
+        .catch(() => null);
+      if (!userExists) {
+        return withHeaders(Response.json({ error: "User not found" }, { status: 404 }), request);
+      }
+
+      const storedMap = await getAdditionalFields(env.DB, targetUserId);
+      const fields = hydrateFields(storedMap);
+      return withHeaders(Response.json({ fields }), request);
+    }
+
+    // ── Additional Fields: admin write (any user, all fields) ─────────────────
+    //
+    // PATCH /api/admin/users/:userId/fields
+    // Body: Record<fieldKey, value | null>
+    //
+    // Allows admins to update ALL fields — including admin-only ones like
+    // app_role, department, employee_id.
+    const adminFieldsWriteMatch = url.pathname.match(/^\/api\/admin\/users\/([^/]+)\/fields$/);
+    if (adminFieldsWriteMatch && request.method === "PATCH") {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const callerRole = (session.user as { role?: string }).role ?? "";
+      if (!callerRole.split(",").map((r: string) => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      const targetUserId = adminFieldsWriteMatch[1]!;
+
+      // Verify target user exists
+      const targetUser = await env.DB
+        .prepare(`SELECT id, name, email FROM "user" WHERE id = ? LIMIT 1`)
+        .bind(targetUserId)
+        .first<{ id: string; name: string; email: string }>()
+        .catch(() => null);
+      if (!targetUser) {
+        return withHeaders(Response.json({ error: "User not found" }, { status: 404 }), request);
+      }
+
+      let patch: Record<string, unknown>;
+      try {
+        patch = await request.json() as Record<string, unknown>;
+      } catch {
+        return withHeaders(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+      }
+
+      if (typeof patch !== "object" || Array.isArray(patch) || patch === null) {
+        return withHeaders(Response.json({ error: "Body must be a JSON object" }, { status: 400 }), request);
+      }
+
+      if (Object.keys(patch).length === 0) {
+        return withHeaders(Response.json({ error: "Patch must contain at least one field" }, { status: 400 }), request);
+      }
+
+      // Admin: selfEditableOnly = false — all registered fields are permitted
+      const validation = validatePatch(patch, /* selfEditableOnly */ false);
+      if (!validation.valid) {
+        return withHeaders(
+          Response.json({ error: "Validation failed", fieldErrors: validation.errors }, { status: 422 }),
+          request,
+        );
+      }
+
+      const typedPatch = patch as import("./additional-fields").FieldMap;
+      const { saved, errors } = await setAdditionalFields(env.DB, targetUserId, typedPatch);
+
+      // Audit log as admin action targeting another user
+      await logAudit(env.DB, {
+        userId: targetUserId,
+        actor: session.user.id,
+        actorName: session.user.name ?? null,
+        actorEmail: session.user.email,
+        action: "user.fieldsUpdated" as AuditAction,
+        targetType: "user",
+        targetId: targetUserId,
+        targetLabel: targetUser.email,
+        ipAddress: request.headers.get("CF-Connecting-IP"),
+        userAgent: request.headers.get("User-Agent"),
+        metadata: { updatedKeys: Object.keys(saved), adminOverride: true },
+      }).catch(() => { }); // non-fatal
+
+      const storedMap = await getAdditionalFields(env.DB, targetUserId);
+      const fields = hydrateFields(storedMap);
+
+      if (errors.length > 0) {
+        return withHeaders(
+          Response.json({ fields, partialErrors: errors }, { status: 207 }),
+          request,
+        );
+      }
+      return withHeaders(Response.json({ fields }), request);
+    }
+
     return withHeaders(new Response("Not found", { status: 404 }), request);
+
 
   },
 } satisfies ExportedHandler<Env>;
