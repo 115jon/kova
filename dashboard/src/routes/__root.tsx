@@ -1,23 +1,300 @@
 import { UserAvatar } from "@/components/UserAvatar";
 import { multiSession, organization, signOut, useActiveOrganization, useListOrganizations, useSession } from "@/lib/auth-client";
-import { createRootRoute, Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { createRootRoute, Link, Outlet, useLocation, useNavigate, useRouter } from "@tanstack/react-router";
 import {
   Activity,
+  AlertTriangle,
   BarChart3,
   Building2,
   Check,
   ChevronDown,
   ClipboardList,
+  Copy,
   Globe,
   Key,
   LogOut,
   PlusCircle,
+  RefreshCw,
+  Search,
   Settings,
   Shield,
   UserCircle,
   Users
 } from "lucide-react";
 import React from "react";
+
+// ── Error Boundary ────────────────────────────────────────────────────────────
+
+interface EBState { hasError: boolean; message: string }
+
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, EBState> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, message: "" };
+  }
+
+  static getDerivedStateFromError(err: unknown): EBState {
+    return { hasError: true, message: err instanceof Error ? err.message : String(err) };
+  }
+
+  componentDidCatch(err: Error, info: React.ErrorInfo) {
+    console.error("[ErrorBoundary]", err, info.componentStack);
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+    return (
+      <div style={{
+        height: "100%", minHeight: 400,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 24,
+      }}>
+        <div style={{
+          width: "100%", maxWidth: 460,
+          background: "var(--color-surface-800)",
+          border: "1px solid rgba(239,68,68,0.25)",
+          borderRadius: 16, padding: 36, textAlign: "center",
+          boxShadow: "0 24px 48px rgba(0,0,0,0.4)",
+        }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: 14, margin: "0 auto 20px",
+            background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <AlertTriangle size={22} color="#f87171" strokeWidth={2} />
+          </div>
+          <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "#e2e8f0", marginBottom: 8 }}>
+            Something went wrong
+          </h2>
+          <p style={{ fontSize: "0.82rem", color: "#64748b", lineHeight: 1.65, marginBottom: 6 }}>
+            An unexpected error occurred in this view.
+          </p>
+          {import.meta.env.DEV && this.state.message && (
+            <pre style={{
+              fontSize: "0.72rem", color: "#f87171",
+              background: "rgba(239,68,68,0.07)", borderRadius: 8,
+              padding: "10px 12px", textAlign: "left",
+              whiteSpace: "pre-wrap", wordBreak: "break-word",
+              maxHeight: 160, overflow: "auto", marginBottom: 20,
+            }}>{this.state.message}</pre>
+          )}
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 20 }}>
+            <button
+              className="btn btn-ghost"
+              onClick={() => this.setState({ hasError: false, message: "" })}
+            >
+              <RefreshCw size={14} /> Reload
+            </button>
+            <button
+              className="btn btn-danger"
+              onClick={async () => { await signOut(); window.location.href = "/sign-in"; }}
+            >
+              <LogOut size={14} /> Sign out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+// ── Command Palette (Cmd+K) ───────────────────────────────────────────────────
+
+interface PaletteItem {
+  id: string;
+  label: string;
+  sublabel?: string;
+  icon: React.ReactNode;
+  action: () => void;
+}
+
+const NAV_ITEMS = [
+  { to: "/", label: "Overview", icon: <BarChart3 size={15} /> },
+  { to: "/users", label: "Users", icon: <Users size={15} /> },
+  { to: "/sessions", label: "Sessions", icon: <Activity size={15} /> },
+  { to: "/audit-logs", label: "Audit Logs", icon: <ClipboardList size={15} /> },
+  { to: "/organizations", label: "Organizations", icon: <Building2 size={15} /> },
+  { to: "/oauth-apps", label: "OAuth Apps", icon: <Globe size={15} /> },
+  { to: "/api-keys", label: "API Keys", icon: <Key size={15} /> },
+  { to: "/settings", label: "Settings", icon: <Settings size={15} /> },
+];
+
+function CommandPalette({ onClose, currentUserId }: { onClose: () => void; currentUserId?: string }) {
+  const navigate = useNavigate();
+  const router = useRouter();
+  const [query, setQuery] = React.useState("");
+  const [userResults, setUserResults] = React.useState<{ id: string; name: string; email: string; image: string | null }[]>([]);
+  const [searching, setSearching] = React.useState(false);
+  const [activeIdx, setActiveIdx] = React.useState(0);
+  const [copied, setCopied] = React.useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const searchTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => { inputRef.current?.focus(); }, []);
+
+  // Live user search
+  React.useEffect(() => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!query.trim()) { setUserResults([]); return; }
+    searchTimeout.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const params = new URLSearchParams({ limit: "6", searchField: "email", searchValue: query, searchOperator: "contains" });
+        const res = await fetch(`/api/auth/admin/list-users?${params}`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json() as { users: { id: string; name: string; email: string; image: string | null }[] };
+          setUserResults(data.users ?? []);
+        }
+      } finally { setSearching(false); }
+    }, 250);
+    return () => { if (searchTimeout.current) clearTimeout(searchTimeout.current); };
+  }, [query]);
+
+  // Build items list
+  const items = React.useMemo<PaletteItem[]>(() => {
+    const navItems: PaletteItem[] = NAV_ITEMS
+      .filter(n => !query || n.label.toLowerCase().includes(query.toLowerCase()))
+      .map(n => ({
+        id: `nav:${n.to}`,
+        label: `Go to ${n.label}`,
+        icon: n.icon,
+        action: () => { navigate({ to: n.to as any }); onClose(); },
+      }));
+
+    const userItems: PaletteItem[] = userResults.map(u => ({
+      id: `user:${u.id}`,
+      label: u.name,
+      sublabel: u.email,
+      icon: <UserAvatar src={u.image} name={u.name} size={20} style={{ flexShrink: 0 }} />,
+      action: () => { window.location.href = `/users/${u.id}`; onClose(); },
+    }));
+
+    const extras: PaletteItem[] = [];
+    if (currentUserId && (!query || "copy id".includes(query.toLowerCase()))) {
+      extras.push({
+        id: "copy-id",
+        label: copied ? "Copied!" : "Copy my user ID",
+        sublabel: currentUserId,
+        icon: <Copy size={15} />,
+        action: () => {
+          navigator.clipboard.writeText(currentUserId);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        },
+      });
+    }
+
+    return [...navItems, ...userItems, ...extras];
+  }, [query, userResults, currentUserId, copied, navigate, onClose]);
+
+  React.useEffect(() => { setActiveIdx(0); }, [items.length]);
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") { onClose(); return; }
+    if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, items.length - 1)); }
+    if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); }
+    if (e.key === "Enter") { e.preventDefault(); items[activeIdx]?.action(); }
+  };
+
+  // Close on backdrop
+  const handleBackdropClick = (e: React.MouseEvent) => { if (e.target === e.currentTarget) onClose(); };
+
+  void router;
+
+  return (
+    <div
+      onClick={handleBackdropClick}
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)",
+        display: "flex", alignItems: "flex-start", justifyContent: "center",
+        paddingTop: "12vh",
+      }}
+    >
+      <div style={{
+        width: "100%", maxWidth: 540,
+        background: "var(--color-surface-800)",
+        border: "1px solid var(--color-border)",
+        borderRadius: 14, overflow: "hidden",
+        boxShadow: "0 32px 64px rgba(0,0,0,0.6)",
+      }}>
+        {/* Search input */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--color-border)" }}>
+          <Search size={15} color="#475569" style={{ flexShrink: 0 }} />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="Navigate, search users…"
+            style={{
+              flex: 1, background: "none", border: "none", outline: "none",
+              color: "#e2e8f0", fontSize: "0.92rem",
+            }}
+          />
+          {searching && <div className="loading" style={{ width: 14, height: 14, flexShrink: 0 }} />}
+          <kbd style={{
+            fontSize: "0.65rem", color: "#475569",
+            background: "var(--color-surface-700)", border: "1px solid var(--color-border)",
+            borderRadius: 4, padding: "2px 6px", flexShrink: 0,
+          }}>esc</kbd>
+        </div>
+
+        {/* Results */}
+        <div style={{ maxHeight: 360, overflowY: "auto", padding: 4 }}>
+          {items.length === 0 && (
+            <div style={{ padding: "24px", textAlign: "center", color: "#475569", fontSize: "0.83rem" }}>
+              {query ? "No results" : "Type to search or navigate…"}
+            </div>
+          )}
+          {items.map((item, idx) => (
+            <button
+              key={item.id}
+              onClick={item.action}
+              onMouseEnter={() => setActiveIdx(idx)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 10,
+                padding: "9px 12px", borderRadius: 8, marginBottom: 2,
+                background: activeIdx === idx ? "rgba(99,102,241,0.12)" : "transparent",
+                border: "none", cursor: "pointer", transition: "background 0.1s",
+                textAlign: "left",
+              }}
+            >
+              <span style={{ color: activeIdx === idx ? "#818cf8" : "#475569", flexShrink: 0 }}>
+                {item.icon}
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: "0.85rem", color: activeIdx === idx ? "#e2e8f0" : "#94a3b8", fontWeight: 500 }}>
+                  {item.label}
+                </span>
+                {item.sublabel && (
+                  <span style={{ display: "block", fontSize: "0.72rem", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {item.sublabel}
+                  </span>
+                )}
+              </span>
+              {activeIdx === idx && (
+                <kbd style={{ fontSize: "0.65rem", color: "#475569", background: "var(--color-surface-700)", border: "1px solid var(--color-border)", borderRadius: 4, padding: "2px 6px", flexShrink: 0 }}>↵</kbd>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Footer hint */}
+        <div style={{ borderTop: "1px solid var(--color-border)", padding: "8px 16px", display: "flex", gap: 14 }}>
+          {[["↑↓", "navigate"], ["↵", "select"], ["esc", "close"]].map(([key, hint]) => (
+            <span key={key} style={{ fontSize: "0.69rem", color: "#334155", display: "flex", alignItems: "center", gap: 4 }}>
+              <kbd style={{ background: "var(--color-surface-700)", border: "1px solid var(--color-border)", borderRadius: 3, padding: "1px 5px" }}>{key}</kbd>
+              {hint}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Nav ───────────────────────────────────────────────────────────────────────
 
 const NAV = [
   { to: "/", label: "Overview", icon: BarChart3, exact: true },
@@ -553,8 +830,23 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const location = useLocation();
+  const { data: session } = useSession();
+  const [paletteOpen, setPaletteOpen] = React.useState(false);
   const isPublic = ["/sign-in", "/auth-error"].some(p => location.pathname === p)
     || location.pathname.startsWith("/accept-invitation");
+
+  // Global Cmd+K / Ctrl+K listener
+  React.useEffect(() => {
+    if (isPublic) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setPaletteOpen(v => !v);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isPublic]);
 
   if (isPublic) {
     return <Outlet />;
@@ -562,11 +854,19 @@ function RootComponent() {
 
   return (
     <AuthGuard>
+      {paletteOpen && (
+        <CommandPalette
+          onClose={() => setPaletteOpen(false)}
+          currentUserId={session?.user.id}
+        />
+      )}
       <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
         <Sidebar />
         <main style={{ flex: 1, overflow: "auto", padding: 28, minWidth: 0 }}>
           <div style={{ maxWidth: 900, margin: "0 auto" }}>
-            <Outlet />
+            <ErrorBoundary>
+              <Outlet />
+            </ErrorBoundary>
           </div>
         </main>
       </div>

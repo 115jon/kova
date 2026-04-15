@@ -7,6 +7,7 @@ import {
   Building2,
   ChevronDown,
   ClipboardList,
+  Download,
   Key,
   LogIn,
   LogOut,
@@ -265,9 +266,39 @@ function AuditLogsPage() {
             ) : "All platform events — sign-ins, key operations, org changes, admin actions"}
           </p>
         </div>
-        <button className="btn btn-ghost" onClick={() => loadLogs(true)} disabled={loading} title="Refresh">
-          <RefreshCw size={14} className={loading ? "spin" : ""} />
-        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          {logs.length > 0 && !loading && (
+            <button
+              className="btn btn-ghost"
+              title="Download CSV"
+              onClick={() => {
+                const headers = ["Timestamp", "Action", "Actor", "Actor Email", "Target", "IP Address", "User Agent"];
+                const rows = logs.map(r => [
+                  new Date(r.createdAt).toISOString(),
+                  r.action,
+                  r.actorName ?? r.actor,
+                  r.actorEmail ?? r.actor,
+                  r.targetLabel ?? r.targetId ?? "",
+                  r.ipAddress ?? "",
+                  r.userAgent ?? "",
+                ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+                const csv = [headers.join(","), ...rows].join("\n");
+                const blob = new Blob([csv], { type: "text/csv" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              <Download size={14} />
+            </button>
+          )}
+          <button className="btn btn-ghost" onClick={() => loadLogs(true)} disabled={loading} title="Refresh">
+            <RefreshCw size={14} className={loading ? "spin" : ""} />
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

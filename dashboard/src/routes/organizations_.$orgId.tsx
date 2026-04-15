@@ -1,13 +1,16 @@
 import { UserAvatar } from "@/components/UserAvatar";
 import { organization } from "@/lib/auth-client";
+import { relativeTime } from "@/lib/utils";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle, ArrowLeft, CheckCircle,
+  ClipboardList,
   Mail,
+  RefreshCw,
   Settings,
   Trash2, UserMinus, UserPlus, Users
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/organizations_/$orgId")({
   component: OrgDetailPage,
@@ -19,7 +22,7 @@ const ROLE_COLORS: Record<string, string> = {
   member: "#34d399",
 };
 
-type Tab = "members" | "invitations" | "settings";
+type Tab = "members" | "invitations" | "activity" | "settings";
 
 // ── Invite Member Modal ───────────────────────────────────────────────────────
 
@@ -96,6 +99,157 @@ function InviteModal({ orgId, onClose, onInvited }: { orgId: string; onClose: ()
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Org Audit Log mini-view ───────────────────────────────────────────────────
+
+interface AuditLogRow {
+  id: string;
+  actor: string;
+  actorName: string | null;
+  actorEmail: string | null;
+  actorImage?: string | null;
+  action: string;
+  targetLabel: string | null;
+  targetId: string | null;
+  ipAddress: string | null;
+  createdAt: number;
+}
+
+const ACTION_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  "user.signIn": { bg: "rgba(99,102,241,0.15)", text: "#818cf8", label: "Signed in" },
+  "user.signOut": { bg: "rgba(71,85,105,0.2)", text: "#94a3b8", label: "Signed out" },
+  "user.signUp": { bg: "rgba(52,211,153,0.15)", text: "#34d399", label: "Signed up" },
+  "apiKey.created": { bg: "rgba(245,158,11,0.15)", text: "#f59e0b", label: "API key created" },
+  "apiKey.revoked": { bg: "rgba(239,68,68,0.12)", text: "#f87171", label: "API key revoked" },
+  "member.invited": { bg: "rgba(139,92,246,0.15)", text: "#a78bfa", label: "Member invited" },
+  "member.joined": { bg: "rgba(139,92,246,0.15)", text: "#a78bfa", label: "Member joined" },
+  "member.removed": { bg: "rgba(239,68,68,0.12)", text: "#f87171", label: "Member removed" },
+  "member.roleChanged": { bg: "rgba(139,92,246,0.12)", text: "#a78bfa", label: "Role changed" },
+  "session.revoked": { bg: "rgba(239,68,68,0.12)", text: "#f87171", label: "Session revoked" },
+  "admin.userBanned": { bg: "rgba(239,68,68,0.15)", text: "#f87171", label: "User banned" },
+  "admin.userUnbanned": { bg: "rgba(52,211,153,0.12)", text: "#34d399", label: "User unbanned" },
+};
+
+function OrgAuditLog({ orgId }: { orgId: string }) {
+  const [logs, setLogs] = useState<AuditLogRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const nextCursorRef = useRef<string | null>(null);
+
+  const fetchLogs = useCallback(async (replace = true) => {
+    if (replace) setLoading(true); else setLoadingMore(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ orgId, limit: "30" });
+      if (!replace && nextCursorRef.current) params.set("before", nextCursorRef.current);
+      const res = await fetch(`/api/audit/logs?${params}`, { credentials: "include" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
+        throw new Error(err.error ?? `Failed (${res.status})`);
+      }
+      const data = await res.json() as { logs: AuditLogRow[]; nextCursor: string | null };
+      nextCursorRef.current = data.nextCursor;
+      setNextCursor(data.nextCursor);
+      setLogs(prev => replace ? data.logs : [...prev, ...data.logs]);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load activity");
+    } finally {
+      if (replace) setLoading(false); else setLoadingMore(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId]);
+
+  useEffect(() => { fetchLogs(true); }, [fetchLogs]);
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <p style={{ fontSize: "0.82rem", color: "#94a3b8", fontWeight: 600 }}>Recent activity</p>
+        <button className="btn btn-ghost" onClick={() => fetchLogs(true)} disabled={loading} title="Refresh" style={{ padding: "4px 8px" }}>
+          <RefreshCw size={13} className={loading ? "spin" : ""} />
+        </button>
+      </div>
+
+      {error && (
+        <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, padding: "10px 14px", color: "#f87171", fontSize: "0.82rem", marginBottom: 12 }}>
+          {error}
+        </div>
+      )}
+
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        {loading ? (
+          <div className="loading" style={{ padding: 36, textAlign: "center", color: "#475569", fontSize: "0.83rem" }}>Loading activity…</div>
+        ) : logs.length === 0 ? (
+          <div style={{ padding: "32px 24px", textAlign: "center", color: "#475569", fontSize: "0.83rem" }}>
+            <ClipboardList size={20} color="#334155" strokeWidth={1.5} style={{ marginBottom: 10 }} />
+            <p>No activity recorded yet for this organization.</p>
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Event</th>
+                <th>Actor</th>
+                <th>Target</th>
+                <th>IP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map(row => {
+                const meta = ACTION_COLORS[row.action];
+                return (
+                  <tr key={row.id}>
+                    <td style={{ color: "#64748b", fontSize: "0.77rem", whiteSpace: "nowrap" }}>
+                      <span title={new Date(row.createdAt).toLocaleString()}>
+                        {relativeTime(new Date(row.createdAt).toISOString())}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{
+                        display: "inline-block",
+                        background: meta?.bg ?? "rgba(71,85,105,0.2)",
+                        color: meta?.text ?? "#94a3b8",
+                        borderRadius: 5, padding: "2px 8px",
+                        fontSize: "0.72rem", fontWeight: 600,
+                      }}>
+                        {meta?.label ?? row.action}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                        <UserAvatar src={row.actorImage ?? null} name={row.actorName ?? row.actor} size={24} style={{ flexShrink: 0, borderRadius: 7 }} />
+                        <span style={{ fontSize: "0.8rem", color: "#e2e8f0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120 }}>
+                          {row.actorName ?? row.actorEmail ?? row.actor}
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: "0.77rem", color: "#64748b", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {row.targetLabel ?? (row.targetId ? <code style={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#475569" }}>{row.targetId.slice(0, 10)}…</code> : <span style={{ color: "#334155" }}>—</span>)}
+                    </td>
+                    <td style={{ fontSize: "0.74rem", color: "#475569", fontFamily: "monospace" }}>
+                      {row.ipAddress ?? "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+
+        {nextCursor && !loading && (
+          <div style={{ padding: "10px 16px", borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "center" }}>
+            <button className="btn btn-ghost" style={{ fontSize: "0.78rem" }} onClick={() => fetchLogs(false)} disabled={loadingMore}>
+              {loadingMore ? "Loading…" : "Load more"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -198,6 +352,7 @@ function OrgDetailPage() {
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "members", label: `Members (${members.length})`, icon: <Users size={14} /> },
     { key: "invitations", label: `Invitations (${invitations.filter(i => i.status === "pending").length})`, icon: <Mail size={14} /> },
+    { key: "activity", label: "Activity", icon: <ClipboardList size={14} /> },
     { key: "settings", label: "Settings", icon: <Settings size={14} /> },
   ];
 
@@ -303,6 +458,9 @@ function OrgDetailPage() {
           ))}
         </div>
       )}
+
+      {/* Activity tab */}
+      {activeTab === "activity" && <OrgAuditLog orgId={orgId} />}
 
       {/* Invitations tab */}
       {activeTab === "invitations" && (
