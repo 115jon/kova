@@ -1,6 +1,9 @@
 import { UserAvatar } from "@/components/UserAvatar";
+import { flattenAuditPages, useAuditLogs } from "@/hooks/use-audit-logs";
 import { useActiveOrganization } from "@/lib/auth-client";
+import { auditKeys } from "@/lib/query-keys";
 import { relativeTime } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Activity,
@@ -17,7 +20,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 export const Route = createFileRoute("/audit-logs")({
   component: AuditLogsPage,
@@ -188,70 +191,32 @@ function FilterDropdown({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 function AuditLogsPage() {
+  const qc = useQueryClient();
   const { data: activeOrg } = useActiveOrganization();
 
-  const [logs, setLogs] = useState<AuditLogRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState("");
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-
-  // Filters
+  // Filters — changes cause useInfiniteQuery to re-run from page 1
   const [userIdFilter, setUserIdFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
 
-  // Use a ref for nextCursor so loadLogs can have a stable identity
-  // (never captures stale cursor value, no need for it in useCallback deps).
-  const nextCursorRef = useRef<string | null>(null);
-  // Stable ref so loadLogs reads current filter values without needing them in deps.
-  const filtersRef = useRef({ userId: "", action: "", orgId: "" });
-
-  const buildParams = (before?: string | null) => {
-    const params = new URLSearchParams();
-    if (filtersRef.current.userId) params.set("userId", filtersRef.current.userId);
-    if (filtersRef.current.action) params.set("action", filtersRef.current.action);
-    if (filtersRef.current.orgId) params.set("orgId", filtersRef.current.orgId);
-    if (before) params.set("before", before);
-    params.set("limit", "50");
-    return params.toString();
+  const filters = {
+    userId: userIdFilter.trim(),
+    action: actionFilter,
+    orgId: activeOrg?.id ?? "",
   };
 
-  // stable identity — reads from refs, never needs to be in useEffect deps
-  const loadLogs = useCallback(async (replace = true) => {
-    if (replace) setLoading(true);
-    else setLoadingMore(true);
-    setError("");
-    try {
-      const qs = buildParams(replace ? null : nextCursorRef.current);
-      const res = await fetch(`/api/audit/logs?${qs}`, { credentials: "include" });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
-        throw new Error(err.error ?? `Failed (${res.status})`);
-      }
-      const data = await res.json() as { logs: AuditLogRow[]; nextCursor: string | null };
-      nextCursorRef.current = data.nextCursor;
-      setNextCursor(data.nextCursor);
-      setLogs(prev => replace ? data.logs : [...prev, ...data.logs]);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load audit logs");
-    } finally {
-      if (replace) setLoading(false);
-      else setLoadingMore(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // ── Data ─────────────────────────────────────────────────────────────────────
+  const {
+    data,
+    isLoading,
+    error,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    isFetching,
+  } = useAuditLogs(filters);
 
-  // Re-load whenever filters change
-  useEffect(() => {
-    filtersRef.current = {
-      userId: userIdFilter.trim(),
-      action: actionFilter,
-      orgId: activeOrg?.id ?? "",
-    };
-    loadLogs(true);
-  }, [userIdFilter, actionFilter, activeOrg?.id, loadLogs]);
-
-  const handleLoadMore = () => loadLogs(false);
+  // Flatten all pages into one array for rendering
+  const logs = flattenAuditPages(data) as AuditLogRow[];
 
   return (
     <div className="animate-in">
@@ -268,7 +233,7 @@ function AuditLogsPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 6 }}>
-          {logs.length > 0 && !loading && (
+          {logs.length > 0 && !isLoading && (
             <button
               className="btn btn-ghost"
               title="Download CSV"
@@ -296,8 +261,13 @@ function AuditLogsPage() {
               <Download size={14} />
             </button>
           )}
-          <button className="btn btn-ghost" onClick={() => loadLogs(true)} disabled={loading} title="Refresh">
-            <RefreshCw size={14} className={loading ? "spin" : ""} />
+          <button
+            className="btn btn-ghost"
+            onClick={() => void qc.invalidateQueries({ queryKey: auditKeys.list(filters) })}
+            disabled={isFetching}
+            title="Refresh"
+          >
+            <RefreshCw size={14} className={isFetching ? "spin" : ""} />
           </button>
         </div>
       </div>
@@ -334,13 +304,13 @@ function AuditLogsPage() {
           borderRadius: 4, padding: "9px 13px",
           fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.78rem",
         }}>
-          {error}
+          {error.message}
         </div>
       )}
 
       {/* Table */}
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        {loading ? (
+        {isLoading ? (
           <div className="loading" style={{ padding: 48, textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>
             Loading audit logs…
           </div>
@@ -407,20 +377,20 @@ function AuditLogsPage() {
         )}
 
         {/* Load more */}
-        {nextCursor && !loading && (
+        {hasNextPage && !isLoading && (
           <div style={{ padding: "12px 16px", borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "center" }}>
-            <button className="btn btn-ghost" onClick={handleLoadMore} disabled={loadingMore}>
-              {loadingMore ? "Loading…" : "Load more"}
+            <button className="btn btn-ghost" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>
+              {isFetchingNextPage ? "Loading…" : "Load more"}
             </button>
           </div>
         )}
       </div>
 
       {/* Row count */}
-      {!loading && logs.length > 0 && (
+      {!isLoading && logs.length > 0 && (
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 10, textAlign: "right" }}>
           Showing {logs.length} event{logs.length !== 1 ? "s" : ""}
-          {nextCursor ? " — more available" : ""}
+          {hasNextPage ? " — more available" : ""}
         </p>
       )}
     </div>

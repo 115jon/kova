@@ -1,6 +1,9 @@
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { UserAvatar } from "@/components/UserAvatar";
+import { useRevokeAllOtherSessions, useRevokeSession, useSessions } from "@/hooks/use-sessions";
+import { sessionKeys } from "@/lib/query-keys";
 import { relativeTime } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   AlertCircle,
@@ -13,7 +16,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 export const Route = createFileRoute("/sessions")({
   component: SessionsPage,
@@ -339,11 +342,18 @@ function SessionCard({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 function SessionsPage() {
-  const [sessions, setSessions] = useState<EnrichedSession[]>([]);
-  const [currentToken, setCurrentToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [revoking, setRevoking] = useState<string | null>(null);
-  const [revokingAll, setRevokingAll] = useState(false);
+  const qc = useQueryClient();
+
+  // ── Data ───────────────────────────────────────────────────────────────────
+  const { data, isLoading } = useSessions();
+  const sessions = data?.sessions ?? [];
+  const currentToken = data?.currentSessionToken ?? null;
+
+  // ── Mutations ───────────────────────────────────────────────────────────────
+  const revokeMut = useRevokeSession();
+  const revokeAllMut = useRevokeAllOtherSessions();
+
+  // ── Local UI state (toasts + confirm dialog) ────────────────────────────────
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [confirmState, setConfirmState] = useState<{
     title: string; body: string; confirmLabel: string; onConfirm: () => void;
@@ -358,49 +368,20 @@ function SessionsPage() {
 
   const dismissToast = (id: number) => setToasts(prev => prev.filter(t => t.id !== id));
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/sessions", { credentials: "include" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as { sessions: EnrichedSession[]; currentSessionToken: string };
-      setSessions(data.sessions ?? []);
-      setCurrentToken(data.currentSessionToken ?? null);
-    } catch (e: unknown) {
-      addToast("error", e instanceof Error ? e.message : "Failed to load sessions");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const revoke = async (token: string) => {
+  // ── Handlers ────────────────────────────────────────────────────────────────
+  const revoke = (token: string) => {
     const session = sessions.find(s => s.token === token);
     if (session?.isCurrent) {
       addToast("error", "Cannot revoke your own current session");
       return;
     }
-    setRevoking(token);
-    try {
-      const res = await fetch("/api/auth/admin/revoke-user-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ sessionToken: token }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { message?: string };
-        addToast("error", body.message ?? "Failed to revoke session");
-        return;
-      }
-      addToast("success", "Session revoked");
-      setSessions(prev => prev.filter(s => s.token !== token));
-    } catch {
-      addToast("error", "Network error");
-    } finally {
-      setRevoking(null);
-    }
+    revokeMut.mutate(
+      { token },
+      {
+        onSuccess: () => addToast("success", "Session revoked"),
+        onError: (err) => addToast("error", err.message ?? "Failed to revoke session"),
+      },
+    );
   };
 
   const revokeAllOthers = () => {
@@ -410,34 +391,21 @@ function SessionsPage() {
       confirmLabel: "Revoke all",
       onConfirm: () => {
         setConfirmState(null);
-        void doRevokeAllOthers();
+        if (!currentToken) return;
+        revokeAllMut.mutate(
+          { exceptToken: currentToken },
+          {
+            onSuccess: (data) =>
+              addToast("success", `Revoked ${data.revokedCount} session${data.revokedCount !== 1 ? "s" : ""}`),
+            onError: (err) => addToast("error", err.message ?? "Revoke all failed"),
+          },
+        );
       },
     });
   };
 
-  const doRevokeAllOthers = async () => {
-    setRevokingAll(true);
-    try {
-      const res = await fetch("/api/admin/sessions/revoke-all-others", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ exceptToken: currentToken }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string };
-        addToast("error", body.error ?? "Revoke all failed");
-        return;
-      }
-      const data = await res.json() as { revokedCount: number };
-      addToast("success", `Revoked ${data.revokedCount} session${data.revokedCount !== 1 ? "s" : ""}`);
-      await load();
-    } catch {
-      addToast("error", "Network error");
-    } finally {
-      setRevokingAll(false);
-    }
-  };
+  const loading = isLoading;
+  const revokingAll = revokeAllMut.isPending;
 
   // Separate current from others, sort others by most-recently-active
   const currentSession = sessions.find(s => s.isCurrent);
@@ -509,7 +477,7 @@ function SessionsPage() {
           <button
             className="btn btn-ghost"
             style={{ padding: "6px 10px" }}
-            onClick={load}
+            onClick={() => void qc.invalidateQueries({ queryKey: sessionKeys.all })}
             disabled={loading}
             title="Refresh"
           >
@@ -541,7 +509,7 @@ function SessionsPage() {
           <p className="section-label" style={{ marginBottom: 8 }}>Your current session</p>
           <SessionCard
             session={currentSession}
-            revoking={revoking === currentSession.token}
+            revoking={revokeMut.isPending && revokeMut.variables?.token === currentSession.token}
             onRevoke={revoke}
           />
         </div>
@@ -574,7 +542,7 @@ function SessionsPage() {
                     <SessionCard
                       key={s.id}
                       session={s}
-                      revoking={revoking === s.token}
+                      revoking={revokeMut.isPending && revokeMut.variables?.token === s.token}
                       onRevoke={revoke}
                     />
                   ))}

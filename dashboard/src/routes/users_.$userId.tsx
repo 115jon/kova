@@ -1,6 +1,13 @@
 import { AvatarUpload } from "@/components/AvatarUpload";
 import { ProviderIcon } from "@/components/BrandIcons";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import {
+  useBanUser,
+  useDeleteUser,
+  useSetUserRole,
+  useUnbanUser,
+  useUserDetail,
+} from "@/hooks/use-users";
 import type { ProviderId } from "@/lib/providers";
 import { relativeTime } from "@/lib/utils";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -17,80 +24,15 @@ import {
   Shield,
   ShieldCheck,
   Trash2,
-  UserX
+  UserX,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 // The underscore in the filename (users_.$userId.tsx) tells TanStack Router
 // this is a top-level route at /users/$userId, NOT nested inside users.tsx.
 export const Route = createFileRoute("/users_/$userId")({
   component: UserDetailPage,
 });
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-type UserDetail = {
-  id: string;
-  name: string;
-  email: string;
-  emailVerified: boolean;
-  image: string | null;
-  role: string | null;
-  banned: boolean;
-  banReason: string | null;
-  banExpires: number | null;
-  createdAt: number;
-  updatedAt: number;
-  username: string | null;
-};
-
-type LinkedAccount = {
-  id: string;
-  providerId: string;
-  accountId: string;
-  createdAt: number;
-};
-
-type AuditEntry = {
-  id: string;
-  action: string;
-  actorName: string | null;
-  ipAddress: string | null;
-  userAgent: string | null;
-  createdAt: number;
-  metadata: Record<string, unknown> | null;
-};
-
-type UserDetailResponse = {
-  user: UserDetail;
-  accounts: LinkedAccount[];
-  sessionCount: number;
-  apiKeyCount: number;
-  recentActivity: AuditEntry[];
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const PROVIDER_LABELS: Record<string, string> = {
-  credential: "Password",
-  google: "Google",
-  discord: "Discord",
-  github: "GitHub",
-  twitter: "Twitter / X",
-};
-
-function actionLabel(action: string): { label: string; color: string } {
-  if (action.startsWith("user.signIn")) return { label: "Signed in", color: "var(--color-green)" };
-  if (action.startsWith("user.signOut")) return { label: "Signed out", color: "var(--color-text-tertiary)" };
-  if (action.startsWith("user.signUp")) return { label: "Account created", color: "var(--color-accent)" };
-  if (action.startsWith("user.password")) return { label: "Password changed", color: "var(--color-amber)" };
-  if (action.startsWith("user.ban")) return { label: "Banned", color: "var(--color-red)" };
-  if (action.startsWith("user.unban")) return { label: "Unbanned", color: "var(--color-green)" };
-  if (action.startsWith("apiKey")) return { label: "API key action", color: "var(--color-amber)" };
-  if (action.startsWith("org.")) return { label: "Org action", color: "var(--color-accent)" };
-  if (action.startsWith("session.")) return { label: "Session action", color: "var(--color-accent)" };
-  return { label: action, color: "var(--color-text-secondary)" };
-}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -132,75 +74,71 @@ function AdminAction({
   );
 }
 
+const PROVIDER_LABELS: Record<string, string> = {
+  credential: "Password",
+  google: "Google",
+  discord: "Discord",
+  github: "GitHub",
+  twitter: "Twitter / X",
+};
+
+function actionLabel(action: string): { label: string; color: string } {
+  if (action.startsWith("user.signIn")) return { label: "Signed in", color: "var(--color-green)" };
+  if (action.startsWith("user.signOut")) return { label: "Signed out", color: "var(--color-text-tertiary)" };
+  if (action.startsWith("user.signUp")) return { label: "Account created", color: "var(--color-accent)" };
+  if (action.startsWith("user.password")) return { label: "Password changed", color: "var(--color-amber)" };
+  if (action.startsWith("user.ban")) return { label: "Banned", color: "var(--color-red)" };
+  if (action.startsWith("user.unban")) return { label: "Unbanned", color: "var(--color-green)" };
+  if (action.startsWith("apiKey")) return { label: "API key action", color: "var(--color-amber)" };
+  if (action.startsWith("org.")) return { label: "Org action", color: "var(--color-accent)" };
+  if (action.startsWith("session.")) return { label: "Session action", color: "var(--color-accent)" };
+  return { label: action, color: "var(--color-text-secondary)" };
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 function UserDetailPage() {
   const { userId } = Route.useParams();
   const navigate = useNavigate();
 
-  const [data, setData] = useState<UserDetailResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [actionLoading, setActionLoading] = useState(false);
-  const [actionError, setActionError] = useState("");
-  const [actionSuccess, setActionSuccess] = useState("");
+  // ── Data ──────────────────────────────────────────────────────────────────
+  const { data, isLoading, error, refetch } = useUserDetail(userId);
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  const setRoleMut = useSetUserRole();
+  const banMut = useBanUser();
+  const unbanMut = useUnbanUser();
+  const deleteMut = useDeleteUser();
+
+  const anyMutPending =
+    setRoleMut.isPending || banMut.isPending || unbanMut.isPending || deleteMut.isPending;
+
+  // ── Local UI ───────────────────────────────────────────────────────────────
   const [localImage, setLocalImage] = useState<string | null>(null);
   const [confirmState, setConfirmState] = useState<{
     title: string; body: string; confirmLabel: string; onConfirm: () => void;
   } | null>(null);
-
-  const load = async () => {
-    setLoading(true); setError("");
-    try {
-      const res = await fetch(`/api/admin/users/${userId}`, { credentials: "include" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string };
-        setError(body.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      setData(await res.json() as UserDetailResponse);
-    } catch (e: any) {
-      setError(e?.message ?? "Network error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, [userId]);
-
-  const adminAction = async (endpoint: string, body: object): Promise<boolean> => {
-    setActionLoading(true); setActionError(""); setActionSuccess("");
-    try {
-      const res = await fetch(`/api/auth/admin/${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const b = await res.json().catch(() => ({})) as { message?: string };
-        setActionError(b.message ?? `Action failed (${res.status})`);
-        return false;
-      }
-      setActionSuccess("Done!");
-      setTimeout(() => setActionSuccess(""), 3000);
-      await load();
-      return true;
-    } catch (e: any) {
-      setActionError(e?.message ?? "Network error");
-      return false;
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
   /** Show a ConfirmModal and execute fn only if user confirms. */
   const withConfirm = (title: string, body: string, confirmLabel: string, fn: () => void) => {
     setConfirmState({ title, body, confirmLabel, onConfirm: () => { setConfirmState(null); fn(); } });
   };
 
-  // ── Loading / error states ────────────────
-  if (loading) {
+  // Aggregate mutation errors for the right-column error banner
+  const actionError =
+    setRoleMut.error?.message ??
+    banMut.error?.message ??
+    unbanMut.error?.message ??
+    deleteMut.error?.message ??
+    "";
+
+  const actionSuccess =
+    (!setRoleMut.isPending && setRoleMut.isSuccess) ||
+    (!banMut.isPending && banMut.isSuccess) ||
+    (!unbanMut.isPending && unbanMut.isSuccess);
+
+  // ── Loading / error states ─────────────────────────────────────────────────
+  if (isLoading) {
     return (
       <div className="animate-in loading" style={{ display: "flex", alignItems: "center", gap: 10, padding: 40, fontFamily: "var(--font-mono)", fontSize: "0.78rem", color: "var(--color-text-tertiary)" }}>
         <RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} /> Loading user…
@@ -219,7 +157,7 @@ function UserDetailPage() {
           background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
           borderRadius: 4, fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.78rem",
         }}>
-          <AlertCircle size={14} /> {error || "User not found"}
+          <AlertCircle size={14} /> {error?.message ?? "User not found"}
         </div>
       </div>
     );
@@ -234,11 +172,12 @@ function UserDetailPage() {
           title={confirmState.title}
           body={confirmState.body}
           confirmLabel={confirmState.confirmLabel}
-          loading={actionLoading}
+          loading={anyMutPending}
           onConfirm={confirmState.onConfirm}
           onClose={() => setConfirmState(null)}
         />
       )}
+
       {/* Back nav */}
       <Link
         to="/users"
@@ -255,7 +194,7 @@ function UserDetailPage() {
           size={68}
           uploadUrl={`/api/admin/users/${userId}/avatar`}
           onSuccess={(url) => setLocalImage(url)}
-          onError={(msg) => setActionError(msg)}
+          onError={(msg) => console.error("Avatar upload error:", msg)}
         />
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -294,7 +233,8 @@ function UserDetailPage() {
         <button
           className="btn btn-ghost"
           style={{ padding: "5px 9px", fontSize: "0.76rem", flexShrink: 0 }}
-          onClick={load} title="Refresh"
+          onClick={() => void refetch()}
+          title="Refresh"
         >
           <RefreshCw size={12} />
         </button>
@@ -421,13 +361,13 @@ function UserDetailPage() {
               <AlertCircle size={13} /> {actionError}
             </div>
           )}
-          {actionSuccess && (
+          {actionSuccess && !anyMutPending && (
             <div style={{
               display: "flex", alignItems: "center", gap: 8, padding: "9px 12px",
               background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
               borderRadius: 4, fontFamily: "var(--font-mono)", color: "var(--color-green)", fontSize: "0.76rem",
             }}>
-              <CheckCircle size={13} /> {actionSuccess}
+              <CheckCircle size={13} /> Done!
             </div>
           )}
 
@@ -441,24 +381,24 @@ function UserDetailPage() {
                 <AdminAction
                   label="Promote to admin"
                   icon={<ShieldCheck size={13} />}
-                  disabled={actionLoading}
+                  disabled={anyMutPending}
                   onClick={() => withConfirm(
                     "Promote to admin?",
                     "This user will have full dashboard access.",
                     "Promote",
-                    () => void adminAction("set-role", { userId, role: "admin" })
+                    () => setRoleMut.mutate({ userId, role: "admin" })
                   )}
                 />
               ) : (
                 <AdminAction
                   label="Demote to user"
                   icon={<UserX size={13} />}
-                  disabled={actionLoading}
+                  disabled={anyMutPending}
                   onClick={() => withConfirm(
                     "Remove admin role?",
                     "This user will lose dashboard access.",
                     "Demote",
-                    () => void adminAction("set-role", { userId, role: "user" })
+                    () => setRoleMut.mutate({ userId, role: "user" })
                   )}
                 />
               )}
@@ -481,8 +421,8 @@ function UserDetailPage() {
                   <AdminAction
                     label="Unban user"
                     icon={<CheckCircle size={13} />}
-                    disabled={actionLoading}
-                    onClick={() => void adminAction("unban-user", { userId })}
+                    disabled={anyMutPending}
+                    onClick={() => unbanMut.mutate({ userId })}
                   />
                 </>
               ) : (
@@ -490,12 +430,12 @@ function UserDetailPage() {
                   label="Ban user"
                   icon={<Ban size={13} />}
                   danger
-                  disabled={actionLoading}
+                  disabled={anyMutPending}
                   onClick={() => withConfirm(
                     "Ban this user?",
                     "They will be unable to sign in until unbanned.",
                     "Ban user",
-                    () => void adminAction("ban-user", { userId, banReason: "Banned by admin" })
+                    () => banMut.mutate({ userId, banReason: "Banned by admin" })
                   )}
                 />
               )}
@@ -512,15 +452,15 @@ function UserDetailPage() {
                 label="Delete account"
                 icon={<Trash2 size={13} />}
                 danger
-                disabled={actionLoading}
+                disabled={anyMutPending}
                 onClick={() => withConfirm(
                   `Delete ${user.name}'s account?`,
                   "This will permanently erase all data for this user. This cannot be undone.",
                   "Delete permanently",
-                  async () => {
-                    const ok = await adminAction("remove-user", { userId });
-                    if (ok) navigate({ to: "/users" });
-                  }
+                  () => deleteMut.mutate(
+                    { userId },
+                    { onSuccess: () => void navigate({ to: "/users" }) }
+                  )
                 )}
               />
             </div>

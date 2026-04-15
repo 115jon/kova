@@ -1,5 +1,14 @@
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { Modal } from "@/components/Modal";
+import {
+  useCreateWebhook,
+  useDeleteWebhook,
+  useToggleWebhook,
+  useWebhooks,
+  type WebhookEndpoint,
+} from "@/hooks/use-webhooks";
+import { webhookKeys } from "@/lib/query-keys";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Activity,
@@ -23,14 +32,14 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/webhooks")({
   component: WebhooksPage,
 });
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
+// Types are now imported from @/hooks/use-webhooks — keeping AuditAction locally
+// for the CreateEndpointModal event catalogue which still needs it.
 type AuditAction =
   | "user.signIn" | "user.signOut" | "user.signUp"
   | "user.passwordChanged" | "user.passwordSet" | "user.emailVerified"
@@ -42,20 +51,6 @@ type AuditAction =
   | "member.invited" | "member.joined" | "member.removed" | "member.roleChanged"
   | "admin.userBanned" | "admin.userUnbanned" | "admin.userDeleted"
   | "admin.roleChanged" | "admin.passwordReset";
-
-interface WebhookEndpoint {
-  id: string;
-  userId: string;
-  orgId: string | null;
-  url: string;
-  events: string;
-  eventList: AuditAction[] | ["*"];
-  enabled: number;
-  createdAt: number;
-  lastSuccess: number | null;
-  lastFailure: number | null;
-  failureCount: number;
-}
 
 // ── Event catalogue ──────────────────────────────────────────────────────────
 
@@ -257,7 +252,6 @@ function CreateEndpointModal({ onClose, onCreated }: {
   const [url, setUrl] = useState("");
   const [selectedEvents, setSelectedEvents] = useState<Set<AuditAction>>(new Set());
   const [allEvents, setAllEvents] = useState(true);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(["auth"]));
   const urlRef = useRef<HTMLInputElement>(null);
@@ -280,27 +274,23 @@ function CreateEndpointModal({ onClose, onCreated }: {
     });
   };
 
+  const createWebhook = useCreateWebhook();
+
   const createEndpoint = async () => {
     const trimmedUrl = url.trim();
     if (!trimmedUrl) { setError("URL is required"); return; }
     setError("");
-    setLoading(true);
-    try {
-      const res = await fetch("/api/webhooks/endpoints", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ url: trimmedUrl, events: allEvents ? ["*"] : Array.from(selectedEvents) }),
-      });
-      const data = await res.json() as { endpoint?: WebhookEndpoint; rawSecret?: string; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Failed to create endpoint");
-      onCreated(data.endpoint!, data.rawSecret!);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to create endpoint");
-    } finally {
-      setLoading(false);
-    }
+    const events = allEvents ? ["*"] : Array.from(selectedEvents);
+    createWebhook.mutate(
+      { url: trimmedUrl, events },
+      {
+        onSuccess: (result) => onCreated(result.endpoint as WebhookEndpoint, result.rawSecret),
+        onError: (e) => setError(e.message ?? "Failed to create endpoint"),
+      },
+    );
   };
+
+  const loading = createWebhook.isPending;
 
   const categorized = Object.entries(
     EVENT_CATALOG.reduce<Record<string, EventDef[]>>((acc, ev) => {
@@ -633,9 +623,11 @@ function EndpointCard({ ep, onDelete, onToggle, onViewLog }: {
   onToggle: (id: string, enabled: boolean) => void;
   onViewLog: (ep: WebhookEndpoint) => void;
 }) {
-  const [deleting, setDeleting] = useState(false);
-  const [toggling, setToggling] = useState(false);
+  // deleting/toggling are now driven by the parent's optimistic mutation hooks.
+  // We only keep deleteConfirm for the ConfirmModal gate.
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const deleting = false;
+  const toggling = false;
   const status = healthStatus(ep);
 
   const statusDot: Record<typeof status, string> = {
@@ -645,26 +637,13 @@ function EndpointCard({ ep, onDelete, onToggle, onViewLog }: {
     idle: "var(--color-text-tertiary)",
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     setDeleteConfirm(false);
-    setDeleting(true);
-    try {
-      const res = await fetch(`/api/webhooks/endpoints/${ep.id}`, { method: "DELETE", credentials: "include" });
-      if (res.ok) onDelete(ep.id);
-    } finally { setDeleting(false); }
+    onDelete(ep.id);
   };
 
-  const handleToggle = async () => {
-    setToggling(true);
-    try {
-      const res = await fetch(`/api/webhooks/endpoints/${ep.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ enabled: ep.enabled === 0 }),
-      });
-      if (res.ok) onToggle(ep.id, ep.enabled === 0);
-    } finally { setToggling(false); }
+  const handleToggle = () => {
+    onToggle(ep.id, ep.enabled === 0);
   };
 
   return (
@@ -675,7 +654,7 @@ function EndpointCard({ ep, onDelete, onToggle, onViewLog }: {
           body={`${ep.url} will be permanently removed. All delivery history will be lost.`}
           confirmLabel="Delete endpoint"
           loading={deleting}
-          onConfirm={() => void handleDelete()}
+          onConfirm={handleDelete}
           onClose={() => setDeleteConfirm(false)}
         />
       )}
@@ -825,42 +804,27 @@ function EventCatalogPanel() {
 // ── Main page ────────────────────────────────────────────────────────────────
 
 function WebhooksPage() {
-  const [endpoints, setEndpoints] = useState<WebhookEndpoint[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const qc = useQueryClient();
+
+  const { data: endpoints = [], isLoading: loading, error } = useWebhooks();
+  const deleteMut = useDeleteWebhook();
+  const toggleMut = useToggleWebhook();
+
   const [showCreate, setShowCreate] = useState(false);
   const [revealSecret, setRevealSecret] = useState<{ secret: string; url: string } | null>(null);
   const [viewLogEp, setViewLogEp] = useState<WebhookEndpoint | null>(null);
 
-  const loadEndpoints = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/webhooks/endpoints", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load endpoints");
-      const data = await res.json() as { endpoints: WebhookEndpoint[] };
-      setEndpoints(data.endpoints ?? []);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void loadEndpoints(); }, [loadEndpoints]);
-
   const handleCreated = (ep: WebhookEndpoint, secret: string) => {
-    setEndpoints(prev => [ep, ...prev]);
     setShowCreate(false);
     setRevealSecret({ secret, url: ep.url });
+    // Cache invalidation already done inside useCreateWebhook
   };
 
-  const handleDelete = (id: string) => setEndpoints(prev => prev.filter(ep => ep.id !== id));
-  const handleToggle = (id: string, enabled: boolean) =>
-    setEndpoints(prev => prev.map(ep => ep.id === id ? { ...ep, enabled: enabled ? 1 : 0 } : ep));
+  const handleDelete = (id: string) => deleteMut.mutate({ id });
+  const handleToggle = (id: string, enabled: boolean) => toggleMut.mutate({ id, enabled });
 
-  const activeCount = endpoints.filter(ep => ep.enabled === 1).length;
-  const failingCount = endpoints.filter(ep => ep.failureCount > 3).length;
+  const activeCount = endpoints.filter((ep: WebhookEndpoint) => ep.enabled === 1).length;
+  const failingCount = endpoints.filter((ep: WebhookEndpoint) => ep.failureCount > 3).length;
 
   return (
     <div className="animate-in">
@@ -877,7 +841,7 @@ function WebhooksPage() {
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button className="btn btn-ghost" onClick={() => void loadEndpoints()} disabled={loading} title="Refresh">
+          <button className="btn btn-ghost" onClick={() => void qc.invalidateQueries({ queryKey: webhookKeys.all })} disabled={loading} title="Refresh">
             <RotateCcw size={14} className={loading ? "spin" : ""} />
           </button>
           <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
@@ -911,7 +875,7 @@ function WebhooksPage() {
           borderRadius: 4, padding: "9px 13px",
           fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
         }}>
-          <AlertTriangle size={13} /> {error}
+          <AlertTriangle size={13} /> {error instanceof Error ? error.message : error}
         </div>
       )}
 

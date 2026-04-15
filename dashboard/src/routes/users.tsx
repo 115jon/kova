@@ -1,107 +1,112 @@
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { UserAvatar } from "@/components/UserAvatar";
+import {
+  useBanUser,
+  useDeleteUser,
+  useSetUserRole,
+  useUnbanUser,
+  useUsers,
+} from "@/hooks/use-users";
+import { userKeys } from "@/lib/query-keys";
 import { relativeTime } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Ban, ChevronLeft, ChevronRight, RefreshCw, Search, ShieldCheck, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  Ban,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react";
+import { useState } from "react";
 
 export const Route = createFileRoute("/users")({
   component: UsersPage,
 });
 
-type User = {
-  id: string;
-  name: string;
-  email: string;
-  emailVerified: boolean;
-  image: string | null;
-  role: string;
-  banned: boolean;
-  banReason: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
 const PAGE_SIZE = 20;
+
+type ConfirmState = {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+} | null;
 
 function UsersPage() {
   const navigate = useNavigate();
-  const [users, setUsers] = useState<User[]>([]);
-  const [total, setTotal] = useState(0);
+  const qc = useQueryClient();
+
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [actionUser, setActionUser] = useState<string | null>(null);
-  const [actionError, setActionError] = useState("");
-  const [confirmState, setConfirmState] = useState<{
-    title: string; body: string; confirmLabel: string; onConfirm: () => void;
-  } | null>(null);
+  const [confirmState, setConfirmState] = useState<ConfirmState>(null);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        limit: String(PAGE_SIZE),
-        offset: String(page * PAGE_SIZE),
-        ...(search ? { searchField: "email", searchValue: search, searchOperator: "contains" } : {}),
-      });
-      const res = await fetch(`/api/auth/admin/list-users?${params}`, { credentials: "include" });
-      const data = await res.json() as { users: User[]; total: number };
-      setUsers(data.users ?? []);
-      setTotal(data.total ?? 0);
-    } finally {
-      setLoading(false);
-    }
+  // ── Data ────────────────────────────────────────────────────────────────────
+  const { data, isLoading, error, isFetching } = useUsers({ page, search });
+  const users = data?.users ?? [];
+  const total = data?.total ?? 0;
+  const pages = Math.ceil(total / PAGE_SIZE);
+
+  // ── Mutations ───────────────────────────────────────────────────────────────
+  const setRoleMut = useSetUserRole();
+  const banMut = useBanUser();
+  const unbanMut = useUnbanUser();
+  const deleteMut = useDeleteUser();
+
+  // Track which user has an in-flight mutation for button disabled states
+  const mutatingUserId =
+    setRoleMut.variables?.userId ??
+    banMut.variables?.userId ??
+    unbanMut.variables?.userId ??
+    deleteMut.variables?.userId ??
+    null;
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
+  const setRole = (userId: string, role: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRoleMut.mutate({ userId, role });
   };
 
-  useEffect(() => { load(); }, [page, search]);
-
-  const action = async (endpoint: string, body: object, userId: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // don't trigger row click → detail page
-    setActionUser(userId);
-    setActionError("");
-    try {
-      const res = await fetch(`/api/auth/admin/${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: res.statusText })) as { message?: string };
-        setActionError(err.message ?? `Action failed (${res.status})`);
-        return;
-      }
-      load();
-    } catch (e: any) {
-      setActionError(e?.message ?? "Network error — action may not have completed");
-    } finally {
-      setActionUser(null);
-    }
-  };
-
-  const setRole = (id: string, role: string, e: React.MouseEvent) => action("set-role", { userId: id, role }, id, e);
-  const banUser = (id: string, e: React.MouseEvent) => {
+  const banUser = (userId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setConfirmState({
       title: "Ban this user?",
       body: "They will be unable to sign in until unbanned.",
       confirmLabel: "Ban user",
-      onConfirm: () => { setConfirmState(null); action("ban-user", { userId: id, banReason: "Banned by admin" }, id, e); },
+      onConfirm: () => {
+        setConfirmState(null);
+        banMut.mutate({ userId, banReason: "Banned by admin" });
+      },
     });
   };
-  const unbanUser = (id: string, e: React.MouseEvent) => action("unban-user", { userId: id }, id, e);
-  const deleteUser = (id: string, name: string, e: React.MouseEvent) => {
+
+  const unbanUser = (userId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    unbanMut.mutate({ userId });
+  };
+
+  const deleteUser = (userId: string, name: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setConfirmState({
       title: `Delete ${name}'s account?`,
       body: "This will permanently erase all data for this user and cannot be undone.",
       confirmLabel: "Delete permanently",
-      onConfirm: () => { setConfirmState(null); action("remove-user", { userId: id }, id, e); },
+      onConfirm: () => {
+        setConfirmState(null);
+        deleteMut.mutate({ userId });
+      },
     });
   };
 
-  const pages = Math.ceil(total / PAGE_SIZE);
+  // Aggregate mutation error for the error banner
+  const actionError =
+    setRoleMut.error?.message ??
+    banMut.error?.message ??
+    unbanMut.error?.message ??
+    deleteMut.error?.message ??
+    "";
 
   return (
     <div className="animate-in">
@@ -120,8 +125,13 @@ function UsersPage() {
           <h1 className="page-title">Users</h1>
           <p className="page-subtitle">{total.toLocaleString()} total</p>
         </div>
-        <button className="btn btn-ghost" onClick={load} title="Refresh">
-          <RefreshCw size={14} />
+        <button
+          className="btn btn-ghost"
+          onClick={() => void qc.invalidateQueries({ queryKey: userKeys.all })}
+          title="Refresh"
+          disabled={isFetching}
+        >
+          <RefreshCw size={14} className={isFetching ? "spin" : ""} />
         </button>
       </div>
 
@@ -151,9 +161,22 @@ function UsersPage() {
         </div>
       )}
 
+      {/* Query error */}
+      {error && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
+          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+          borderRadius: 4, padding: "9px 13px",
+          color: "var(--color-red)",
+          fontFamily: "var(--font-mono)", fontSize: "0.78rem",
+        }}>
+          <Ban size={13} /> {error.message}
+        </div>
+      )}
+
       {/* Table */}
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        {loading ? (
+        {isLoading ? (
           <div className="loading" style={{ padding: 32, textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>Loading…</div>
         ) : (
           <table className="data-table">
@@ -204,7 +227,7 @@ function UsersPage() {
                         <button
                           className="btn btn-ghost"
                           style={{ padding: "4px 8px", fontSize: "0.75rem" }}
-                          disabled={actionUser === u.id}
+                          disabled={mutatingUserId === u.id}
                           onClick={e => setRole(u.id, "admin", e)}
                           title="Make admin"
                         >
@@ -215,7 +238,7 @@ function UsersPage() {
                         <button
                           className="btn btn-ghost"
                           style={{ padding: "4px 8px", fontSize: "0.75rem" }}
-                          disabled={actionUser === u.id}
+                          disabled={mutatingUserId === u.id}
                           onClick={e => setRole(u.id, "user", e)}
                           title="Remove admin"
                         >
@@ -226,7 +249,7 @@ function UsersPage() {
                         <button
                           className="btn btn-ghost"
                           style={{ padding: "4px 8px", fontSize: "0.75rem" }}
-                          disabled={actionUser === u.id}
+                          disabled={mutatingUserId === u.id}
                           onClick={e => unbanUser(u.id, e)}
                           title="Unban"
                         >
@@ -236,7 +259,7 @@ function UsersPage() {
                         <button
                           className="btn btn-danger"
                           style={{ padding: "4px 8px", fontSize: "0.75rem" }}
-                          disabled={actionUser === u.id}
+                          disabled={mutatingUserId === u.id}
                           onClick={e => banUser(u.id, e)}
                           title="Ban user"
                         >
@@ -246,7 +269,7 @@ function UsersPage() {
                       <button
                         className="btn btn-danger"
                         style={{ padding: "4px 8px" }}
-                        disabled={actionUser === u.id}
+                        disabled={mutatingUserId === u.id}
                         onClick={e => deleteUser(u.id, u.name, e)}
                         title="Delete user"
                       >

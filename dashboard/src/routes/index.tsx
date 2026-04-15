@@ -1,19 +1,12 @@
 import { UserAvatar } from "@/components/UserAvatar";
+import { useOverviewStats } from "@/hooks/use-overview";
 import { relativeTime } from "@/lib/utils";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Activity, Globe, Shield, TrendingUp, Users } from "lucide-react";
-import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/")({
   component: OverviewPage,
 });
-
-type Stats = {
-  totalUsers: number;
-  activeSessions: number;
-  bannedUsers: number;
-  recentUsers: { id: string; name: string; email: string; createdAt: string; role: string; image?: string | null }[];
-};
 
 function StatCard({ label, value, icon: Icon, color }: {
   label: string; value: number | string; icon: React.ElementType; color: string;
@@ -38,34 +31,7 @@ function StatCard({ label, value, icon: Icon, color }: {
 
 function OverviewPage() {
   const navigate = useNavigate();
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const [usersRes, sessionsRes] = await Promise.all([
-          fetch(`/api/auth/admin/list-users?limit=5`, { credentials: "include" }),
-          fetch(`/api/auth/list-sessions`, { credentials: "include" }),
-        ]);
-        const usersData = await usersRes.json() as { users: Stats["recentUsers"]; total: number };
-        const sessData = await sessionsRes.json() as { session: unknown[] } | unknown[];
-        const sessions = Array.isArray(sessData) ? sessData : (sessData as any).sessions ?? [];
-        const banned = usersData.users?.filter((u: any) => u.banned).length ?? 0;
-        setStats({
-          totalUsers: usersData.total ?? usersData.users?.length ?? 0,
-          activeSessions: sessions.length,
-          bannedUsers: banned,
-          recentUsers: usersData.users ?? [],
-        });
-      } catch {
-        setStats({ totalUsers: 0, activeSessions: 0, bannedUsers: 0, recentUsers: [] });
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+  const { data: stats, isLoading, isError } = useOverviewStats();
 
   return (
     <div className="animate-in">
@@ -80,9 +46,13 @@ function OverviewPage() {
 
       {/* Stat cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12, marginBottom: 24 }}>
-        {loading ? (
+        {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="card loading" style={{ padding: "18px 20px", height: 74 }} />
+          ))
+        ) : isError ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="card" style={{ padding: "18px 20px", height: 74, opacity: 0.4 }} />
           ))
         ) : (
           <>
@@ -110,7 +80,7 @@ function OverviewPage() {
           </div>
           <TrendingUp size={13} color="var(--color-text-tertiary)" />
         </div>
-        {loading ? (
+        {isLoading ? (
           <div className="loading" style={{ padding: 24, textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>Loading…</div>
         ) : (
           <table className="data-table">
@@ -123,7 +93,7 @@ function OverviewPage() {
               </tr>
             </thead>
             <tbody>
-              {stats!.recentUsers.map(u => (
+              {(stats?.recentUsers ?? []).map(u => (
                 <tr
                   key={u.id}
                   onClick={() => navigate({ to: "/users/$userId", params: { userId: u.id } })}
@@ -145,7 +115,7 @@ function OverviewPage() {
                   <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>{relativeTime(u.createdAt)}</td>
                 </tr>
               ))}
-              {stats!.recentUsers.length === 0 && (
+              {!isLoading && (stats?.recentUsers ?? []).length === 0 && (
                 <tr><td colSpan={4} style={{ textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", padding: 24, fontSize: "0.78rem" }}>No users yet</td></tr>
               )}
             </tbody>

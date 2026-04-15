@@ -1,50 +1,41 @@
 import { Modal } from "@/components/Modal";
 import { OrgAvatar } from "@/components/OrgAvatar";
-import { organization } from "@/lib/auth-client";
+import {
+  useCreateOrganization,
+  useOrganizations,
+} from "@/hooks/use-organizations";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Building2, ChevronRight, Crown, Plus, Shield } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export const Route = createFileRoute("/organizations")({
   component: OrganizationsPage,
 });
 
-const ROLE_COLORS: Record<string, string> = {
-  owner: "#f59e0b",
-  admin: "#818cf8",
-  member: "#34d399",
-};
-
 // ── Create Org Modal ──────────────────────────────────────────────────────────
 
-function CreateOrgModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function CreateOrgModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!slugTouched) {
-      setSlug(name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""));
-    }
-  }, [name, slugTouched]);
+  const createOrg = useCreateOrganization();
+
+  // Auto-derive slug from name until user touches it
+  const derivedSlug = slugTouched
+    ? slug
+    : name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    setError(""); setLoading(true);
-    try {
-      const resolvedSlug = slug.trim() || name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      const res = await organization.create({ name: name.trim(), slug: resolvedSlug });
-      if (res.error) throw new Error(res.error.message);
-      onCreated();
-      onClose();
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to create organization");
-    } finally {
-      setLoading(false);
-    }
+    const resolvedSlug =
+      derivedSlug.trim() ||
+      name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    createOrg.mutate(
+      { name: name.trim(), slug: resolvedSlug },
+      { onSuccess: onClose },
+    );
   };
 
   return (
@@ -73,23 +64,23 @@ function CreateOrgModal({ onClose, onCreated }: { onClose: () => void; onCreated
         </div>
         <div className="form-group">
           <label className="form-label">Slug</label>
-          <input className="input" placeholder="acme-inc" value={slug}
+          <input className="input" placeholder="acme-inc" value={derivedSlug}
             onChange={e => { setSlug(e.target.value); setSlugTouched(true); }}
             style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem" }} />
           <p className="form-hint">Used in URLs — letters, numbers and hyphens only</p>
         </div>
-        {error && (
+        {createOrg.error && (
           <div style={{
             background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
             borderRadius: 4, padding: "8px 12px",
             fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.75rem",
-          }}>{error}</div>
+          }}>{createOrg.error.message}</div>
         )}
         <div className="modal-footer" style={{ border: "none", padding: 0 }}>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn btn-primary"
-            disabled={loading || !name.trim()}>
-            <Building2 size={13} /> {loading ? "Creating…" : "Create"}
+            disabled={createOrg.isPending || !name.trim()}>
+            <Building2 size={13} /> {createOrg.isPending ? "Creating…" : "Create"}
           </button>
         </div>
       </form>
@@ -101,25 +92,13 @@ function CreateOrgModal({ onClose, onCreated }: { onClose: () => void; onCreated
 
 function OrganizationsPage() {
   const navigate = useNavigate();
-  const [orgs, setOrgs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
 
-  const fetchOrgs = async () => {
-    setLoading(true);
-    try {
-      const res = await organization.list();
-      if (!res.error) setOrgs(res.data ?? []);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchOrgs(); }, []);
+  const { data: orgs = [], isLoading, error } = useOrganizations();
 
   return (
     <div className="animate-in" style={{ maxWidth: 740 }}>
-      {showCreate && <CreateOrgModal onClose={() => setShowCreate(false)} onCreated={fetchOrgs} />}
+      {showCreate && <CreateOrgModal onClose={() => setShowCreate(false)} />}
 
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
@@ -132,7 +111,17 @@ function OrganizationsPage() {
         </button>
       </div>
 
-      {loading ? (
+      {error && (
+        <div style={{
+          marginBottom: 16, padding: "10px 14px",
+          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
+          borderRadius: 4, fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
+        }}>
+          {error.message}
+        </div>
+      )}
+
+      {isLoading ? (
         <div style={{ padding: "40px 0", textAlign: "center" }}>
           <div className="loading" style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.8rem" }}>Loading organizations…</div>
         </div>

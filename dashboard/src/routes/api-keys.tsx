@@ -1,6 +1,9 @@
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { Modal } from "@/components/Modal";
+import { useApiKeys, useDeleteApiKey } from "@/hooks/use-api-keys";
 import { apiKey, useActiveOrganization } from "@/lib/auth-client";
+import { queryClient } from "@/lib/query-client";
+import { apiKeyKeys } from "@/lib/query-keys";
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertCircle, Building2, Check, Copy, Key, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -19,7 +22,6 @@ type ApiKey = {
   createdAt: Date | string;
   lastRequest: Date | string | null;
   requestCount: number;
-  // Which config this key belongs to — needed for delete calls
   configId?: string;
 };
 
@@ -98,7 +100,13 @@ function KeyRevealModal({ keyValue, onClose }: { keyValue: string; onClose: () =
 
 // ── Create key form ───────────────────────────────────────────────────────────
 
-function CreateKeyForm({ organizationId, onCreated }: { organizationId: string | null; onCreated: (key: string) => void }) {
+function CreateKeyForm({
+  organizationId,
+  onCreated,
+}: {
+  organizationId: string | null;
+  onCreated: (key: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [expiry, setExpiry] = useState("never");
@@ -128,6 +136,10 @@ function CreateKeyForm({ organizationId, onCreated }: { organizationId: string |
       if (result.error) throw new Error(result.error.message ?? "Failed to create key");
       const rawKey = result.data?.key;
       if (!rawKey) throw new Error("Key created but server did not return the plaintext value — check the API key plugin version");
+      // Invalidate the list so it refreshes after the reveal modal is closed
+      void queryClient.invalidateQueries({
+        queryKey: apiKeyKeys.list({ organizationId }),
+      });
       onCreated(rawKey);
       setName("");
       setExpiry("never");
@@ -216,66 +228,32 @@ function ApiKeysPage() {
   const { data: activeOrg } = useActiveOrganization();
   const activeOrgId = activeOrg?.id ?? null;
 
-  const [keys, setKeys] = useState<ApiKey[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [revealKey, setRevealKey] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null);
 
-  const loadKeys = useCallback(async (orgId: string | null) => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await apiKey.list({
-        query: {
-          configId: orgId ? "organization" : "personal",
-          sortBy: "createdAt",
-          sortDirection: "desc",
-          ...(orgId ? { organizationId: orgId } : {}),
-        },
-      });
-      if (res.error) throw new Error(res.error.message);
-      setKeys(res.data?.apiKeys ?? []);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to load API keys";
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // ── Data ─────────────────────────────────────────────────────────────────────
+  const { data: keys = [], isLoading, error } = useApiKeys({ organizationId: activeOrgId });
 
-  useEffect(() => { loadKeys(activeOrgId); }, [loadKeys, activeOrgId]);
+  // ── Mutation ──────────────────────────────────────────────────────────────────
+  const deleteKey = useDeleteApiKey();
 
-  const handleDelete = async (key: ApiKey) => {
+  const handleDelete = useCallback((key: ApiKey) => {
     setRevokeTarget(null);
-    setDeletingId(key.id);
-    try {
-      // Must specify both `id` and `configId` — BA throws 400 when multiple
-      // configs exist and no default is set.
-      const configId = activeOrgId ? "organization" : "personal";
-      const res = await apiKey.delete({ id: key.id, configId } as any);
-      if ((res as any)?.error) throw new Error((res as any).error.message);
-      setKeys(k => k.filter(x => x.id !== key.id));
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to revoke key";
-      setError(msg);
-    } finally {
-      setDeletingId(null);
-    }
-  };
+    const configId = activeOrgId ? "organization" : "personal";
+    deleteKey.mutate({ id: key.id, configId, organizationId: activeOrgId });
+  }, [activeOrgId, deleteKey]);
 
   return (
     <div className="animate-in">
       {revealKey && (
-        <KeyRevealModal keyValue={revealKey} onClose={() => { setRevealKey(null); loadKeys(activeOrgId); }} />
+        <KeyRevealModal keyValue={revealKey} onClose={() => setRevealKey(null)} />
       )}
       {revokeTarget && (
         <ConfirmModal
           title="Revoke API key?"
           body={`"${revokeTarget.name ?? "Unnamed key"}" will be permanently revoked. Any service using it will lose access immediately.`}
           confirmLabel="Revoke key"
-          loading={deletingId === revokeTarget.id}
+          loading={deleteKey.isPending && deleteKey.variables?.id === revokeTarget.id}
           onConfirm={() => void handleDelete(revokeTarget)}
           onClose={() => setRevokeTarget(null)}
         />
@@ -292,25 +270,30 @@ function ApiKeysPage() {
             }
           </p>
         </div>
-        <button className="btn btn-ghost" onClick={() => loadKeys(activeOrgId)} disabled={loading} title="Refresh">
-          <RotateCcw size={14} className={loading ? "spin" : ""} />
+        <button
+          className="btn btn-ghost"
+          onClick={() => void queryClient.invalidateQueries({ queryKey: apiKeyKeys.list({ organizationId: activeOrgId }) })}
+          disabled={isLoading}
+          title="Refresh"
+        >
+          <RotateCcw size={14} className={isLoading ? "spin" : ""} />
         </button>
       </div>
 
       <CreateKeyForm organizationId={activeOrgId} onCreated={(key) => setRevealKey(key)} />
 
-      {error && (
+      {(error || deleteKey.error) && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 16,
           background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
           borderRadius: 4, padding: "9px 13px",
           fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
         }}>
-          <AlertCircle size={13} /> {error}
+          <AlertCircle size={13} /> {error?.message ?? deleteKey.error?.message}
         </div>
       )}
 
-      {loading ? (
+      {isLoading ? (
         <div style={{ textAlign: "center", padding: 48 }}>
           <div className="loading" style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>Loading…</div>
         </div>
@@ -395,12 +378,12 @@ function ApiKeysPage() {
                     <button
                       className="btn btn-danger"
                       style={{ padding: "4px 10px", fontSize: "0.75rem" }}
-                      disabled={deletingId === k.id}
-                      onClick={() => setRevokeTarget(k)}
+                      disabled={deleteKey.isPending && deleteKey.variables?.id === k.id}
+                      onClick={() => setRevokeTarget(k as ApiKey)}
                       title="Revoke key"
                     >
                       <Trash2 size={12} />
-                      {deletingId === k.id ? "Revoking…" : "Revoke"}
+                      {deleteKey.isPending && deleteKey.variables?.id === k.id ? "Revoking…" : "Revoke"}
                     </button>
                   </td>
                 </tr>
