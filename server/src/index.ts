@@ -21,6 +21,29 @@ import {
   setWebhookEnabled,
 } from "./webhook";
 
+// ── NSFW / content-policy scan helper ─────────────────────────────────────────
+//
+// Calls POST {CDN_URL}/scan/{cdnKey} on the CDN Worker (Workers AI endpoint).
+// Returns true  = image is safe to publish.
+// Returns false = image contains NSFW/explicit content and must be rejected.
+//
+// Intentionally fails open: if the scan endpoint is unreachable or the Workers AI
+// daily neuron quota is exhausted, we allow the upload so legitimate users are
+// never blocked by infrastructure issues.
+//
+async function scanUpload(cdnUrl: string, cdnApiKey: string, cdnKey: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${cdnUrl}/scan/${cdnKey}`, {
+      method: "POST",
+      headers: { "CDN-API-Key": cdnApiKey },
+    });
+    if (!res.ok) return true; // scan endpoint error → fail open
+    const { safe } = await res.json() as { safe: boolean };
+    return safe;
+  } catch {
+    return true; // network / parse error → fail open
+  }
+}
 
 // â”€â”€ Allowed CORS origins â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
@@ -176,6 +199,22 @@ export default {
       }
       const { url: imageUrl } = await cdnRes.json() as { url: string };
 
+      // ── NSFW scan ─────────────────────────────────────────────────────────
+      // The CDN stores objects under {app}/{key} — full R2 key is ralph-auth/{cdnKey}.
+      // The /scan route splits on /:app/:key+ so we must pass the full stored path.
+      const isSafe = await scanUpload(env.CDN_URL, env.CDN_API_KEY, `ralph-auth/${cdnKey}`);
+      if (!isSafe) {
+        // Delete the just-uploaded file from R2 before returning the error
+        fetch(`${env.CDN_URL}/files/${cdnKey}`, {
+          method: "DELETE",
+          headers: { "CDN-API-Key": env.CDN_API_KEY },
+        }).catch(() => { });
+        return withHeaders(
+          Response.json({ error: "Image rejected: content policy violation" }, { status: 422 }),
+          request
+        );
+      }
+
       await env.DB
         .prepare(`UPDATE "user" SET image = ?, updatedAt = ? WHERE id = ?`)
         .bind(imageUrl, Date.now(), session.user.id)
@@ -278,6 +317,20 @@ export default {
         return withHeaders(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
       }
       const { url: imageUrl } = await cdnRes.json() as { url: string };
+
+      // ── NSFW scan ─────────────────────────────────────────────────────────
+      // Full R2 key is ralph-auth/{cdnKey2} — pass including app prefix.
+      const isSafe = await scanUpload(env.CDN_URL, env.CDN_API_KEY, `ralph-auth/${cdnKey2}`);
+      if (!isSafe) {
+        fetch(`${env.CDN_URL}/files/${cdnKey2}`, {
+          method: "DELETE",
+          headers: { "CDN-API-Key": env.CDN_API_KEY },
+        }).catch(() => { });
+        return withHeaders(
+          Response.json({ error: "Image rejected: content policy violation" }, { status: 422 }),
+          request
+        );
+      }
 
       await env.DB
         .prepare(`UPDATE "user" SET image = ?, updatedAt = ? WHERE id = ?`)
@@ -467,6 +520,20 @@ export default {
         return withHeaders(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
       }
       const { url: logoUrl } = await cdnRes.json() as { url: string };
+
+      // ── NSFW scan ─────────────────────────────────────────────────────────
+      // Full R2 key is ralph-auth/{cdnKey} — pass including app prefix.
+      const isSafe = await scanUpload(env.CDN_URL, env.CDN_API_KEY, `ralph-auth/${cdnKey}`);
+      if (!isSafe) {
+        fetch(`${env.CDN_URL}/files/${cdnKey}`, {
+          method: "DELETE",
+          headers: { "CDN-API-Key": env.CDN_API_KEY },
+        }).catch(() => { });
+        return withHeaders(
+          Response.json({ error: "Image rejected: content policy violation" }, { status: 422 }),
+          request
+        );
+      }
 
       await env.DB
         .prepare(`UPDATE organization SET logo = ? WHERE id = ?`)
