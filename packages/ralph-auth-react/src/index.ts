@@ -24,7 +24,9 @@
 export { RalphAuthProvider } from "./context";
 export type { RalphAuthProviderProps } from "./context";
 
-// ── Components ────────────────────────────────────────────────────────────────
+// ── Components ───────────────────────────────────────────────────────────────
+// UI building-blocks that can also be embedded in custom profile pages.
+export { ConnectedAccounts } from "./components/ConnectedAccounts";
 export { OrgSwitcher } from "./components/OrgSwitcher";
 export { Protect } from "./components/Protect";
 export { SignIn } from "./components/SignIn";
@@ -34,6 +36,8 @@ export { UserButton } from "./components/UserButton";
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 export { useAuth } from "./hooks/use-auth";
 export type { UseAuthReturn } from "./hooks/use-auth";
+
+export { useLinkedAccounts } from "./hooks/use-linked-accounts";
 
 export { useOrganization } from "./hooks/use-organization";
 export { useSession } from "./hooks/use-session";
@@ -61,15 +65,26 @@ export type { VerifyOptions, WebhookEvent } from "./webhook";
 // ── Types (all public interfaces) ─────────────────────────────────────────────
 export type {
   // Appearance
-  Appearance, AppearanceElements, AppearanceVariables, OAuthProvider, OrgSwitcherProps, PluginConfig, ProtectProps,
+  Appearance,
+  AppearanceElements,
+  AppearanceVariables,
+  // Domain models (linked accounts)
+  LinkedAccount, OAuthProvider,
+  OrgSwitcherProps,
+  PluginConfig,
+  ProtectProps,
   // Config
-  RalphAuthConfig, RalphMembership, RalphOrganization, RalphSession,
-  // Domain models
+  RalphAuthConfig, RalphMembership,
+  RalphOrganization,
+  RalphSession,
   RalphUser,
   // Component props
-  SignInProps, SignInTab, SignUpProps, UseOrganizationReturn, UserButtonProps,
+  SignInProps,
+  SignInTab,
+  SignUpProps,
   // Hook returns
-  UseSessionReturn,
+  UseLinkedAccountsReturn,
+  UseOrganizationReturn, UserButtonProps, UseSessionReturn,
   UseUserReturn
 } from "./types";
 

@@ -88,6 +88,12 @@ export interface AppearanceElements {
   userButtonMenu?: React.CSSProperties;
   userButtonMenuItem?: React.CSSProperties;
 
+  // ── Connected accounts (in UserButton / profile) ──────────────────────────
+  connectedAccountsSection?: React.CSSProperties;
+  connectedAccountsItem?: React.CSSProperties;
+  connectedAccountsItemLabel?: React.CSSProperties;
+  connectedAccountsConnectButton?: React.CSSProperties;
+
   // ── OrgSwitcher ──────────────────────────────────────────────────────
   orgSwitcherTrigger?: React.CSSProperties;
   orgSwitcherMenu?: React.CSSProperties;
@@ -226,6 +232,26 @@ export interface RalphAuthConfig {
 
 // ── Session / user types ──────────────────────────────────────────────────────
 
+// ── Linked / connected account record ────────────────────────────────────────
+
+/**
+ * A provider account linked to the current user.
+ * Returned by `useLinkedAccounts()` and `client.listAccounts()`.
+ */
+export interface LinkedAccount {
+  /** Better Auth account row ID. */
+  id: string;
+  /** Provider identifier ("google", "github", "credential", etc.). */
+  providerId: string;
+  /** The opaque account ID from the provider side. */
+  accountId: string;
+  /** ISO date string when the link was created. */
+  createdAt: string;
+  /** "credential" | "oauth2" | "oidc" — from the account row */
+  accessToken?: string | null;
+  scopes?: string[];
+}
+
 export interface RalphUser {
   id: string;
   name: string;
@@ -282,6 +308,28 @@ export interface UseUserReturn {
   isSignedIn: boolean;
   /** Update mutable user fields (name, username, image). */
   updateUser: (data: { name?: string; image?: string }) => Promise<void>;
+}
+
+// ── useLinkedAccounts return ──────────────────────────────────────────────────
+
+export interface UseLinkedAccountsReturn {
+  /** All provider accounts linked to the current user. */
+  accounts: LinkedAccount[];
+  /** `false` until the first fetch resolves. */
+  isLoaded: boolean;
+  /** True while a link or unlink operation is in-flight. */
+  isUpdating: boolean;
+  /** Error message from the last failed operation, or `null`. */
+  error: string | null;
+  /**
+   * Initiate an OAuth redirect to link a new provider account.
+   * Redirects the browser — resolves immediately after redirect is triggered.
+   */
+  linkAccount: (opts: { provider: string; callbackURL?: string }) => Promise<void>;
+  /**
+   * Refresh the list from the server.
+   */
+  refetch: () => void;
 }
 
 export interface UseOrganizationReturn {

@@ -41,6 +41,7 @@ export type AuditAction =
   | "org.deleted"
   | "member.invited"
   | "member.joined"             // accepted invitation
+  | "member.autoJoined"         // auto-joined via domain enrollment
   | "member.removed"
   | "member.roleChanged"
   // Admin actions

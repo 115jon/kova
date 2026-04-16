@@ -1372,6 +1372,120 @@ export default {
       return withHeaders(Response.json({ fields }), request);
     }
 
+    // ── Org Settings — GET + PATCH ─────────────────────────────────────────────
+    //
+    // GET  /api/admin/orgs/:orgId/settings  → { orgId, require_mfa }
+    // PATCH /api/admin/orgs/:orgId/settings  ← { require_mfa: boolean }
+    //
+    // Admin-only. Org owner/admins are NOT granted access here — only platform
+    // admins with role:admin can toggle enforcement policies for now.
+    const orgSettingsMatch = url.pathname.match(/^\/api\/admin\/orgs\/([^/]+)\/settings$/);
+    if (orgSettingsMatch) {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const role = (session.user as { role?: string }).role ?? "";
+      if (!role.split(",").map((r: string) => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      const orgId = orgSettingsMatch[1]!;
+      const { getOrgSettings, setRequireMFA } = await import("./org-settings");
+
+      if (request.method === "GET") {
+        const settings = await getOrgSettings(env.DB, orgId);
+        return withHeaders(Response.json(settings), request);
+      }
+
+      if (request.method === "PATCH") {
+        let body: { require_mfa?: boolean };
+        try {
+          body = await request.json() as { require_mfa?: boolean };
+        } catch {
+          return withHeaders(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+        }
+        if (typeof body.require_mfa === "boolean") {
+          await setRequireMFA(env.DB, orgId, body.require_mfa);
+          await logAudit(env.DB, {
+            userId: session.user.id,
+            orgId,
+            actor: session.user.id,
+            actorName: session.user.name ?? null,
+            actorEmail: session.user.email,
+            action: "org.updated",
+            targetType: "org",
+            targetId: orgId,
+            ipAddress: request.headers.get("CF-Connecting-IP"),
+            userAgent: request.headers.get("User-Agent"),
+            metadata: { field: "require_mfa", value: body.require_mfa },
+          }).catch(() => { });
+        }
+        const settings = await getOrgSettings(env.DB, orgId);
+        return withHeaders(Response.json(settings), request);
+      }
+    }
+
+    // ── Org Domains — list, add, remove ───────────────────────────────────────
+    //
+    // GET    /api/admin/orgs/:orgId/domains          → { domains: OrgDomain[] }
+    // POST   /api/admin/orgs/:orgId/domains          ← { domain, enrollment_mode?, default_role? }
+    // DELETE /api/admin/orgs/:orgId/domains/:id
+    //
+    // Admin-only (same as org settings above).
+    const orgDomainsListMatch = url.pathname.match(/^\/api\/admin\/orgs\/([^/]+)\/domains$/);
+    const orgDomainItemMatch = url.pathname.match(/^\/api\/admin\/orgs\/([^/]+)\/domains\/([^/]+)$/);
+
+    if (orgDomainsListMatch || orgDomainItemMatch) {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) {
+        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+      }
+      const role = (session.user as { role?: string }).role ?? "";
+      if (!role.split(",").map((r: string) => r.trim()).includes("admin")) {
+        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+      }
+
+      const { listOrgDomains, addOrgDomain, removeOrgDomain } = await import("./org-settings");
+
+      if (orgDomainsListMatch) {
+        const orgId = orgDomainsListMatch[1]!;
+        if (request.method === "GET") {
+          const domains = await listOrgDomains(env.DB, orgId);
+          return withHeaders(Response.json({ domains }), request);
+        }
+        if (request.method === "POST") {
+          let body: { domain?: string; enrollment_mode?: string; default_role?: string };
+          try {
+            body = await request.json() as typeof body;
+          } catch {
+            return withHeaders(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+          }
+          if (!body.domain || typeof body.domain !== "string") {
+            return withHeaders(Response.json({ error: "domain is required" }, { status: 400 }), request);
+          }
+          const domain = await addOrgDomain(env.DB, {
+            orgId,
+            domain: body.domain,
+            enrollment_mode: (body.enrollment_mode === "automatic_join" ? "automatic_join" : "automatic_invitation"),
+            default_role: body.default_role ?? "member",
+          });
+          return withHeaders(Response.json({ domain }), request);
+        }
+      }
+
+      if (orgDomainItemMatch) {
+        const orgId = orgDomainItemMatch[1]!;
+        const domainId = orgDomainItemMatch[2]!;
+        if (request.method === "DELETE") {
+          await removeOrgDomain(env.DB, domainId, orgId);
+          return withHeaders(Response.json({ ok: true }), request);
+        }
+      }
+    }
+
     return withHeaders(new Response("Not found", { status: 404 }), request);
 
 

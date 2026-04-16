@@ -25,8 +25,10 @@ import { mergeAppearance, useRalphAuth } from "../context";
 import { useAuth } from "../hooks/use-auth";
 import { useUser } from "../hooks/use-user";
 import type { UserButtonProps } from "../types";
+import { ConnectedAccounts } from "./ConnectedAccounts";
 import {
   ChevronDownIcon,
+  LinkIcon,
   LogOutIcon,
   SettingsIcon,
   UserIcon,
@@ -180,6 +182,7 @@ export function UserButton({
 
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [showLinkedAccounts, setShowLinkedAccounts] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -357,6 +360,41 @@ export function UserButton({
               <SettingsIcon size={14} />
               Settings
             </button>
+
+            {/* Connected accounts — expandable accordion */}
+            <button
+              type="button"
+              role="menuitem"
+              data-ra-element="userButtonMenuItem"
+              aria-expanded={showLinkedAccounts}
+              style={el.userButtonMenuItem}
+              onClick={() => setShowLinkedAccounts((v) => !v)}
+            >
+              <LinkIcon size={14} />
+              <span style={{ flex: 1 }}>Connected accounts</span>
+              <ChevronDownIcon
+                size={10}
+                style={{
+                  color: "var(--ra-color-text-tertiary)",
+                  transform: showLinkedAccounts ? "rotate(180deg)" : "none",
+                  transition: "transform 0.15s",
+                  flexShrink: 0,
+                }}
+              />
+            </button>
+            {showLinkedAccounts && (
+              <div
+                style={{
+                  padding: "0 12px 4px",
+                  borderBottom: "1px solid var(--ra-color-border)",
+                }}
+              >
+                <ConnectedAccounts
+                  callbackURL={window.location.pathname}
+                  elements={el}
+                />
+              </div>
+            )}
 
             {/* Multi-session switcher */}
             <MultiSessionSection

@@ -2,6 +2,7 @@ import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
+import { APIError } from "better-auth/api";
 import { admin, bearer, genericOAuth, magicLink, multiSession, organization, twoFactor, username } from "better-auth/plugins";
 import { logAudit } from "./audit";
 import {
@@ -12,8 +13,13 @@ import {
   twoFactorOtpEmail,
   verificationEmail,
 } from "./email";
+import {
+  findAutoJoinDomainForEmail,
+  findMFAEnforcedOrgBlockingUser,
+} from "./org-settings";
 import { ac, member, admin as orgAdmin, owner } from "./permissions";
 import { deliverEvent } from "./webhook";
+
 
 /**
  * Factory — called once per request inside the fetch() handler.
@@ -52,6 +58,32 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         secret: env.BETTER_AUTH_SECRET,
         baseURL: env.AUTH_URL,
         basePath: "/api/auth",
+
+        // ── Account linking ───────────────────────────────────────
+        //
+        // Prevents duplicate accounts when the same email is used with
+        // different providers. All active social providers are trusted so that
+        // e.g. a user who signed up with Google can later sign in with GitHub
+        // (same verified email) and get one unified account.
+        //
+        // "trusted" means: if the provider has verified the email, auto-link.
+        // Untrusted providers would require the user to confirm via a challenge.
+        // We mark all six social providers as trusted because each performs
+        // email-ownership verification in their OAuth flow.
+        account: {
+          accountLinking: {
+            enabled: true,
+            trustedProviders: [
+              "google",
+              "discord",
+              "github",
+              "microsoft",
+              "apple",
+              "facebook",
+              "email",          // credential accounts (email+password / magic-link)
+            ],
+          },
+        },
 
         // ── Error page ───────────────────────────────────────────
         onAPIError: {
@@ -110,7 +142,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
                 }
               },
               after: async (user: { id: string; name?: string | null; email?: string }) => {
-                // A new user account was created (sign-up)
+                // ── 1. Audit + webhook fan-out ─────────────────────
                 await logAudit(env.DB, {
                   userId: user.id,
                   actor: user.id,
@@ -118,17 +150,109 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
                   actorEmail: user.email ?? null,
                   action: "user.signUp",
                 }).catch(() => { }); // non-fatal
-                // Webhook fan-out — fire-and-forget
+
                 deliverEvent(env.DB, "user.signUp", {
                   userId: user.id,
                   actorName: user.name ?? null,
                   actorEmail: user.email ?? null,
                 }).catch(() => { });
+
+                // ── 2. Domain-based org auto-join ──────────────────
+                // If the user's email domain matches a verified org domain,
+                // either send an invitation or directly add them as a member
+                // depending on the org's enrollment_mode setting.
+                if (!user.email) return;
+
+                const domainRecord = await findAutoJoinDomainForEmail(
+                  env.DB,
+                  user.email
+                ).catch(() => null);
+
+                if (!domainRecord) return; // no matching domain configured
+
+                if (domainRecord.enrollment_mode === "automatic_join") {
+                  // Direct insert into org as a member — fire-and-forget
+                  const { generateId } = await import("better-auth");
+                  env.DB
+                    .prepare(`
+                      INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt)
+                      VALUES (?, ?, ?, ?, ?)
+                    `)
+                    .bind(
+                      generateId(),
+                      domainRecord.orgId,
+                      user.id,
+                      domainRecord.default_role,
+                      Date.now()
+                    )
+                    .run()
+                    .catch(() => { });
+
+                  // Log the auto-join event
+                  logAudit(env.DB, {
+                    userId: user.id,
+                    actor: user.id,
+                    actorName: user.name ?? null,
+                    actorEmail: user.email,
+                    action: "member.autoJoined",
+                    metadata: { orgId: domainRecord.orgId, domain: domainRecord.domain },
+                  }).catch(() => { });
+
+                } else {
+                  // automatic_invitation — look up org name, then send an email invite
+                  const org = await env.DB
+                    .prepare('SELECT name FROM organization WHERE id = ? LIMIT 1')
+                    .bind(domainRecord.orgId)
+                    .first<{ name: string }>()
+                    .catch(() => null);
+
+                  if (org && env.RESEND_API_KEY) {
+                    const inviteLink = `${env.DASHBOARD_URL}/accept-invitation/domain-join?orgId=${domainRecord.orgId}&userId=${user.id}`;
+                    const { subject, html } = invitationEmail({
+                      inviterName: "ralph-auth",
+                      inviterEmail: "noreply@auto-join",
+                      orgName: org.name,
+                      inviteLink,
+                      role: domainRecord.default_role,
+                    });
+                    sendEmail({
+                      to: user.email,
+                      subject,
+                      html,
+                      apiKey: env.RESEND_API_KEY,
+                    }).catch(() => { });
+                  }
+                }
               },
             },
           },
           session: {
             create: {
+              // ── MFA enforcement: block session creation if the user belongs ──
+              // to an org with require_mfa = 1 and has not set up 2FA yet.
+              //
+              // This fires BEFORE the session row is inserted in D1, so the
+              // login is hard-blocked. The APIError FORBIDDEN propagates back
+              // to the client as a 403 with { code: "MFA_REQUIRED", orgId }.
+              //
+              // The client SDK / sign-in form should detect this code and redirect
+              // the user to the 2FA setup flow before they can proceed.
+              before: async (session: { userId: string }) => {
+                const blockingOrgId = await findMFAEnforcedOrgBlockingUser(
+                  env.DB,
+                  session.userId
+                ).catch(() => null); // never block on lookup failure
+
+                if (blockingOrgId) {
+                  throw new APIError("FORBIDDEN", {
+                    message:
+                      "Your organization requires two-factor authentication. " +
+                      "Please enable 2FA on your account before signing in.",
+                    code: "MFA_REQUIRED",
+                    orgId: blockingOrgId,
+                  });
+                }
+              },
               after: async (session: {
                 userId: string;
                 ipAddress?: string | null;
