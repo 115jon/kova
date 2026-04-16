@@ -15,6 +15,12 @@ not_found_handling = "single-page-application"
 html_handling = "auto-trailing-slash"
 run_worker_first = true
 
+# ── Routes ────────────────────────────────────────────────────────────────────
+[[routes]]
+pattern = "auth.115jon.site"
+zone_name = "115jon.site"
+custom_domain = true
+
 [vars]
 # ── Dev defaults — override in production via: wrangler secret put <NAME> ──────
 # Combined worker: dashboard + server share one origin.
