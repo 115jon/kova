@@ -7,10 +7,10 @@ export default defineConfig({
   server: {
     port: 5180,
     proxy: {
-      // Proxy /api/auth/* to the Wrangler dev server so we avoid CORS issues
-      // while testing locally. The auth server runs on :8787 by default.
+      // Proxy /api/* to the combined auth+dashboard worker (Vite + Miniflare).
+      // The combined dev server runs on :5174; standalone wrangler dev is no longer used.
       "/api": {
-        target: "http://localhost:8787",
+        target: "http://localhost:5174",
         changeOrigin: true,
         secure: false,
       },

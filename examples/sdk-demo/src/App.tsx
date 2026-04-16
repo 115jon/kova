@@ -16,16 +16,16 @@ import { OrgPage } from "./pages/OrgPage";
 
 // ── SDK configuration ─────────────────────────────────────────────────────────
 //
-// IMPORTANT: authUrl MUST point at THIS app's origin (not at Wrangler directly).
+// IMPORTANT: authUrl MUST point at THIS app's origin (not at the combined worker directly).
 // The Vite dev proxy (see vite.config.ts) intercepts /api/* and forwards it to
-// http://localhost:8787 transparently.  If we pointed directly at :8787 the
+// http://localhost:5174 transparently.  If we pointed directly at :5174 the
 // browser would treat it as a cross-origin request and CORS would block it.
 //
 // PUBLISHABLE KEY: identifies this app to the ralph-auth server.
 // The server validates origin + key and applies per-app CORS allowlists.
 // See Dashboard → Applications to manage keys.
 const AUTH_URL = typeof window !== "undefined"
-  ? window.location.origin   // http://localhost:5180 in dev → proxied to :8787
+  ? window.location.origin   // http://localhost:5180 in dev → proxied to :5174
   : "http://localhost:5180";
 
 const PUBLISHABLE_KEY = "pk_dev_TlwQ68U4ywaqK8VDMUJKi7zl";
