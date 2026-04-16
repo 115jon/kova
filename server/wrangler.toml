@@ -22,13 +22,10 @@ zone_name = "115jon.site"
 custom_domain = true
 
 [vars]
-# ── Dev defaults — override in production via: wrangler secret put <NAME> ──────
+# ── Dev defaults — overridden in production via: wrangler secret put <NAME> ──────
 # Combined worker: dashboard + server share one origin.
-# Production URL: https://auth.115jon.site
-AUTH_URL = "http://localhost:5174"
-DASHBOARD_URL = "http://localhost:5174"
-# CDN — set as secret in production: wrangler secret put CDN_API_KEY
-# Dev URL overridden in .dev.vars; prod points to deployed worker.
+# Production URL is injected as a Cloudflare secret - not listed here.
+# CDN — production URL; not sensitive so kept as a plain var.
 CDN_URL = "https://cdn.115jon.site"
 
 # ── D1 Database ─────────────────────────────────────────────
