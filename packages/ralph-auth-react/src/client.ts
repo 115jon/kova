@@ -42,6 +42,14 @@ export interface ClientOptions {
    */
   authUrl: string;
 
+  /**
+   * The publishable key identifying this SDK consumer.
+   * Automatically forwarded as `X-Publishable-Key` on every request,
+   * allowing the server to resolve per-app CORS and redirect URI allowlists.
+   * @example "pk_dev_abc123"
+   */
+  publishableKey?: string;
+
   /** Selectively enable / configure plugins. All are enabled by default. */
   plugins?: PluginConfig;
 
@@ -57,7 +65,14 @@ export interface ClientOptions {
  * Call once at module level and share the result via context.
  */
 export function createRalphAuthClient(opts: ClientOptions) {
-  const { authUrl, plugins = {}, fetchOptions = {} } = opts;
+  const { authUrl, publishableKey, plugins = {}, fetchOptions = {} } = opts;
+
+  // Merge in the X-Publishable-Key header when a key is provided.
+  // This is how the server identifies which registered application is making
+  // the request and enforces its per-app CORS + redirect URI allowlists.
+  const pkHeaders: HeadersInit = publishableKey
+    ? { "X-Publishable-Key": publishableKey }
+    : {};
 
   const pluginList = buildPluginList(plugins);
 
@@ -67,6 +82,10 @@ export function createRalphAuthClient(opts: ClientOptions) {
     fetchOptions: {
       credentials: "include",
       ...fetchOptions,
+      headers: {
+        ...pkHeaders,
+        ...(fetchOptions.headers as Record<string, string> | undefined ?? {}),
+      },
     },
   });
 }

@@ -5,6 +5,9 @@
  * After submission, the component transitions to a "check your email"
  * state when `requireEmailVerification` is enabled on the server.
  *
+ * Social OAuth providers (if configured) appear above the form and share
+ * the same redirect URI enforcement + error handling as <SignIn />.
+ *
  * @example
  * ```tsx
  * <SignUp
@@ -18,8 +21,8 @@ import { type FormEvent, useState } from "react";
 import { mergeAppearance, useRalphAuth } from "../context";
 import { useSignUp } from "../hooks/use-sign-up";
 import type { SignUpProps } from "../types";
-import { ProviderIcon, providerLabel } from "./icons";
-import { Alert, Card, CardBody, CardFooter, CardHeader, FormField, SubmitButton } from "./ui";
+import { resolveAbsoluteUrl, SocialButtons } from "./social-buttons";
+import { Alert, Card, CardBody, CardFooter, CardHeader, Divider, FormField, SubmitButton } from "./ui";
 
 // ── Password strength indicator ────────────────────────────────────────────────
 
@@ -93,44 +96,6 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
-// ── Social buttons (OAuth) ────────────────────────────────────────────────────
-
-function SocialButtons({ callbackURL }: { callbackURL: string }) {
-  const { oauthProviders, client } = useRalphAuth();
-  if (!oauthProviders.length) return null;
-
-  const handleSocial = async (providerId: string) => {
-    await client.signIn.social({
-      provider: providerId,
-      callbackURL,
-      errorCallbackURL: "/sign-up?error=oauth",
-    } as Parameters<typeof client.signIn.social>[0]);
-  };
-
-  return (
-    <>
-      <div data-ra-element="socialButtonsRoot">
-        {oauthProviders.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            data-ra-element="socialButton"
-            onClick={() => void handleSocial(p.id)}
-          >
-            <ProviderIcon provider={p.id} size={18} />
-            Continue with {p.label ?? providerLabel(p.id)}
-          </button>
-        ))}
-      </div>
-      <div data-ra-element="dividerRow">
-        <div data-ra-element="dividerLine" />
-        <span data-ra-element="dividerText">or</span>
-        <div data-ra-element="dividerLine" />
-      </div>
-    </>
-  );
-}
-
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export function SignUp({
@@ -143,6 +108,7 @@ export function SignUp({
     appearance: providerAppearance,
     afterSignUpUrl: providerUrl,
     oauthProviders,
+    authUrl,
   } = useRalphAuth();
   const merged = mergeAppearance(providerAppearance, instanceAppearance);
   const el = merged.elements ?? {};
@@ -154,6 +120,8 @@ export function SignUp({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const absCallbackUrl = resolveAbsoluteUrl(authUrl, resolvedUrl);
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -172,7 +140,7 @@ export function SignUp({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    await signUp.email({ name, email, password, callbackURL: resolvedUrl }).catch(() => null);
+    await signUp.email({ name, email, password, callbackURL: absCallbackUrl }).catch(() => null);
   };
 
   if (verificationPending) {
@@ -188,7 +156,7 @@ export function SignUp({
             Didn&apos;t get it? Check your spam folder, or{" "}
             <button
               type="button"
-              onClick={() => void signUp.email({ name, email, password, callbackURL: resolvedUrl })}
+              onClick={() => void signUp.email({ name, email, password, callbackURL: absCallbackUrl })}
               style={{
                 background: "none",
                 border: "none",
@@ -220,7 +188,16 @@ export function SignUp({
       />
 
       <CardBody elements={el}>
-        {oauthProviders.length > 0 && <SocialButtons callbackURL={resolvedUrl} />}
+        {oauthProviders.length > 0 && (
+          <SocialButtons
+            callbackURL={resolvedUrl}
+            errorCallbackURL="/sign-up?error=oauth"
+            elements={el}
+          />
+        )}
+
+        {/* Divider between OAuth and form — only when both are present */}
+        {oauthProviders.length > 0 && <Divider elements={el} />}
 
         <form onSubmit={(e) => void handleSubmit(e)} noValidate>
           {error && <Alert variant="error">{error}</Alert>}

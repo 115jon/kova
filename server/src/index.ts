@@ -7,6 +7,16 @@ import {
   toPublicDef,
   validatePatch
 } from "./additional-fields";
+import {
+  createApplication,
+  deleteApplication,
+  getApplicationByPublishableKey,
+  isOriginAllowed,
+  isRedirectUriAllowed,
+  listApplications,
+  rotateSecretKey,
+  updateApplication
+} from "./applications";
 import type { AuditAction } from "./audit";
 import { logAudit, queryAuditLogs } from "./audit";
 import { createAuth } from "./auth";
@@ -20,6 +30,7 @@ import {
   sendTestPing,
   setWebhookEnabled,
 } from "./webhook";
+
 
 // ── NSFW / content-policy scan helper ─────────────────────────────────────────
 //
@@ -55,54 +66,53 @@ async function scanUpload(cdnUrl: string, cdnApiKey: string, cdnKey: string): Pr
 //     to this set AND to trustedOrigins in auth.ts.
 //     Auth server URLs: https://auth.115jon.site, https://ralph-auth.jontitor.workers.dev
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const ALLOWED_ORIGINS = new Set([
-  // Dev
+// ── Static origin allowlist (dashboard, admin tooling, dev) ──────────────────
+//
+// SDK consumer apps use the dynamic path: X-Publishable-Key triggers a D1
+// lookup for the app's allowed_origins list.  This static set is the fallback.
+const STATIC_ORIGINS = new Set([
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174",
+  "http://localhost:5175",
   "http://localhost:5180",   // SDK demo app
   "http://localhost:8787",
   "http://localhost:8888",
-  // Production â€” third-party consumers
   "https://meet.115jon.site",
   "https://ralph-meet.jontitor.workers.dev",
-  // Dashboard deployed as a Worker
   "https://ralph-auth-dashboard.jontitor.workers.dev",
-  // "https://dash.115jon.site",  // uncomment if you add a custom domain
-  // CDN dashboard (dev + prod)
-  "http://localhost:5175",
   "https://cdn.115jon.site",
 ]);
 
 /**
- * Returns a validated `Access-Control-Allow-Origin` value.
- * Only echoes the origin if it's in the allowlist â€” never wildcards credentials.
+ * Resolves the allowed CORS origin.
+ *  1. X-Publishable-Key present → look up app in D1, check its origin list.
+ *  2. Fallback to STATIC_ORIGINS.
  */
-function allowedOrigin(request: Request): string {
+async function resolvedOrigin(request: Request, db: D1Database): Promise<string> {
   const origin = request.headers.get("Origin") ?? "";
-  return ALLOWED_ORIGINS.has(origin) ? origin : "";
+  if (!origin) return "";
+  const pk = request.headers.get("X-Publishable-Key");
+  if (pk) {
+    const app = await getApplicationByPublishableKey(db, pk).catch(() => null);
+    if (app && isOriginAllowed(app, origin)) return origin;
+    if (app) return ""; // key found but origin not in app list
+  }
+  return STATIC_ORIGINS.has(origin) ? origin : "";
 }
 
-/**
- * CORS headers for preflight + actual responses.
- * Sets Vary: Origin so CDN caches don't serve wrong-origin responses.
- */
-function corsHeaders(request: Request): Record<string, string> {
-  const origin = allowedOrigin(request);
+async function corsHeaders(request: Request, db: D1Database): Promise<Record<string, string>> {
+  const origin = await resolvedOrigin(request, db);
   return {
     "Access-Control-Allow-Origin": origin || "null",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Publishable-Key",
     "Access-Control-Allow-Credentials": origin ? "true" : "false",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
 }
 
-/**
- * Minimal security headers applied to every non-auth response.
- * Better Auth manages its own headers for /api/auth/* routes.
- */
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
@@ -110,10 +120,9 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 };
 
-/** Merge CORS + security headers onto a Response. */
-function withHeaders(response: Response, request: Request): Response {
+async function withHeaders(response: Response, request: Request, db: D1Database): Promise<Response> {
   const headers = new Headers(response.headers);
-  for (const [k, v] of Object.entries({ ...corsHeaders(request), ...SECURITY_HEADERS })) {
+  for (const [k, v] of Object.entries({ ...(await corsHeaders(request, db)), ...SECURITY_HEADERS })) {
     headers.set(k, v);
   }
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
@@ -126,19 +135,79 @@ export default {
     _ctx: ExecutionContext
   ): Promise<Response> {
     const url = new URL(request.url);
+    const db = env.DB;
+    const wh = (res: Response, req: Request): Promise<Response> => withHeaders(res, req, db);
 
     // â”€â”€ CORS preflight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Validate Origin against allowlist â€” never reflect arbitrary origins.
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
-        headers: corsHeaders(request),
+        headers: await corsHeaders(request, db),
       });
     }
 
-    // â”€â”€ Auth routes â€” delegate entirely to Better Auth â”€â”€â”€â”€â”€â”€â”€â”€
-    // Better Auth uses trustedOrigins from auth.ts for its own CORS.
+
+    // -- Auth routes -- with per-app enforcement when X-Publishable-Key is set -
+    //
+    // Requests carrying X-Publishable-Key are validated against the registered
+    // application's allowlists BEFORE reaching Better Auth (which has no concept
+    // of per-app config). Two checks:
+    //
+    //   1. Origin enforcement  -- request Origin must be in the app's allowed_origins
+    //      (non-empty list). Blocks unauthorized domains from calling auth APIs.
+    //
+    //   2. callbackURL enforcement -- for sign-in / sign-up flows, the callbackURL
+    //      in the JSON body must start with one of the app's redirect_uris.
+    //      Prevents open-redirect attacks.
+    //
+    // Requests without a publishable key (admin dashboard, server-to-server)
+    // pass through unchanged -- Better Auth's trustedOrigins applies.
     if (url.pathname.startsWith("/api/auth")) {
+      const pk = request.headers.get("X-Publishable-Key");
+      if (pk) {
+        const app = await getApplicationByPublishableKey(db, pk).catch(() => null);
+        if (app) {
+          // -- 1. Origin check --
+          const origin = request.headers.get("Origin") ?? "";
+          if (origin && !isOriginAllowed(app, origin)) {
+            return wh(new Response(
+              JSON.stringify({
+                error: "origin_not_allowed",
+                message: `Origin '${origin}' is not in the allowed origins list for application '${app.name}'. Update the application's allowed origins in the ralph-auth dashboard.`,
+              }),
+              { status: 403, headers: { "Content-Type": "application/json" } }
+            ), request);
+          }
+
+          // -- 2. callbackURL / redirect URI check --
+          // Clone request body so auth.handler() gets the original stream intact.
+          const isAuthFlow = request.method === "POST" && (
+            url.pathname.includes("/sign-in/") ||
+            url.pathname.includes("/sign-up/") ||
+            url.pathname.includes("/magic-link")
+          );
+          if (isAuthFlow) {
+            try {
+              const bodyClone = request.clone();
+              const body = await bodyClone.json() as Record<string, unknown>;
+              const callbackURL = typeof body["callbackURL"] === "string" ? body["callbackURL"] : null;
+              if (callbackURL && !isRedirectUriAllowed(app, callbackURL)) {
+                return wh(new Response(
+                  JSON.stringify({
+                    error: "redirect_uri_not_allowed",
+                    message: `callbackURL '${callbackURL}' is not in the allowed redirect URIs for application '${app.name}'. Update the application's redirect URIs in the ralph-auth dashboard.`,
+                  }),
+                  { status: 403, headers: { "Content-Type": "application/json" } }
+                ), request);
+              }
+            } catch {
+              // Body not JSON or missing -- non-standard flow, pass through.
+            }
+          }
+        }
+      }
+
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       return auth.handler(request);
     }
@@ -155,7 +224,7 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
 
       const form = await request.formData().catch(() => null);
@@ -163,15 +232,15 @@ export default {
       const isFile = (v: unknown): v is { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> } =>
         typeof v === "object" && v !== null && "arrayBuffer" in v && "type" in v && "size" in v;
       if (!isFile(file)) {
-        return withHeaders(Response.json({ error: "No file provided â€” send a multipart field named 'avatar'" }, { status: 400 }), request);
+        return wh(Response.json({ error: "No file provided â€” send a multipart field named 'avatar'" }, { status: 400 }), request);
       }
 
       const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
       if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
-        return withHeaders(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
       }
       if (file.size > 10 * 1024 * 1024) {
-        return withHeaders(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
       }
 
       // Content-addressed upload — each upload gets a unique ID like Discord's
@@ -196,7 +265,7 @@ export default {
       });
       if (!cdnRes.ok) {
         const detail = await cdnRes.text().catch(() => "");
-        return withHeaders(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
+        return wh(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
       }
       const { url: imageUrl } = await cdnRes.json() as { url: string };
 
@@ -210,7 +279,7 @@ export default {
           method: "DELETE",
           headers: { "CDN-API-Key": env.CDN_API_KEY },
         }).catch(() => { });
-        return withHeaders(
+        return wh(
           Response.json({ error: "Image rejected: content policy violation" }, { status: 422 }),
           request
         );
@@ -245,7 +314,7 @@ export default {
         imageUrl,
       }).catch(() => { });
 
-      return withHeaders(Response.json({ imageUrl }), request);
+      return wh(Response.json({ imageUrl }), request);
     }
 
     // â”€â”€ Avatar upload (admin â€” CRM override) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -260,11 +329,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!role.split(",").map(r => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const targetUserId = adminAvatarMatch[1]!;
@@ -274,7 +343,7 @@ export default {
         .first<{ id: string; name: string; email: string; image: string | null }>()
         .catch(() => null);
       if (!targetUser) {
-        return withHeaders(Response.json({ error: "User not found" }, { status: 404 }), request);
+        return wh(Response.json({ error: "User not found" }, { status: 404 }), request);
       }
 
       const form = await request.formData().catch(() => null);
@@ -282,15 +351,15 @@ export default {
       const isFile2 = (v: unknown): v is { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> } =>
         typeof v === "object" && v !== null && "arrayBuffer" in v && "type" in v && "size" in v;
       if (!isFile2(file)) {
-        return withHeaders(Response.json({ error: "No file provided" }, { status: 400 }), request);
+        return wh(Response.json({ error: "No file provided" }, { status: 400 }), request);
       }
 
       const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
       if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
-        return withHeaders(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
       }
       if (file.size > 10 * 1024 * 1024) {
-        return withHeaders(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
       }
 
       // Content-addressed: unique uploadId per upload — same pattern as user self-upload.
@@ -315,7 +384,7 @@ export default {
       });
       if (!cdnRes.ok) {
         const detail = await cdnRes.text().catch(() => "");
-        return withHeaders(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
+        return wh(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
       }
       const { url: imageUrl } = await cdnRes.json() as { url: string };
 
@@ -327,7 +396,7 @@ export default {
           method: "DELETE",
           headers: { "CDN-API-Key": env.CDN_API_KEY },
         }).catch(() => { });
-        return withHeaders(
+        return wh(
           Response.json({ error: "Image rejected: content policy violation" }, { status: 422 }),
           request
         );
@@ -368,7 +437,7 @@ export default {
         targetLabel: targetUser.email,
       }).catch(() => { });
 
-      return withHeaders(Response.json({ imageUrl }), request);
+      return wh(Response.json({ imageUrl }), request);
     }
 
     // â”€â”€ Avatar remove (self) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -381,7 +450,7 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
 
       // Get current image URL to purge both the versioned URL (exactly what
@@ -422,7 +491,7 @@ export default {
         removed: true,
       }).catch(() => { });
 
-      return withHeaders(Response.json({ ok: true, previous: row?.image ?? null }), request);
+      return wh(Response.json({ ok: true, previous: row?.image ?? null }), request);
     }
 
     // â”€â”€ Avatar serve â€” legacy redirect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -454,7 +523,7 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
 
       const targetOrgId = orgAvatarUploadMatch[1]!;
@@ -469,7 +538,7 @@ export default {
           .first<{ role: string }>()
           .catch(() => null);
         if (!membership || !["owner", "admin"].includes(membership.role)) {
-          return withHeaders(Response.json({ error: "Only org owners and admins can update the org logo" }, { status: 403 }), request);
+          return wh(Response.json({ error: "Only org owners and admins can update the org logo" }, { status: 403 }), request);
         }
       }
 
@@ -480,7 +549,7 @@ export default {
         .first<{ id: string; name: string; logo: string | null }>()
         .catch(() => null);
       if (!orgRow) {
-        return withHeaders(Response.json({ error: "Organization not found" }, { status: 404 }), request);
+        return wh(Response.json({ error: "Organization not found" }, { status: 404 }), request);
       }
 
       const form = await request.formData().catch(() => null);
@@ -488,15 +557,15 @@ export default {
       const isFile = (v: unknown): v is { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> } =>
         typeof v === "object" && v !== null && "arrayBuffer" in v && "type" in v && "size" in v;
       if (!isFile(file)) {
-        return withHeaders(Response.json({ error: "No file provided — send a multipart field named 'avatar'" }, { status: 400 }), request);
+        return wh(Response.json({ error: "No file provided — send a multipart field named 'avatar'" }, { status: 400 }), request);
       }
 
       const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
       if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
-        return withHeaders(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
       }
       if (file.size > 10 * 1024 * 1024) {
-        return withHeaders(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
       }
 
       const uploadId = crypto.randomUUID().replace(/-/g, "");
@@ -518,7 +587,7 @@ export default {
       });
       if (!cdnRes.ok) {
         const detail = await cdnRes.text().catch(() => "");
-        return withHeaders(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
+        return wh(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
       }
       const { url: logoUrl } = await cdnRes.json() as { url: string };
 
@@ -530,7 +599,7 @@ export default {
           method: "DELETE",
           headers: { "CDN-API-Key": env.CDN_API_KEY },
         }).catch(() => { });
-        return withHeaders(
+        return wh(
           Response.json({ error: "Image rejected: content policy violation" }, { status: 422 }),
           request
         );
@@ -565,7 +634,7 @@ export default {
         metadata: { field: "logo" },
       }).catch(() => { });
 
-      return withHeaders(Response.json({ imageUrl: logoUrl }), request);
+      return wh(Response.json({ imageUrl: logoUrl }), request);
     }
 
     // ── Org logo remove ───────────────────────────────────────────────────────
@@ -578,7 +647,7 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
 
       const targetOrgId = orgAvatarUploadMatch[1]!;
@@ -591,7 +660,7 @@ export default {
           .first<{ role: string }>()
           .catch(() => null);
         if (!membership || !["owner", "admin"].includes(membership.role)) {
-          return withHeaders(Response.json({ error: "Only org owners and admins can update the org logo" }, { status: 403 }), request);
+          return wh(Response.json({ error: "Only org owners and admins can update the org logo" }, { status: 403 }), request);
         }
       }
 
@@ -629,7 +698,7 @@ export default {
         metadata: { field: "logo", removed: true },
       }).catch(() => { });
 
-      return withHeaders(Response.json({ ok: true, previous: orgRow2?.logo ?? null }), request);
+      return wh(Response.json({ ok: true, previous: orgRow2?.logo ?? null }), request);
     }
 
     // Better Auth's admin.setUserPassword doesn't create a credential
@@ -644,7 +713,7 @@ export default {
       // 1. Require a valid session
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
 
       // 2. Parse + validate password (same rules enforced client-side too)
@@ -653,12 +722,12 @@ export default {
         const body = await request.json() as { newPassword?: string };
         rawPassword = body.newPassword;
       } catch {
-        return withHeaders(Response.json({ error: "Invalid request body" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Invalid request body" }, { status: 400 }), request);
       }
       const newPassword = rawPassword ?? "";
       const { valid, errors } = validatePassword(newPassword);
       if (!valid) {
-        return withHeaders(
+        return wh(
           Response.json({ error: errors[0] ?? "Password does not meet requirements" }, { status: 400 }),
           request
         );
@@ -670,7 +739,7 @@ export default {
         .bind(session.user.id)
         .first<{ id: string }>();
       if (existing) {
-        return withHeaders(
+        return wh(
           Response.json(
             { error: "You already have a password. Use 'Change Password' to update it." },
             { status: 409 }
@@ -710,13 +779,13 @@ export default {
         actorEmail: session.user.email,
       }).catch(() => { });
 
-      return withHeaders(Response.json({ success: true }), request);
+      return wh(Response.json({ success: true }), request);
     }
 
     // â”€â”€ Health check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Minimal response â€” no service name or timestamp to avoid info leakage.
     if (url.pathname === "/health") {
-      return withHeaders(Response.json({ status: "ok" }), request);
+      return wh(Response.json({ status: "ok" }), request);
     }
 
     // â”€â”€ Audit log query â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -734,11 +803,11 @@ export default {
 
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!role.split(",").map(r => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const params = url.searchParams;
@@ -756,7 +825,7 @@ export default {
         metadata: row.metadata ? JSON.parse(row.metadata) : null,
       }));
 
-      return withHeaders(
+      return wh(
         Response.json({ logs: parsed, nextCursor }),
         request
       );
@@ -774,11 +843,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!role.split(",").map((r: string) => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const targetId = userDetailMatch[1];
@@ -794,7 +863,7 @@ export default {
           createdAt: number; updatedAt: number; username: string | null;
         }>();
       if (!user) {
-        return withHeaders(Response.json({ error: "User not found" }, { status: 404 }), request);
+        return wh(Response.json({ error: "User not found" }, { status: 404 }), request);
       }
 
       // 2. Linked accounts (OAuth providers + credential)
@@ -823,7 +892,7 @@ export default {
         metadata: row.metadata ? JSON.parse(row.metadata) : null,
       }));
 
-      return withHeaders(Response.json({
+      return wh(Response.json({
         user: {
           ...user,
           emailVerified: Boolean(user.emailVerified),
@@ -852,11 +921,11 @@ export default {
 
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!role.split(",").map(r => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const filterUserId = url.searchParams.get("userId");
@@ -949,7 +1018,7 @@ export default {
         };
       });
 
-      return withHeaders(Response.json({
+      return wh(Response.json({
         sessions: enriched,
         currentSessionToken: callerToken,
       }), request);
@@ -967,11 +1036,11 @@ export default {
 
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!role.split(",").map(r => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       let exceptToken: string;
@@ -1006,7 +1075,7 @@ export default {
         revokedCount: result.meta?.changes ?? 0,
       }).catch(() => { });
 
-      return withHeaders(Response.json({
+      return wh(Response.json({
         success: true,
         revokedCount: result.meta?.changes ?? 0,
       }), request);
@@ -1022,18 +1091,18 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!role.split(",").map(r => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       // ── GET: list all endpoints ───────────────────────────────────────────
       if (request.method === "GET") {
         const orgId = url.searchParams.get("orgId") ?? undefined;
         const endpoints = await listWebhookEndpoints(env.DB, { orgId });
-        return withHeaders(Response.json({ endpoints }), request);
+        return wh(Response.json({ endpoints }), request);
       }
 
       // ── POST: create endpoint ─────────────────────────────────────────────
@@ -1042,20 +1111,20 @@ export default {
         try {
           body = await request.json() as { url?: string; events?: unknown; orgId?: string };
         } catch {
-          return withHeaders(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+          return wh(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
         }
 
         if (!body.url || typeof body.url !== "string") {
-          return withHeaders(Response.json({ error: "'url' is required" }, { status: 400 }), request);
+          return wh(Response.json({ error: "'url' is required" }, { status: 400 }), request);
         }
         // Must be HTTPS in production; allow HTTP for localhost dev
         try {
           const parsed = new URL(body.url);
           if (parsed.protocol !== "https:" && parsed.hostname !== "localhost" && !parsed.hostname.startsWith("127.")) {
-            return withHeaders(Response.json({ error: "Webhook URL must use HTTPS" }, { status: 400 }), request);
+            return wh(Response.json({ error: "Webhook URL must use HTTPS" }, { status: 400 }), request);
           }
         } catch {
-          return withHeaders(Response.json({ error: "Invalid URL" }, { status: 400 }), request);
+          return wh(Response.json({ error: "Invalid URL" }, { status: 400 }), request);
         }
 
         const events = Array.isArray(body.events) && body.events.length > 0
@@ -1069,14 +1138,14 @@ export default {
           events,
         });
 
-        return withHeaders(Response.json({
+        return wh(Response.json({
           endpoint,
           // Raw secret shown ONCE — consumer must store it now
           rawSecret,
         }, { status: 201 }), request);
       }
 
-      return withHeaders(new Response("Method Not Allowed", { status: 405 }), request);
+      return wh(new Response("Method Not Allowed", { status: 405 }), request);
     }
 
     // ── Webhook endpoint: delete ─────────────────────────────────────────────
@@ -1087,19 +1156,19 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!role.split(",").map(r => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const endpointId = webhookDeleteMatch[1]!;
       const deleted = await deleteWebhookEndpoint(env.DB, endpointId);
       if (!deleted) {
-        return withHeaders(Response.json({ error: "Endpoint not found" }, { status: 404 }), request);
+        return wh(Response.json({ error: "Endpoint not found" }, { status: 404 }), request);
       }
-      return withHeaders(Response.json({ success: true }), request);
+      return wh(Response.json({ success: true }), request);
     }
 
     // ── Webhook endpoint: toggle enabled ─────────────────────────────────────
@@ -1110,11 +1179,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!role.split(",").map(r => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const endpointId = webhookPatchMatch[1]!;
@@ -1122,17 +1191,17 @@ export default {
       try {
         body = await request.json() as { enabled?: boolean };
       } catch {
-        return withHeaders(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
       }
       if (typeof body.enabled !== "boolean") {
-        return withHeaders(Response.json({ error: "'enabled' (boolean) is required" }, { status: 400 }), request);
+        return wh(Response.json({ error: "'enabled' (boolean) is required" }, { status: 400 }), request);
       }
 
       const updated = await setWebhookEnabled(env.DB, endpointId, body.enabled);
       if (!updated) {
-        return withHeaders(Response.json({ error: "Endpoint not found" }, { status: 404 }), request);
+        return wh(Response.json({ error: "Endpoint not found" }, { status: 404 }), request);
       }
-      return withHeaders(Response.json({ success: true, enabled: body.enabled }), request);
+      return wh(Response.json({ success: true, enabled: body.enabled }), request);
     }
 
     // ── Webhook endpoint: test ping ──────────────────────────────────────────
@@ -1143,17 +1212,17 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!role.split(",").map(r => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const endpointId = webhookTestMatch[1]!;
       const result = await sendTestPing(env.DB, endpointId);
       const statusCode = result.status === 404 ? 404 : 200;
-      return withHeaders(Response.json(result, { status: statusCode }), request);
+      return wh(Response.json(result, { status: statusCode }), request);
     }
 
     // ── Additional Fields: schema introspection ───────────────────────────────
@@ -1165,7 +1234,7 @@ export default {
     // No authentication required — definitions are not sensitive.
     if (url.pathname === "/api/user/fields/schema" && request.method === "GET") {
       const publicDefs = FIELD_DEFINITIONS.map(toPublicDef);
-      return withHeaders(Response.json({ fields: publicDefs }), request);
+      return wh(Response.json({ fields: publicDefs }), request);
     }
 
     // ── Additional Fields: self-service read ──────────────────────────────────
@@ -1178,11 +1247,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const storedMap = await getAdditionalFields(env.DB, session.user.id);
       const fields = hydrateFields(storedMap);
-      return withHeaders(Response.json({ fields }), request);
+      return wh(Response.json({ fields }), request);
     }
 
     // ── Additional Fields: self-service write ─────────────────────────────────
@@ -1197,28 +1266,28 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
 
       let patch: Record<string, unknown>;
       try {
         patch = await request.json() as Record<string, unknown>;
       } catch {
-        return withHeaders(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
       }
 
       if (typeof patch !== "object" || Array.isArray(patch) || patch === null) {
-        return withHeaders(Response.json({ error: "Body must be a JSON object" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Body must be a JSON object" }, { status: 400 }), request);
       }
 
       if (Object.keys(patch).length === 0) {
-        return withHeaders(Response.json({ error: "Patch must contain at least one field" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Patch must contain at least one field" }, { status: 400 }), request);
       }
 
       // Validate — reject unknown keys AND admin-only keys (selfEditableOnly: true)
       const validation = validatePatch(patch, /* selfEditableOnly */ true);
       if (!validation.valid) {
-        return withHeaders(
+        return wh(
           Response.json({ error: "Validation failed", fieldErrors: validation.errors }, { status: 422 }),
           request,
         );
@@ -1246,12 +1315,12 @@ export default {
 
       if (errors.length > 0) {
         // Partial success — some fields saved, some had errors
-        return withHeaders(
+        return wh(
           Response.json({ fields, partialErrors: errors }, { status: 207 }),
           request,
         );
       }
-      return withHeaders(Response.json({ fields }), request);
+      return wh(Response.json({ fields }), request);
     }
 
     // ── Additional Fields: admin read (any user) ──────────────────────────────
@@ -1264,11 +1333,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const callerRole = (session.user as { role?: string }).role ?? "";
       if (!callerRole.split(",").map((r: string) => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const targetUserId = adminFieldsReadMatch[1]!;
@@ -1280,12 +1349,12 @@ export default {
         .first<{ id: string }>()
         .catch(() => null);
       if (!userExists) {
-        return withHeaders(Response.json({ error: "User not found" }, { status: 404 }), request);
+        return wh(Response.json({ error: "User not found" }, { status: 404 }), request);
       }
 
       const storedMap = await getAdditionalFields(env.DB, targetUserId);
       const fields = hydrateFields(storedMap);
-      return withHeaders(Response.json({ fields }), request);
+      return wh(Response.json({ fields }), request);
     }
 
     // ── Additional Fields: admin write (any user, all fields) ─────────────────
@@ -1300,11 +1369,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const callerRole = (session.user as { role?: string }).role ?? "";
       if (!callerRole.split(",").map((r: string) => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const targetUserId = adminFieldsWriteMatch[1]!;
@@ -1316,28 +1385,28 @@ export default {
         .first<{ id: string; name: string; email: string }>()
         .catch(() => null);
       if (!targetUser) {
-        return withHeaders(Response.json({ error: "User not found" }, { status: 404 }), request);
+        return wh(Response.json({ error: "User not found" }, { status: 404 }), request);
       }
 
       let patch: Record<string, unknown>;
       try {
         patch = await request.json() as Record<string, unknown>;
       } catch {
-        return withHeaders(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
       }
 
       if (typeof patch !== "object" || Array.isArray(patch) || patch === null) {
-        return withHeaders(Response.json({ error: "Body must be a JSON object" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Body must be a JSON object" }, { status: 400 }), request);
       }
 
       if (Object.keys(patch).length === 0) {
-        return withHeaders(Response.json({ error: "Patch must contain at least one field" }, { status: 400 }), request);
+        return wh(Response.json({ error: "Patch must contain at least one field" }, { status: 400 }), request);
       }
 
       // Admin: selfEditableOnly = false — all registered fields are permitted
       const validation = validatePatch(patch, /* selfEditableOnly */ false);
       if (!validation.valid) {
-        return withHeaders(
+        return wh(
           Response.json({ error: "Validation failed", fieldErrors: validation.errors }, { status: 422 }),
           request,
         );
@@ -1365,12 +1434,12 @@ export default {
       const fields = hydrateFields(storedMap);
 
       if (errors.length > 0) {
-        return withHeaders(
+        return wh(
           Response.json({ fields, partialErrors: errors }, { status: 207 }),
           request,
         );
       }
-      return withHeaders(Response.json({ fields }), request);
+      return wh(Response.json({ fields }), request);
     }
 
     // ── Org Settings — GET + PATCH ─────────────────────────────────────────────
@@ -1385,11 +1454,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!role.split(",").map((r: string) => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const orgId = orgSettingsMatch[1]!;
@@ -1397,7 +1466,7 @@ export default {
 
       if (request.method === "GET") {
         const settings = await getOrgSettings(env.DB, orgId);
-        return withHeaders(Response.json(settings), request);
+        return wh(Response.json(settings), request);
       }
 
       if (request.method === "PATCH") {
@@ -1405,7 +1474,7 @@ export default {
         try {
           body = await request.json() as { require_mfa?: boolean };
         } catch {
-          return withHeaders(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+          return wh(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
         }
         if (typeof body.require_mfa === "boolean") {
           await setRequireMFA(env.DB, orgId, body.require_mfa);
@@ -1424,7 +1493,7 @@ export default {
           }).catch(() => { });
         }
         const settings = await getOrgSettings(env.DB, orgId);
-        return withHeaders(Response.json(settings), request);
+        return wh(Response.json(settings), request);
       }
     }
 
@@ -1442,11 +1511,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return withHeaders(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!role.split(",").map((r: string) => r.trim()).includes("admin")) {
-        return withHeaders(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const { listOrgDomains, addOrgDomain, removeOrgDomain } = await import("./org-settings");
@@ -1455,17 +1524,17 @@ export default {
         const orgId = orgDomainsListMatch[1]!;
         if (request.method === "GET") {
           const domains = await listOrgDomains(env.DB, orgId);
-          return withHeaders(Response.json({ domains }), request);
+          return wh(Response.json({ domains }), request);
         }
         if (request.method === "POST") {
           let body: { domain?: string; enrollment_mode?: string; default_role?: string };
           try {
             body = await request.json() as typeof body;
           } catch {
-            return withHeaders(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+            return wh(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
           }
           if (!body.domain || typeof body.domain !== "string") {
-            return withHeaders(Response.json({ error: "domain is required" }, { status: 400 }), request);
+            return wh(Response.json({ error: "domain is required" }, { status: 400 }), request);
           }
           const domain = await addOrgDomain(env.DB, {
             orgId,
@@ -1473,7 +1542,7 @@ export default {
             enrollment_mode: (body.enrollment_mode === "automatic_join" ? "automatic_join" : "automatic_invitation"),
             default_role: body.default_role ?? "member",
           });
-          return withHeaders(Response.json({ domain }), request);
+          return wh(Response.json({ domain }), request);
         }
       }
 
@@ -1482,12 +1551,98 @@ export default {
         const domainId = orgDomainItemMatch[2]!;
         if (request.method === "DELETE") {
           await removeOrgDomain(env.DB, domainId, orgId);
-          return withHeaders(Response.json({ ok: true }), request);
+          return wh(Response.json({ ok: true }), request);
         }
       }
     }
 
-    return withHeaders(new Response("Not found", { status: 404 }), request);
+    // ── Applications API ─────────────────────────────────────────────────────────
+    //
+    // GET    /api/admin/apps                 → list all apps
+    // POST   /api/admin/apps                 → create app (returns rawSecretKey ONCE)
+    // GET    /api/admin/apps/:id             → get single app
+    // PATCH  /api/admin/apps/:id             → update name/origins/redirectUris
+    // DELETE /api/admin/apps/:id             → delete
+    // POST   /api/admin/apps/:id/rotate-secret → rotate secret key (returns new raw sk)
+    //
+    const appListPath = url.pathname === "/api/admin/apps";
+    const appItemMatch = url.pathname.match(/^\/api\/admin\/apps\/([^/]+)$/);
+    const appRotateMatch = url.pathname.match(/^\/api\/admin\/apps\/([^/]+)\/rotate-secret$/);
+
+    if (appListPath || appItemMatch || appRotateMatch) {
+      const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user || (session.user as { role?: string }).role !== "admin") {
+        return wh(Response.json({ error: "Forbidden" }, { status: 403 }), request);
+      }
+
+      // POST /api/admin/apps/:id/rotate-secret
+      if (appRotateMatch && request.method === "POST") {
+        const id = appRotateMatch[1]!;
+        const rawSecretKey = await rotateSecretKey(env.DB, id, env.BETTER_AUTH_SECRET);
+        return wh(Response.json({ rawSecretKey }), request);
+      }
+
+      // GET /api/admin/apps
+      if (appListPath && request.method === "GET") {
+        const apps = await listApplications(env.DB);
+        return wh(Response.json({ apps }), request);
+      }
+
+      // POST /api/admin/apps
+      if (appListPath && request.method === "POST") {
+        const body = await request.json() as {
+          name: string;
+          environment: "development" | "production";
+          allowed_origins: string[];
+          redirect_uris: string[];
+        };
+        if (!body.name) {
+          return wh(Response.json({ error: "name is required" }, { status: 400 }), request);
+        }
+        const result = await createApplication(env.DB, {
+          name: body.name,
+          environment: body.environment ?? "development",
+          allowed_origins: body.allowed_origins ?? [],
+          redirect_uris: body.redirect_uris ?? [],
+          createdBy: session.user.id,
+          signingSecret: env.BETTER_AUTH_SECRET,
+        });
+        return wh(Response.json(result, { status: 201 }), request);
+      }
+
+      if (appItemMatch) {
+        const id = appItemMatch[1]!;
+
+        // GET /api/admin/apps/:id
+        if (request.method === "GET") {
+          const app = await (await import("./applications")).getApplicationById(env.DB, id);
+          if (!app) return wh(Response.json({ error: "Not found" }, { status: 404 }), request);
+          return wh(Response.json({ app }), request);
+        }
+
+        // PATCH /api/admin/apps/:id
+        if (request.method === "PATCH") {
+          const body = await request.json() as {
+            name?: string;
+            allowed_origins?: string[];
+            redirect_uris?: string[];
+          };
+          const app = await updateApplication(env.DB, id, body);
+          if (!app) return wh(Response.json({ error: "Not found" }, { status: 404 }), request);
+          return wh(Response.json({ app }), request);
+        }
+
+        // DELETE /api/admin/apps/:id
+        if (request.method === "DELETE") {
+          await deleteApplication(env.DB, id);
+          return wh(Response.json({ ok: true }), request);
+        }
+      }
+    }
+
+    return wh(new Response("Not found", { status: 404 }), request);
+
 
 
   },

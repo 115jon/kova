@@ -28,7 +28,8 @@ import {
 } from "../context";
 import { useSignIn } from "../hooks/use-sign-in";
 import type { Appearance, AppearanceElements, SignInProps, SignInTab } from "../types";
-import { FingerprintIcon, MailIcon, ProviderIcon, providerLabel } from "./icons";
+import { FingerprintIcon, MailIcon } from "./icons";
+import { resolveAbsoluteUrl, SocialButtons } from "./social-buttons";
 import {
   Alert,
   Card,
@@ -43,42 +44,6 @@ import {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function SocialButtons({
-  elements,
-  callbackURL,
-}: {
-  elements?: AppearanceElements;
-  callbackURL?: string;
-}) {
-  const { oauthProviders, client } = useRalphAuth();
-  if (!oauthProviders.length) return null;
-
-  const handleSocial = async (providerId: string) => {
-    await client.signIn.social({
-      provider: providerId,
-      callbackURL: callbackURL ?? "/",
-      errorCallbackURL: "/sign-in?error=oauth",
-    } as Parameters<typeof client.signIn.social>[0]);
-  };
-
-  return (
-    <div data-ra-element="socialButtonsRoot" style={elements?.socialButtonsRoot}>
-      {oauthProviders.map((p) => (
-        <button
-          key={p.id}
-          type="button"
-          data-ra-element="socialButton"
-          style={elements?.socialButton}
-          onClick={() => void handleSocial(p.id)}
-        >
-          <ProviderIcon provider={p.id} size={18} />
-          Continue with {p.label ?? providerLabel(p.id)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function PasskeyButton({
   elements,
   callbackURL,
@@ -86,7 +51,7 @@ function PasskeyButton({
   elements?: AppearanceElements;
   callbackURL?: string;
 }) {
-  const { client } = useRalphAuth();
+  const { client, authUrl } = useRalphAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,7 +61,7 @@ function PasskeyButton({
     try {
       await (client as unknown as {
         signIn: { passkey: (o: { callbackURL: string }) => Promise<unknown> };
-      }).signIn.passkey({ callbackURL: callbackURL ?? "/" });
+      }).signIn.passkey({ callbackURL: resolveAbsoluteUrl(authUrl, callbackURL) });
     } catch (err) {
       // Ignore user-cancel (DOMException name = "NotAllowedError")
       if (err instanceof DOMException && err.name === "NotAllowedError") return;
@@ -131,10 +96,13 @@ function EmailPasswordForm({
   elements?: AppearanceElements;
 }) {
   const { signIn, isLoading, error, twoFactorRequired } = useSignIn();
+  const { authUrl } = useRalphAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const absCallbackUrl = resolveAbsoluteUrl(authUrl, afterSignInUrl);
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -153,7 +121,7 @@ function EmailPasswordForm({
       return;
     }
     if (!validate()) return;
-    await signIn.email({ email, password, callbackURL: afterSignInUrl }).catch(() => null);
+    await signIn.email({ email, password, callbackURL: absCallbackUrl }).catch(() => null);
   };
 
   if (twoFactorRequired) {
@@ -223,9 +191,12 @@ function MagicLinkForm({
   elements?: AppearanceElements;
 }) {
   const { signIn, isLoading, error } = useSignIn();
+  const { authUrl } = useRalphAuth();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
+
+  const absCallbackUrl = resolveAbsoluteUrl(authUrl, afterSignInUrl);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -235,7 +206,7 @@ function MagicLinkForm({
       return;
     }
     try {
-      await signIn.magicLink({ email, callbackURL: afterSignInUrl });
+      await signIn.magicLink({ email, callbackURL: absCallbackUrl });
       setSent(true);
     } catch {
       // error is surfaced via the hook
@@ -309,7 +280,11 @@ export function SignIn({
         {/* OAuth social providers */}
         {oauthProviders.length > 0 && (
           <>
-            <SocialButtons elements={el} callbackURL={resolvedUrl} />
+            <SocialButtons
+              elements={el}
+              callbackURL={resolvedUrl}
+              errorCallbackURL="/sign-in?error=oauth"
+            />
             <Divider elements={el} />
           </>
         )}
@@ -345,4 +320,3 @@ export function SignIn({
 
 // Re-export appearance type for convenience
 export type { Appearance };
-

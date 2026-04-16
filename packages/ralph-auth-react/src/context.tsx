@@ -154,11 +154,13 @@ export function RalphAuthProvider({
     [publishableKey, authUrl]
   );
 
-  // Create the Better Auth client once per resolved URL
+  // Create the Better Auth client once per resolved URL + publishableKey.
+  // The key is forwarded as X-Publishable-Key on every request so the server
+  // can dynamically resolve per-app CORS and redirect URI allowlists.
   const client = useMemo(
-    () => createRalphAuthClient({ authUrl: resolvedAuthUrl, plugins }),
+    () => createRalphAuthClient({ authUrl: resolvedAuthUrl, publishableKey, plugins }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [resolvedAuthUrl]
+    [resolvedAuthUrl, publishableKey]
   );
 
   // Merge appearance variables (defaults → provider)
