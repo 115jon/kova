@@ -554,6 +554,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
           "http://localhost:3000",
           "http://localhost:5173",
           "http://localhost:5174",  // dashboard dev server
+          "http://localhost:5180",  // SDK demo app
           "http://localhost:8787",  // wrangler dev server itself
           "http://localhost:8888",  // ralph-meet dev port
           // Production — auth server self (needed for server-side calls)

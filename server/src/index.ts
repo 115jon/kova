@@ -60,6 +60,7 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174",
+  "http://localhost:5180",   // SDK demo app
   "http://localhost:8787",
   "http://localhost:8888",
   // Production â€” third-party consumers
