@@ -1,7 +1,7 @@
 import { ProviderIcon } from "@/components/BrandIcons";
 import { authClient, getSession, signIn, twoFactor } from "@/lib/auth-client";
 import { CONFIGURED_PROVIDERS } from "@/lib/providers";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
   CheckCircle,
@@ -15,6 +15,30 @@ import {
 import { useState } from "react";
 
 export const Route = createFileRoute("/sign-in")({
+  /**
+   * Redirect already-authenticated users away from the sign-in page.
+   *
+   * `beforeLoad` runs before the route component renders, so there is no
+   * visible flash of the sign-in form for signed-in users.
+   *
+   * We call getSession() (not useSession) because `beforeLoad` is not a
+   * React component — it cannot use hooks. getSession() returns the cached
+   * Better Auth session from the client-side store without firing a new
+   * network request if the session is already loaded.
+   *
+   * Note: there is intentionally NO `?redirect=` parameter support here.
+   * Cross-app post-auth redirects must go through the Applications construct
+   * (publishable key + allowed redirect_uris enforced server-side), not via
+   * an arbitrary client-supplied URL which would constitute an open redirect.
+   * External services (e.g. the CDN) should use the @ralph-auth/react SDK
+   * with a registered Application's callbackURL instead.
+   */
+  beforeLoad: async () => {
+    const session = await getSession();
+    if (session?.data?.user) {
+      throw redirect({ to: "/" });
+    }
+  },
   component: SignInPage,
 });
 
