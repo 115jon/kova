@@ -4,10 +4,15 @@
  * Supports email/password registration with optional username.
  * After successful registration, the user is redirected to `afterSignUpUrl`
  * (from provider config) unless overridden per-call.
+ *
+ * Now includes rate-limit awareness: when the server returns 429, the hook
+ * parses the `Retry-After` response header and exposes `retryAfterSeconds`
+ * in the return value so callers can present an accurate countdown to the user.
  */
 
 import { useCallback, useState } from "react";
 import { useRalphAuth } from "../context";
+import { extractRetryAfter } from "./use-rate-limit";
 
 interface SignUpEmailOpts {
   email: string;
@@ -17,7 +22,7 @@ interface SignUpEmailOpts {
   callbackURL?: string;
 }
 
-interface UseSignUpReturn {
+export interface UseSignUpReturn {
   signUp: {
     /** Register a new account with email + password. */
     email: (opts: SignUpEmailOpts) => Promise<void>;
@@ -30,7 +35,17 @@ interface UseSignUpReturn {
    * Show a "check your email" message in this state.
    */
   verificationPending: boolean;
+  /**
+   * Set to the `Retry-After` value (in seconds) when the server returns 429.
+   * `null` when not rate-limited.
+   *
+   * Pass this to `useRateLimit().recordRateLimit()` to start a countdown,
+   * or use the convenience `<RateLimitBanner>` component directly.
+   */
+  retryAfterSeconds: number | null;
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function extractMessage(err: unknown): string {
   if (!err) return "An unexpected error occurred.";
@@ -43,11 +58,25 @@ function extractMessage(err: unknown): string {
   return "An unexpected error occurred.";
 }
 
+function is429(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const a = err as Record<string, unknown>;
+  if (a["status"] === 429) return true;
+  const inner = a["error"] as Record<string, unknown> | undefined;
+  if (inner?.["status"] === 429) return true;
+  const msg = extractMessage(err).toLowerCase();
+  if (msg.includes("too many") || msg.includes("rate limit")) return true;
+  return false;
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
+
 export function useSignUp(): UseSignUpReturn {
   const { client, afterSignUpUrl } = useRalphAuth();
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verificationPending, setVerificationPending] = useState(false);
+  const [retryAfterSeconds, setRetryAfterSeconds] = useState<number | null>(null);
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -71,8 +100,17 @@ export function useSignUp(): UseSignUpReturn {
         if (data?.requiresEmailVerification) {
           setVerificationPending(true);
         }
+
+        // Clear any stale rate-limit on success
+        setRetryAfterSeconds(null);
       } catch (err) {
         setError(extractMessage(err));
+        if (is429(err)) {
+          const secs = extractRetryAfter(err);
+          setRetryAfterSeconds(secs);
+        } else {
+          setRetryAfterSeconds(null);
+        }
         throw err;
       } finally {
         setLoading(false);
@@ -87,5 +125,6 @@ export function useSignUp(): UseSignUpReturn {
     error,
     clearError,
     verificationPending,
+    retryAfterSeconds,
   };
 }

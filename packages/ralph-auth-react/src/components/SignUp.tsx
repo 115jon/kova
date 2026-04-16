@@ -8,6 +8,11 @@
  * Social OAuth providers (if configured) appear above the form and share
  * the same redirect URI enforcement + error handling as <SignIn />.
  *
+ * Rate limit feedback:
+ *  When the server returns 429 Too Many Requests on sign-up, the form
+ *  reads the `Retry-After` header and shows a `<RateLimitBanner>` with a
+ *  live countdown, disabling the submit button until the window expires.
+ *
  * @example
  * ```tsx
  * <SignUp
@@ -19,10 +24,21 @@
 
 import { type FormEvent, useState } from "react";
 import { mergeAppearance, useRalphAuth } from "../context";
+import { useRateLimit } from "../hooks/use-rate-limit";
 import { useSignUp } from "../hooks/use-sign-up";
 import type { SignUpProps } from "../types";
 import { resolveAbsoluteUrl, SocialButtons } from "./social-buttons";
-import { Alert, Card, CardBody, CardFooter, CardHeader, Divider, FormField, SubmitButton } from "./ui";
+import {
+  Alert,
+  Card,
+  CardBody,
+  CardFooter,
+  CardHeader,
+  Divider,
+  FormField,
+  RateLimitBanner,
+  SubmitButton,
+} from "./ui";
 
 // ── Password strength indicator ────────────────────────────────────────────────
 
@@ -114,7 +130,21 @@ export function SignUp({
   const el = merged.elements ?? {};
   const resolvedUrl = afterSignUpUrl ?? providerUrl;
 
-  const { signUp, isLoading, error, verificationPending } = useSignUp();
+  const { signUp, isLoading, error, verificationPending, retryAfterSeconds } = useSignUp();
+
+  // Rate-limit countdown — seeded by retryAfterSeconds from the hook
+  const {
+    isRateLimited,
+    secondsRemaining,
+    recordRateLimit,
+  } = useRateLimit();
+
+  // Seed countdown when retryAfterSeconds becomes non-null
+  const [prevRetryAfter, setPrevRetryAfter] = useState<number | null>(null);
+  if (retryAfterSeconds !== null && retryAfterSeconds !== prevRetryAfter) {
+    setPrevRetryAfter(retryAfterSeconds);
+    recordRateLimit(retryAfterSeconds);
+  }
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -139,6 +169,7 @@ export function SignUp({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (isRateLimited) return; // hard guard — button is also disabled
     if (!validate()) return;
     await signUp.email({ name, email, password, callbackURL: absCallbackUrl }).catch(() => null);
   };
@@ -200,7 +231,13 @@ export function SignUp({
         {oauthProviders.length > 0 && <Divider elements={el} />}
 
         <form onSubmit={(e) => void handleSubmit(e)} noValidate>
-          {error && <Alert variant="error">{error}</Alert>}
+          {error && !isRateLimited && <Alert variant="error">{error}</Alert>}
+          {isRateLimited && (
+            <RateLimitBanner
+              secondsRemaining={secondsRemaining}
+              totalSeconds={retryAfterSeconds ?? secondsRemaining}
+            />
+          )}
 
           <FormField
             id="ra-signup-name"
@@ -211,6 +248,7 @@ export function SignUp({
             placeholder="Jane Smith"
             autoComplete="name"
             required
+            disabled={isRateLimited}
             error={fieldErrors["name"]}
             elements={el}
           />
@@ -223,6 +261,7 @@ export function SignUp({
             placeholder="you@example.com"
             autoComplete="email"
             required
+            disabled={isRateLimited}
             error={fieldErrors["email"]}
             elements={el}
           />
@@ -235,12 +274,13 @@ export function SignUp({
             placeholder="Min. 12 characters"
             autoComplete="new-password"
             required
+            disabled={isRateLimited}
             error={fieldErrors["password"]}
             elements={el}
           />
           <PasswordStrength password={password} />
 
-          <SubmitButton isLoading={isLoading} elements={el}>
+          <SubmitButton isLoading={isLoading} disabled={isRateLimited} elements={el}>
             Create account
           </SubmitButton>
         </form>

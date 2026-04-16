@@ -67,6 +67,8 @@ export interface AppearanceElements {
   formFieldInput?: React.CSSProperties;
   formFieldError?: React.CSSProperties;
   formSubmitButton?: React.CSSProperties;
+  /** Container for the 429 rate-limit feedback banner. */
+  rateLimitBanner?: React.CSSProperties;
 
   // ── Social ──────────────────────────────────────────────────────────
   socialButtonsRoot?: React.CSSProperties;

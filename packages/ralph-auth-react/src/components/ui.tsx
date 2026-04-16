@@ -63,6 +63,121 @@ export function Alert({
   );
 }
 
+// ── RateLimitBanner ────────────────────────────────────────────────────────────
+//
+// Shown when a 429 Too Many Requests response is received.
+// Displays:
+//   • An error-toned banner with a lock icon
+//   • A live countdown: "Try again in Xs"
+//   • An animated progress bar that depletes as the cooldown expires
+//
+// Props:
+//   secondsRemaining — current tick from `useRateLimit().secondsRemaining`
+//   totalSeconds     — the original Retry-After value; used to compute bar %
+//
+// Renders nothing when secondsRemaining ≤ 0.
+
+export function RateLimitBanner({
+  secondsRemaining,
+  totalSeconds,
+}: {
+  secondsRemaining: number;
+  totalSeconds: number;
+}) {
+  if (secondsRemaining <= 0) return null;
+
+  const safeTotal = Math.max(1, totalSeconds);
+  const progress = Math.min(1, secondsRemaining / safeTotal); // 1 → 0 (full → empty)
+
+  const message =
+    secondsRemaining === 1
+      ? "Too many attempts. Try again in 1 second."
+      : `Too many attempts. Try again in ${secondsRemaining}s.`;
+
+  return (
+    <div
+      data-ra-element="rateLimitBanner"
+      role="alert"
+      aria-live="polite"
+      aria-atomic="true"
+      style={{
+        borderRadius: "var(--ra-border-radius-sm)",
+        border: "1px solid color-mix(in srgb, var(--ra-color-error) 40%, transparent)",
+        background: "color-mix(in srgb, var(--ra-color-error) 10%, var(--ra-color-surface))",
+        padding: "10px 12px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        margin: "4px 0",
+      }}
+    >
+      {/* Message row */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        {/* Lock icon */}
+        <svg
+          role="img"
+          aria-hidden="true"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="var(--ra-color-error)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ flexShrink: 0 }}
+        >
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+
+        <span
+          style={{
+            fontSize: "0.8rem",
+            color: "var(--ra-color-error)",
+            fontFamily: "var(--ra-font-family)",
+            fontWeight: 500,
+            lineHeight: 1.3,
+          }}
+        >
+          {message}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div
+        role="progressbar"
+        aria-valuenow={secondsRemaining}
+        aria-valuemin={0}
+        aria-valuemax={safeTotal}
+        aria-label={`Rate limit countdown: ${secondsRemaining} seconds remaining`}
+        style={{
+          height: 3,
+          borderRadius: 2,
+          background: "color-mix(in srgb, var(--ra-color-error) 20%, var(--ra-color-border))",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${progress * 100}%`,
+            background: "var(--ra-color-error)",
+            borderRadius: 2,
+            transition: "width 0.2s linear",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Divider ────────────────────────────────────────────────────────────────────
 
 export function Divider({

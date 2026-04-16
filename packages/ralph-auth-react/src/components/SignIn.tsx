@@ -11,6 +11,12 @@
  * All methods are shown by default. Tabs are rendered only for methods
  * that require a form (email, magic-link); OAuth + passkey are always visible.
  *
+ * Rate limit feedback:
+ *  When the server returns 429 Too Many Requests, each form variant reads
+ *  the `Retry-After` header (exposed via the `retryAfterSeconds` hook value),
+ *  starts a live countdown, disables the submit button, and renders a
+ *  `<RateLimitBanner>` with an animated progress bar.
+ *
  * @example
  * ```tsx
  * <SignIn
@@ -26,6 +32,7 @@ import {
   mergeAppearance,
   useRalphAuth,
 } from "../context";
+import { useRateLimit } from "../hooks/use-rate-limit";
 import { useSignIn } from "../hooks/use-sign-in";
 import type { Appearance, AppearanceElements, SignInProps, SignInTab } from "../types";
 import { FingerprintIcon, MailIcon } from "./icons";
@@ -38,6 +45,7 @@ import {
   CardHeader,
   Divider,
   FormField,
+  RateLimitBanner,
   SubmitButton,
   Tabs,
 } from "./ui";
@@ -95,12 +103,28 @@ function EmailPasswordForm({
   afterSignInUrl: string;
   elements?: AppearanceElements;
 }) {
-  const { signIn, isLoading, error, twoFactorRequired } = useSignIn();
+  const { signIn, isLoading, error, twoFactorRequired, retryAfterSeconds } = useSignIn();
   const { authUrl } = useRalphAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Rate-limit countdown — seeded by retryAfterSeconds from the hook
+  const {
+    isRateLimited,
+    secondsRemaining,
+    recordRateLimit,
+  } = useRateLimit();
+
+  // When retryAfterSeconds changes (new 429), seed the countdown
+  // We use a local ref-like effect: track the previous value and only call
+  // recordRateLimit when it becomes a non-null number.
+  const [prevRetryAfter, setPrevRetryAfter] = useState<number | null>(null);
+  if (retryAfterSeconds !== null && retryAfterSeconds !== prevRetryAfter) {
+    setPrevRetryAfter(retryAfterSeconds);
+    recordRateLimit(retryAfterSeconds);
+  }
 
   const absCallbackUrl = resolveAbsoluteUrl(authUrl, afterSignInUrl);
 
@@ -116,6 +140,7 @@ function EmailPasswordForm({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (isRateLimited) return; // hard guard — button is also disabled
     if (twoFactorRequired) {
       await signIn.totp({ code: totp }).catch(() => null);
       return;
@@ -131,6 +156,12 @@ function EmailPasswordForm({
           Two-factor authentication required. Enter your 6-digit code.
         </Alert>
         {error && <Alert variant="error">{error}</Alert>}
+        {isRateLimited && (
+          <RateLimitBanner
+            secondsRemaining={secondsRemaining}
+            totalSeconds={retryAfterSeconds ?? secondsRemaining}
+          />
+        )}
         <FormField
           id="ra-totp"
           label="Authenticator Code"
@@ -140,9 +171,10 @@ function EmailPasswordForm({
           placeholder="000000"
           autoComplete="one-time-code"
           required
+          disabled={isRateLimited}
           elements={elements}
         />
-        <SubmitButton isLoading={isLoading} elements={elements}>
+        <SubmitButton isLoading={isLoading} disabled={isRateLimited} elements={elements}>
           Verify Code
         </SubmitButton>
       </form>
@@ -151,7 +183,13 @@ function EmailPasswordForm({
 
   return (
     <form onSubmit={(e) => void handleSubmit(e)} noValidate>
-      {error && <Alert variant="error">{error}</Alert>}
+      {error && !isRateLimited && <Alert variant="error">{error}</Alert>}
+      {isRateLimited && (
+        <RateLimitBanner
+          secondsRemaining={secondsRemaining}
+          totalSeconds={retryAfterSeconds ?? secondsRemaining}
+        />
+      )}
       <FormField
         id="ra-email"
         label="Email address"
@@ -161,6 +199,7 @@ function EmailPasswordForm({
         placeholder="you@example.com"
         autoComplete="email"
         required
+        disabled={isRateLimited}
         error={fieldErrors["email"]}
         elements={elements}
       />
@@ -173,10 +212,11 @@ function EmailPasswordForm({
         placeholder="••••••••••••"
         autoComplete="current-password"
         required
+        disabled={isRateLimited}
         error={fieldErrors["password"]}
         elements={elements}
       />
-      <SubmitButton isLoading={isLoading} elements={elements}>
+      <SubmitButton isLoading={isLoading} disabled={isRateLimited} elements={elements}>
         Continue
       </SubmitButton>
     </form>
@@ -190,16 +230,30 @@ function MagicLinkForm({
   afterSignInUrl: string;
   elements?: AppearanceElements;
 }) {
-  const { signIn, isLoading, error } = useSignIn();
+  const { signIn, isLoading, error, retryAfterSeconds } = useSignIn();
   const { authUrl } = useRalphAuth();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
 
+  // Rate-limit countdown
+  const {
+    isRateLimited,
+    secondsRemaining,
+    recordRateLimit,
+  } = useRateLimit();
+
+  const [prevRetryAfter, setPrevRetryAfter] = useState<number | null>(null);
+  if (retryAfterSeconds !== null && retryAfterSeconds !== prevRetryAfter) {
+    setPrevRetryAfter(retryAfterSeconds);
+    recordRateLimit(retryAfterSeconds);
+  }
+
   const absCallbackUrl = resolveAbsoluteUrl(authUrl, afterSignInUrl);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (isRateLimited) return;
     setFieldError(null);
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setFieldError("Enter a valid email address.");
@@ -223,7 +277,13 @@ function MagicLinkForm({
 
   return (
     <form onSubmit={(e) => void handleSubmit(e)} noValidate>
-      {error && <Alert variant="error">{error}</Alert>}
+      {error && !isRateLimited && <Alert variant="error">{error}</Alert>}
+      {isRateLimited && (
+        <RateLimitBanner
+          secondsRemaining={secondsRemaining}
+          totalSeconds={retryAfterSeconds ?? secondsRemaining}
+        />
+      )}
       <FormField
         id="ra-magic-email"
         label="Email address"
@@ -233,10 +293,11 @@ function MagicLinkForm({
         placeholder="you@example.com"
         autoComplete="email"
         required
+        disabled={isRateLimited}
         error={fieldError}
         elements={elements}
       />
-      <SubmitButton isLoading={isLoading} elements={elements}>
+      <SubmitButton isLoading={isLoading} disabled={isRateLimited} elements={elements}>
         <MailIcon size={15} />
         Send sign-in link
       </SubmitButton>
@@ -320,3 +381,4 @@ export function SignIn({
 
 // Re-export appearance type for convenience
 export type { Appearance };
+

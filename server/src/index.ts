@@ -209,7 +209,15 @@ export default {
       }
 
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
-      return auth.handler(request);
+      // Wrap auth.handler() response with CORS + security headers.
+      //
+      // withHeaders() does `new Headers(response.headers)` first, so all headers
+      // emitted by Better Auth — including Retry-After on 429, Set-Cookie on
+      // successful sign-in, and X-RateLimit-* counters — are preserved.  Only
+      // the CORS access-control and security (X-Frame-Options, etc.) headers are
+      // added on top.  Without this, cross-origin clients receive a CORS failure
+      // on every 429, preventing the JS from reading Retry-After.
+      return wh(await auth.handler(request), request);
     }
 
     // â”€â”€ Avatar upload (self) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

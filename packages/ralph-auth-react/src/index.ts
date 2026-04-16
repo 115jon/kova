@@ -42,8 +42,19 @@ export { useLinkedAccounts } from "./hooks/use-linked-accounts";
 export { useOrganization } from "./hooks/use-organization";
 export { useSession } from "./hooks/use-session";
 export { useSignIn } from "./hooks/use-sign-in";
+export type { UseSignInReturn } from "./hooks/use-sign-in";
 export { useSignUp } from "./hooks/use-sign-up";
+export type { UseSignUpReturn } from "./hooks/use-sign-up";
 export { useUser } from "./hooks/use-user";
+
+/**
+ * Rate-limit countdown hook + utilities.
+ *
+ * Use `useRateLimit()` to build custom forms that react to 429 responses.
+ * Use `extractRetryAfter()` to parse `Retry-After` from any Better Auth error shape.
+ */
+export { extractRetryAfter, rateLimitMessage, useRateLimit } from "./hooks/use-rate-limit";
+export type { UseRateLimitReturn } from "./hooks/use-rate-limit";
 
 /**
  * Low-level context access — prefer the purpose-built hooks above.

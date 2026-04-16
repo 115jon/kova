@@ -5,9 +5,13 @@
  * OAuth redirect, passkey, and TOTP verification. Tracks loading / error
  * state per-action so you can build a completely custom sign-in UI.
  *
+ * Now includes rate-limit awareness: when the server returns 429, the hook
+ * parses the `Retry-After` response header and exposes `retryAfterSeconds`
+ * in the return value so callers can present an accurate countdown to the user.
+ *
  * @example
  * ```tsx
- * const { signIn, isLoading, error } = useSignIn();
+ * const { signIn, isLoading, error, retryAfterSeconds } = useSignIn();
  *
  * async function handleSubmit(e: FormEvent) {
  *   e.preventDefault();
@@ -18,6 +22,7 @@
 
 import { useCallback, useState } from "react";
 import { useRalphAuth } from "../context";
+import { extractRetryAfter } from "./use-rate-limit";
 
 interface SignInEmailOpts {
   email: string;
@@ -51,7 +56,7 @@ interface SignInEmailOtpVerifyOpts {
   otp: string;
 }
 
-interface UseSignInReturn {
+export interface UseSignInReturn {
   signIn: {
     /**
      * Sign in with email + password.
@@ -80,7 +85,17 @@ interface UseSignInReturn {
    * 2FA step before granting a full session.
    */
   twoFactorRequired: boolean;
+  /**
+   * Set to the `Retry-After` value (in seconds) when the server returns 429.
+   * `null` when not rate-limited.
+   *
+   * Pass this to `useRateLimit().recordRateLimit()` to start a countdown,
+   * or use the convenience `<RateLimitBanner>` component directly.
+   */
+  retryAfterSeconds: number | null;
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Extracts a human-readable message from any error shape returned by Better Auth. */
 function extractMessage(err: unknown): string {
@@ -94,11 +109,31 @@ function extractMessage(err: unknown): string {
   return "An unexpected error occurred.";
 }
 
+/**
+ * Returns `true` if the error represents an HTTP 429 Too Many Requests.
+ * Better Auth surfaces 429 via the error.status field in the onError callback,
+ * and also throws errors with a .status property in some paths.
+ */
+function is429(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const a = err as Record<string, unknown>;
+  if (a["status"] === 429) return true;
+  const inner = a["error"] as Record<string, unknown> | undefined;
+  if (inner?.["status"] === 429) return true;
+  // Better Auth also sets the message to "Too many requests" on rate limit
+  const msg = extractMessage(err).toLowerCase();
+  if (msg.includes("too many") || msg.includes("rate limit")) return true;
+  return false;
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
+
 export function useSignIn(): UseSignInReturn {
   const { client, afterSignInUrl } = useRalphAuth();
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [twoFactorRequired, setTwoFactorRequired] = useState(false);
+  const [retryAfterSeconds, setRetryAfterSeconds] = useState<number | null>(null);
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -110,6 +145,13 @@ export function useSignIn(): UseSignInReturn {
         return await fn();
       } catch (err) {
         setError(extractMessage(err));
+        // Surface Retry-After for all rate-limited actions
+        if (is429(err)) {
+          const secs = extractRetryAfter(err);
+          setRetryAfterSeconds(secs);
+        } else {
+          setRetryAfterSeconds(null);
+        }
         throw err;
       } finally {
         setLoading(false);
@@ -129,8 +171,12 @@ export function useSignIn(): UseSignInReturn {
           fetchOptions: {
             onSuccess() {
               setTwoFactorRequired(false);
+              setRetryAfterSeconds(null);
             },
-            onError(ctx: { error: { message?: string; status?: number } }) {
+            onError(ctx: {
+              error: { message?: string; status?: number };
+              response?: Response;
+            }) {
               const msg = ctx.error.message ?? "";
               // Better Auth returns this specific message for pending 2FA
               if (
@@ -138,6 +184,11 @@ export function useSignIn(): UseSignInReturn {
                 ctx.error.status === 403
               ) {
                 setTwoFactorRequired(true);
+              }
+              // Surface Retry-After via the onError callback's response object
+              if (ctx.error.status === 429 && ctx.response) {
+                const secs = extractRetryAfter({ response: ctx.response });
+                if (secs !== null) setRetryAfterSeconds(secs);
               }
             },
           },
@@ -163,6 +214,8 @@ export function useSignIn(): UseSignInReturn {
           email: opts.email,
           callbackURL: opts.callbackURL ?? afterSignInUrl,
         });
+        // Clear any stale rate-limit state on success
+        setRetryAfterSeconds(null);
       });
     },
     [client, afterSignInUrl, run]
@@ -176,6 +229,7 @@ export function useSignIn(): UseSignInReturn {
           callbackURL: opts.callbackURL ?? afterSignInUrl,
           errorCallbackURL: opts.errorCallbackURL,
         } as Parameters<typeof client.signIn.social>[0]);
+        setRetryAfterSeconds(null);
       });
     },
     [client, afterSignInUrl, run]
@@ -191,6 +245,7 @@ export function useSignIn(): UseSignInReturn {
         }).signIn.passkey({
           callbackURL: opts.callbackURL ?? afterSignInUrl,
         });
+        setRetryAfterSeconds(null);
       });
     },
     [client, afterSignInUrl, run]
@@ -211,6 +266,7 @@ export function useSignIn(): UseSignInReturn {
           callbackURL: afterSignInUrl,
         });
         setTwoFactorRequired(false);
+        setRetryAfterSeconds(null);
       });
     },
     [client, afterSignInUrl, run]
@@ -225,6 +281,7 @@ export function useSignIn(): UseSignInReturn {
           };
         }).twoFactor.verifyOtp({ code: opts.otp });
         setTwoFactorRequired(false);
+        setRetryAfterSeconds(null);
       });
     },
     [client, run]
@@ -243,5 +300,6 @@ export function useSignIn(): UseSignInReturn {
     error,
     clearError,
     twoFactorRequired,
+    retryAfterSeconds,
   };
 }
