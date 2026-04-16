@@ -9,13 +9,32 @@ interface Env {
   AUTH_URL: string;
   DASHBOARD_URL: string;
   BETTER_AUTH_SECRET: string;
+
+  // ── OAuth: Google (always required) ─────────────────────────
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
-  DISCORD_CLIENT_ID: string;
-  DISCORD_CLIENT_SECRET: string;
+
+  // ── OAuth: optional providers (set via wrangler secret put) ──
+  // Each provider is only loaded when both ID + SECRET are present.
+  DISCORD_CLIENT_ID?: string;
+  DISCORD_CLIENT_SECRET?: string;
+  GITHUB_CLIENT_ID?: string;
+  GITHUB_CLIENT_SECRET?: string;
+  MICROSOFT_CLIENT_ID?: string;
+  MICROSOFT_CLIENT_SECRET?: string;
+  APPLE_CLIENT_ID?: string;
+  APPLE_CLIENT_SECRET?: string;    // JWT generated from APPLE_PRIVATE_KEY by Better Auth
+  APPLE_TEAM_ID?: string;          // 10-char Apple Developer Team ID
+  APPLE_KEY_ID?: string;           // Key ID for the .p8 private key
+  APPLE_PRIVATE_KEY?: string;      // Contents of the .p8 file (PEM, including header/footer)
+  FACEBOOK_CLIENT_ID?: string;
+  FACEBOOK_CLIENT_SECRET?: string;
+
+  // ── Email ────────────────────────────────────────────────────
   DASHBOARD_ADMIN_EMAIL: string;
   RESEND_API_KEY: string;
-  // CDN integration
+
+  // ── CDN integration ──────────────────────────────────────────
   CDN_URL: string;
   CDN_API_KEY: string;
 }

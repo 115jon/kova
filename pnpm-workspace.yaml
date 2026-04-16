@@ -1,6 +1,7 @@
 packages:
   - 'server'
   - 'dashboard'
+  - 'packages/*'
 allowBuilds:
   esbuild: true
   sharp: true

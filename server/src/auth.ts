@@ -2,7 +2,7 @@ import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
-import { admin, bearer, magicLink, multiSession, organization, twoFactor, username } from "better-auth/plugins";
+import { admin, bearer, genericOAuth, magicLink, multiSession, organization, twoFactor, username } from "better-auth/plugins";
 import { logAudit } from "./audit";
 import {
   invitationEmail,
@@ -197,17 +197,70 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         },
 
         // ── Social providers ──────────────────────────────────────
+        //
+        // All providers are conditional on env vars being set.
+        // In local dev, set them in .dev.vars. In production, use `wrangler secret put`.
+        // Required always:  GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+        // Optional:         DISCORD_*, GITHUB_*, MICROSOFT_*, APPLE_*, FACEBOOK_*
         socialProviders: {
+          // ── Google (always required) ────────────────────────────
           google: {
             clientId: env.GOOGLE_CLIENT_ID,
             clientSecret: env.GOOGLE_CLIENT_SECRET,
           },
-          // Discord is optional — only enabled if secrets are provided
+
+          // ── Discord (conditional) ───────────────────────────────
           ...(env.DISCORD_CLIENT_ID
             ? {
               discord: {
                 clientId: env.DISCORD_CLIENT_ID,
                 clientSecret: env.DISCORD_CLIENT_SECRET,
+              },
+            }
+            : {}),
+
+          // ── GitHub ─────────────────────────────────────────────
+          ...(env.GITHUB_CLIENT_ID
+            ? {
+              github: {
+                clientId: env.GITHUB_CLIENT_ID,
+                clientSecret: env.GITHUB_CLIENT_SECRET,
+              },
+            }
+            : {}),
+
+          // ── Microsoft / Azure Entra ID ─────────────────────────
+          // tenantId: "common" allows both personal + work/school accounts.
+          // Change to a specific tenant GUID to restrict to one Azure AD tenant.
+          ...(env.MICROSOFT_CLIENT_ID
+            ? {
+              microsoft: {
+                clientId: env.MICROSOFT_CLIENT_ID,
+                clientSecret: env.MICROSOFT_CLIENT_SECRET,
+                tenantId: "common",
+              },
+            }
+            : {}),
+
+          // ── Apple Sign In ──────────────────────────────────────
+          // Required by Apple's App Store guidelines when any social login is offered.
+          // The client secret is a JWT signed with a .p8 private key;
+          // Better Auth generates this automatically from APPLE_PRIVATE_KEY.
+          ...(env.APPLE_CLIENT_ID
+            ? {
+              apple: {
+                clientId: env.APPLE_CLIENT_ID,
+                clientSecret: env.APPLE_CLIENT_SECRET,
+              },
+            }
+            : {}),
+
+          // ── Facebook ───────────────────────────────────────────
+          ...(env.FACEBOOK_CLIENT_ID
+            ? {
+              facebook: {
+                clientId: env.FACEBOOK_CLIENT_ID,
+                clientSecret: env.FACEBOOK_CLIENT_SECRET,
               },
             }
             : {}),
@@ -217,7 +270,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         plugins: [
           admin(),   // /api/auth/admin/* management endpoints
 
-          // API Key CRUD endpoints. We pass two configs: one for personal keys, one for org keys.
+          // API Key CRUD endpoints. Personal + org-scoped keys.
           apiKey([
             { configId: "personal", references: "user" },
             { configId: "organization", references: "organization" }
@@ -306,18 +359,26 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
           //   5174 in dev, custom domain in prod), this must be DASHBOARD_URL
           //   — NOT AUTH_URL. The browser embeds the page's origin in the
           //   authenticator data and the server must match it exactly.
+          // Passkey (WebAuthn) — biometric / hardware key sign-in.
           passkey({
             rpName: "ralph-auth",
             rpID: (() => {
               try {
-                // rpID = hostname of auth server (the RP)
                 return new URL(env.AUTH_URL).hostname;
               } catch {
                 return "localhost";
               }
             })(),
-            // origin = where the WebAuthn API is called from (the dashboard)
             origin: env.DASHBOARD_URL,
+          }),
+
+          // Generic OAuth / OIDC — allows custom identity providers (Keycloak,
+          // Auth0, Okta, any OIDC-compatible IdP) to be configured at runtime.
+          // Per-org OIDC connection UI in the dashboard populates the config array
+          // via the API; the empty default means no custom providers are loaded
+          // unless explicitly configured.
+          genericOAuth({
+            config: [],
           }),
         ],
 

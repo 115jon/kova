@@ -1,0 +1,348 @@
+/**
+ * <SignIn /> — drop-in, fully themeable sign-in card.
+ *
+ * Supports every auth method enabled on your ralph-auth server:
+ *  - Email + Password (with optional "remember me")
+ *  - Magic Link (passwordless)
+ *  - OAuth social providers (Google, Discord, etc.)
+ *  - WebAuthn Passkey
+ *  - TOTP / Email OTP two-factor challenge
+ *
+ * All methods are shown by default. Tabs are rendered only for methods
+ * that require a form (email, magic-link); OAuth + passkey are always visible.
+ *
+ * @example
+ * ```tsx
+ * <SignIn
+ *   afterSignInUrl="/dashboard"
+ *   signUpUrl="/sign-up"
+ *   appearance={{ variables: { colorPrimary: "#7c3aed" } }}
+ * />
+ * ```
+ */
+
+import { type FormEvent, useState } from "react";
+import {
+  mergeAppearance,
+  useRalphAuth,
+} from "../context";
+import { useSignIn } from "../hooks/use-sign-in";
+import type { Appearance, AppearanceElements, SignInProps, SignInTab } from "../types";
+import { FingerprintIcon, MailIcon, ProviderIcon, providerLabel } from "./icons";
+import {
+  Alert,
+  Card,
+  CardBody,
+  CardFooter,
+  CardHeader,
+  Divider,
+  FormField,
+  SubmitButton,
+  Tabs,
+} from "./ui";
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+function SocialButtons({
+  elements,
+  callbackURL,
+}: {
+  elements?: AppearanceElements;
+  callbackURL?: string;
+}) {
+  const { oauthProviders, client } = useRalphAuth();
+  if (!oauthProviders.length) return null;
+
+  const handleSocial = async (providerId: string) => {
+    await client.signIn.social({
+      provider: providerId,
+      callbackURL: callbackURL ?? "/",
+      errorCallbackURL: "/sign-in?error=oauth",
+    } as Parameters<typeof client.signIn.social>[0]);
+  };
+
+  return (
+    <div data-ra-element="socialButtonsRoot" style={elements?.socialButtonsRoot}>
+      {oauthProviders.map((p) => (
+        <button
+          key={p.id}
+          type="button"
+          data-ra-element="socialButton"
+          style={elements?.socialButton}
+          onClick={() => void handleSocial(p.id)}
+        >
+          <ProviderIcon provider={p.id} size={18} />
+          Continue with {p.label ?? providerLabel(p.id)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PasskeyButton({
+  elements,
+  callbackURL,
+}: {
+  elements?: AppearanceElements;
+  callbackURL?: string;
+}) {
+  const { client } = useRalphAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handlePasskey = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await (client as unknown as {
+        signIn: { passkey: (o: { callbackURL: string }) => Promise<unknown> };
+      }).signIn.passkey({ callbackURL: callbackURL ?? "/" });
+    } catch (err) {
+      // Ignore user-cancel (DOMException name = "NotAllowedError")
+      if (err instanceof DOMException && err.name === "NotAllowedError") return;
+      setError("Passkey authentication failed. Try another method.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      {error && <Alert variant="error">{error}</Alert>}
+      <button
+        type="button"
+        data-ra-element="socialButton"
+        style={elements?.socialButton}
+        disabled={loading}
+        onClick={() => void handlePasskey()}
+      >
+        <FingerprintIcon size={18} />
+        {loading ? "Authenticating…" : "Sign in with passkey"}
+      </button>
+    </>
+  );
+}
+
+function EmailPasswordForm({
+  afterSignInUrl,
+  elements,
+}: {
+  afterSignInUrl: string;
+  elements?: AppearanceElements;
+}) {
+  const { signIn, isLoading, error, twoFactorRequired } = useSignIn();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [totp, setTotp] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const validate = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!email.trim()) errs["email"] = "Email is required.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      errs["email"] = "Enter a valid email address.";
+    if (!password) errs["password"] = "Password is required.";
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (twoFactorRequired) {
+      await signIn.totp({ code: totp }).catch(() => null);
+      return;
+    }
+    if (!validate()) return;
+    await signIn.email({ email, password, callbackURL: afterSignInUrl }).catch(() => null);
+  };
+
+  if (twoFactorRequired) {
+    return (
+      <form onSubmit={(e) => void handleSubmit(e)} noValidate>
+        <Alert variant="info">
+          Two-factor authentication required. Enter your 6-digit code.
+        </Alert>
+        {error && <Alert variant="error">{error}</Alert>}
+        <FormField
+          id="ra-totp"
+          label="Authenticator Code"
+          type="text"
+          value={totp}
+          onChange={setTotp}
+          placeholder="000000"
+          autoComplete="one-time-code"
+          required
+          elements={elements}
+        />
+        <SubmitButton isLoading={isLoading} elements={elements}>
+          Verify Code
+        </SubmitButton>
+      </form>
+    );
+  }
+
+  return (
+    <form onSubmit={(e) => void handleSubmit(e)} noValidate>
+      {error && <Alert variant="error">{error}</Alert>}
+      <FormField
+        id="ra-email"
+        label="Email address"
+        type="email"
+        value={email}
+        onChange={setEmail}
+        placeholder="you@example.com"
+        autoComplete="email"
+        required
+        error={fieldErrors["email"]}
+        elements={elements}
+      />
+      <FormField
+        id="ra-password"
+        label="Password"
+        type="password"
+        value={password}
+        onChange={setPassword}
+        placeholder="••••••••••••"
+        autoComplete="current-password"
+        required
+        error={fieldErrors["password"]}
+        elements={elements}
+      />
+      <SubmitButton isLoading={isLoading} elements={elements}>
+        Continue
+      </SubmitButton>
+    </form>
+  );
+}
+
+function MagicLinkForm({
+  afterSignInUrl,
+  elements,
+}: {
+  afterSignInUrl: string;
+  elements?: AppearanceElements;
+}) {
+  const { signIn, isLoading, error } = useSignIn();
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setFieldError(null);
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setFieldError("Enter a valid email address.");
+      return;
+    }
+    try {
+      await signIn.magicLink({ email, callbackURL: afterSignInUrl });
+      setSent(true);
+    } catch {
+      // error is surfaced via the hook
+    }
+  };
+
+  if (sent) {
+    return (
+      <Alert variant="success">
+        ✉️ Magic link sent! Check your email and click the link to sign in.
+      </Alert>
+    );
+  }
+
+  return (
+    <form onSubmit={(e) => void handleSubmit(e)} noValidate>
+      {error && <Alert variant="error">{error}</Alert>}
+      <FormField
+        id="ra-magic-email"
+        label="Email address"
+        type="email"
+        value={email}
+        onChange={setEmail}
+        placeholder="you@example.com"
+        autoComplete="email"
+        required
+        error={fieldError}
+        elements={elements}
+      />
+      <SubmitButton isLoading={isLoading} elements={elements}>
+        <MailIcon size={15} />
+        Send sign-in link
+      </SubmitButton>
+    </form>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
+
+const TABS: Array<{ id: SignInTab; label: string }> = [
+  { id: "email", label: "Password" },
+  { id: "magic-link", label: "Magic Link" },
+  { id: "passkey", label: "Passkey" },
+];
+
+export function SignIn({
+  afterSignInUrl,
+  signUpUrl = "/sign-up",
+  defaultTab = "email",
+  appearance: instanceAppearance,
+  className,
+}: SignInProps) {
+  const { appearance: providerAppearance, afterSignInUrl: providerAfterSignIn, oauthProviders } =
+    useRalphAuth();
+
+  const merged = mergeAppearance(providerAppearance, instanceAppearance);
+  const el = merged.elements ?? {};
+  const resolvedUrl = afterSignInUrl ?? providerAfterSignIn;
+
+  const [activeTab, setActiveTab] = useState<SignInTab>(defaultTab);
+
+  return (
+    <Card elements={el} className={className}>
+      <CardHeader
+        title="Sign in"
+        subtitle="Welcome back. Choose your sign-in method."
+        elements={el}
+      />
+
+      <CardBody elements={el}>
+        {/* OAuth social providers */}
+        {oauthProviders.length > 0 && (
+          <>
+            <SocialButtons elements={el} callbackURL={resolvedUrl} />
+            <Divider elements={el} />
+          </>
+        )}
+
+        {/* Method tabs (email | magic-link | passkey) */}
+        <Tabs
+          tabs={TABS}
+          active={activeTab}
+          onSelect={(id) => setActiveTab(id as SignInTab)}
+          elements={el}
+        />
+
+        {activeTab === "email" && (
+          <EmailPasswordForm afterSignInUrl={resolvedUrl} elements={el} />
+        )}
+        {activeTab === "magic-link" && (
+          <MagicLinkForm afterSignInUrl={resolvedUrl} elements={el} />
+        )}
+        {activeTab === "passkey" && (
+          <PasskeyButton elements={el} callbackURL={resolvedUrl} />
+        )}
+      </CardBody>
+
+      <CardFooter elements={el}>
+        <span style={{ color: "var(--ra-color-text-tertiary)" }}>
+          Don&apos;t have an account?{" "}
+        </span>
+        <a href={signUpUrl}>Sign up</a>
+      </CardFooter>
+    </Card>
+  );
+}
+
+// Re-export appearance type for convenience
+export type { Appearance };
+

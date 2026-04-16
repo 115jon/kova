@@ -5,4 +5,5 @@ dist/
 .env.local
 .env.production
 .dev.vars
+.prod.vars
 .vscode/
