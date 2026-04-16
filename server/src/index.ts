@@ -128,6 +128,11 @@ async function withHeaders(response: Response, request: Request, db: D1Database)
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
+export function hasAdminRole(roleString: string | null | undefined): boolean {
+  if (!roleString) return false;
+  return roleString.split(",").map(r => r.trim()).includes("admin");
+}
+
 export default {
   async fetch(
     request: Request,
@@ -340,7 +345,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
-      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+      if (!hasAdminRole(role)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
@@ -538,7 +543,7 @@ export default {
 
       // Verify caller is owner or admin of this org (or global admin)
       const callerRole = (session.user as { role?: string }).role ?? "";
-      const isGlobalAdmin = callerRole.split(",").map((r: string) => r.trim()).includes("admin");
+      const isGlobalAdmin = hasAdminRole(callerRole);
       if (!isGlobalAdmin) {
         const membership = await env.DB
           .prepare(`SELECT role FROM member WHERE organizationId = ? AND userId = ? LIMIT 1`)
@@ -660,7 +665,7 @@ export default {
 
       const targetOrgId = orgAvatarUploadMatch[1]!;
       const callerRole = (session.user as { role?: string }).role ?? "";
-      const isGlobalAdmin = callerRole.split(",").map((r: string) => r.trim()).includes("admin");
+      const isGlobalAdmin = hasAdminRole(callerRole);
       if (!isGlobalAdmin) {
         const membership = await env.DB
           .prepare(`SELECT role FROM member WHERE organizationId = ? AND userId = ? LIMIT 1`)
@@ -814,7 +819,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
-      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+      if (!hasAdminRole(role)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
@@ -854,7 +859,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
-      if (!role.split(",").map((r: string) => r.trim()).includes("admin")) {
+      if (!hasAdminRole(role)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
@@ -932,7 +937,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
-      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+      if (!hasAdminRole(role)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
@@ -1047,7 +1052,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
-      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+      if (!hasAdminRole(role)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
@@ -1102,7 +1107,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
-      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+      if (!hasAdminRole(role)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
@@ -1167,7 +1172,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
-      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+      if (!hasAdminRole(role)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
@@ -1190,7 +1195,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
-      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+      if (!hasAdminRole(role)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
@@ -1223,7 +1228,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
-      if (!role.split(",").map(r => r.trim()).includes("admin")) {
+      if (!hasAdminRole(role)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
@@ -1344,7 +1349,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const callerRole = (session.user as { role?: string }).role ?? "";
-      if (!callerRole.split(",").map((r: string) => r.trim()).includes("admin")) {
+      if (!hasAdminRole(callerRole)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
@@ -1380,7 +1385,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const callerRole = (session.user as { role?: string }).role ?? "";
-      if (!callerRole.split(",").map((r: string) => r.trim()).includes("admin")) {
+      if (!hasAdminRole(callerRole)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
@@ -1465,7 +1470,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
-      if (!role.split(",").map((r: string) => r.trim()).includes("admin")) {
+      if (!hasAdminRole(role)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
@@ -1522,7 +1527,7 @@ export default {
         return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
-      if (!role.split(",").map((r: string) => r.trim()).includes("admin")) {
+      if (!hasAdminRole(role)) {
         return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
