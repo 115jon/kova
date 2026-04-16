@@ -141,7 +141,7 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
     const db = env.DB;
-    const wh = (res: Response, req: Request): Promise<Response> => withHeaders(res, req, db);
+    const withCors = (res: Response, req: Request): Promise<Response> => withHeaders(res, req, db);
 
     // â”€â”€ CORS preflight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Validate Origin against allowlist â€” never reflect arbitrary origins.
@@ -176,7 +176,7 @@ export default {
           // -- 1. Origin check --
           const origin = request.headers.get("Origin") ?? "";
           if (origin && !isOriginAllowed(app, origin)) {
-            return wh(new Response(
+            return withCors(new Response(
               JSON.stringify({
                 error: "origin_not_allowed",
                 message: `Origin '${origin}' is not in the allowed origins list for application '${app.name}'. Update the application's allowed origins in the ralph-auth dashboard.`,
@@ -198,7 +198,7 @@ export default {
               const body = await bodyClone.json() as Record<string, unknown>;
               const callbackURL = typeof body["callbackURL"] === "string" ? body["callbackURL"] : null;
               if (callbackURL && !isRedirectUriAllowed(app, callbackURL)) {
-                return wh(new Response(
+                return withCors(new Response(
                   JSON.stringify({
                     error: "redirect_uri_not_allowed",
                     message: `callbackURL '${callbackURL}' is not in the allowed redirect URIs for application '${app.name}'. Update the application's redirect URIs in the ralph-auth dashboard.`,
@@ -222,7 +222,7 @@ export default {
       // the CORS access-control and security (X-Frame-Options, etc.) headers are
       // added on top.  Without this, cross-origin clients receive a CORS failure
       // on every 429, preventing the JS from reading Retry-After.
-      return wh(await auth.handler(request), request);
+      return withCors(await auth.handler(request), request);
     }
 
     // â”€â”€ Avatar upload (self) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -237,7 +237,7 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
 
       const form = await request.formData().catch(() => null);
@@ -245,15 +245,15 @@ export default {
       const isFile = (v: unknown): v is { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> } =>
         typeof v === "object" && v !== null && "arrayBuffer" in v && "type" in v && "size" in v;
       if (!isFile(file)) {
-        return wh(Response.json({ error: "No file provided â€” send a multipart field named 'avatar'" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "No file provided â€” send a multipart field named 'avatar'" }, { status: 400 }), request);
       }
 
       const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
       if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
-        return wh(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
       }
       if (file.size > 10 * 1024 * 1024) {
-        return wh(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
       }
 
       // Content-addressed upload — each upload gets a unique ID like Discord's
@@ -278,7 +278,7 @@ export default {
       });
       if (!cdnRes.ok) {
         const detail = await cdnRes.text().catch(() => "");
-        return wh(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
+        return withCors(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
       }
       const { url: imageUrl } = await cdnRes.json() as { url: string };
 
@@ -292,7 +292,7 @@ export default {
           method: "DELETE",
           headers: { "CDN-API-Key": env.CDN_API_KEY },
         }).catch(() => { });
-        return wh(
+        return withCors(
           Response.json({ error: "Image rejected: content policy violation" }, { status: 422 }),
           request
         );
@@ -327,7 +327,7 @@ export default {
         imageUrl,
       }).catch(() => { });
 
-      return wh(Response.json({ imageUrl }), request);
+      return withCors(Response.json({ imageUrl }), request);
     }
 
     // â”€â”€ Avatar upload (admin â€” CRM override) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -342,11 +342,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(role)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const targetUserId = adminAvatarMatch[1]!;
@@ -356,7 +356,7 @@ export default {
         .first<{ id: string; name: string; email: string; image: string | null }>()
         .catch(() => null);
       if (!targetUser) {
-        return wh(Response.json({ error: "User not found" }, { status: 404 }), request);
+        return withCors(Response.json({ error: "User not found" }, { status: 404 }), request);
       }
 
       const form = await request.formData().catch(() => null);
@@ -364,15 +364,15 @@ export default {
       const isFile2 = (v: unknown): v is { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> } =>
         typeof v === "object" && v !== null && "arrayBuffer" in v && "type" in v && "size" in v;
       if (!isFile2(file)) {
-        return wh(Response.json({ error: "No file provided" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "No file provided" }, { status: 400 }), request);
       }
 
       const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
       if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
-        return wh(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
       }
       if (file.size > 10 * 1024 * 1024) {
-        return wh(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
       }
 
       // Content-addressed: unique uploadId per upload — same pattern as user self-upload.
@@ -397,7 +397,7 @@ export default {
       });
       if (!cdnRes.ok) {
         const detail = await cdnRes.text().catch(() => "");
-        return wh(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
+        return withCors(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
       }
       const { url: imageUrl } = await cdnRes.json() as { url: string };
 
@@ -409,7 +409,7 @@ export default {
           method: "DELETE",
           headers: { "CDN-API-Key": env.CDN_API_KEY },
         }).catch(() => { });
-        return wh(
+        return withCors(
           Response.json({ error: "Image rejected: content policy violation" }, { status: 422 }),
           request
         );
@@ -450,7 +450,7 @@ export default {
         targetLabel: targetUser.email,
       }).catch(() => { });
 
-      return wh(Response.json({ imageUrl }), request);
+      return withCors(Response.json({ imageUrl }), request);
     }
 
     // â”€â”€ Avatar remove (self) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -463,7 +463,7 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
 
       // Get current image URL to purge both the versioned URL (exactly what
@@ -504,7 +504,7 @@ export default {
         removed: true,
       }).catch(() => { });
 
-      return wh(Response.json({ ok: true, previous: row?.image ?? null }), request);
+      return withCors(Response.json({ ok: true, previous: row?.image ?? null }), request);
     }
 
     // â”€â”€ Avatar serve â€” legacy redirect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -536,7 +536,7 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
 
       const targetOrgId = orgAvatarUploadMatch[1]!;
@@ -551,7 +551,7 @@ export default {
           .first<{ role: string }>()
           .catch(() => null);
         if (!membership || !["owner", "admin"].includes(membership.role)) {
-          return wh(Response.json({ error: "Only org owners and admins can update the org logo" }, { status: 403 }), request);
+          return withCors(Response.json({ error: "Only org owners and admins can update the org logo" }, { status: 403 }), request);
         }
       }
 
@@ -562,7 +562,7 @@ export default {
         .first<{ id: string; name: string; logo: string | null }>()
         .catch(() => null);
       if (!orgRow) {
-        return wh(Response.json({ error: "Organization not found" }, { status: 404 }), request);
+        return withCors(Response.json({ error: "Organization not found" }, { status: 404 }), request);
       }
 
       const form = await request.formData().catch(() => null);
@@ -570,15 +570,15 @@ export default {
       const isFile = (v: unknown): v is { name: string; size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> } =>
         typeof v === "object" && v !== null && "arrayBuffer" in v && "type" in v && "size" in v;
       if (!isFile(file)) {
-        return wh(Response.json({ error: "No file provided — send a multipart field named 'avatar'" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "No file provided — send a multipart field named 'avatar'" }, { status: 400 }), request);
       }
 
       const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
       if (!(ALLOWED_TYPES as readonly string[]).includes(file.type)) {
-        return wh(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 }), request);
       }
       if (file.size > 10 * 1024 * 1024) {
-        return wh(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Image must be <= 10 MB" }, { status: 400 }), request);
       }
 
       const uploadId = crypto.randomUUID().replace(/-/g, "");
@@ -600,7 +600,7 @@ export default {
       });
       if (!cdnRes.ok) {
         const detail = await cdnRes.text().catch(() => "");
-        return wh(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
+        return withCors(Response.json({ error: `CDN upload failed: ${detail}` }, { status: 502 }), request);
       }
       const { url: logoUrl } = await cdnRes.json() as { url: string };
 
@@ -612,7 +612,7 @@ export default {
           method: "DELETE",
           headers: { "CDN-API-Key": env.CDN_API_KEY },
         }).catch(() => { });
-        return wh(
+        return withCors(
           Response.json({ error: "Image rejected: content policy violation" }, { status: 422 }),
           request
         );
@@ -647,7 +647,7 @@ export default {
         metadata: { field: "logo" },
       }).catch(() => { });
 
-      return wh(Response.json({ imageUrl: logoUrl }), request);
+      return withCors(Response.json({ imageUrl: logoUrl }), request);
     }
 
     // ── Org logo remove ───────────────────────────────────────────────────────
@@ -660,7 +660,7 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
 
       const targetOrgId = orgAvatarUploadMatch[1]!;
@@ -673,7 +673,7 @@ export default {
           .first<{ role: string }>()
           .catch(() => null);
         if (!membership || !["owner", "admin"].includes(membership.role)) {
-          return wh(Response.json({ error: "Only org owners and admins can update the org logo" }, { status: 403 }), request);
+          return withCors(Response.json({ error: "Only org owners and admins can update the org logo" }, { status: 403 }), request);
         }
       }
 
@@ -711,7 +711,7 @@ export default {
         metadata: { field: "logo", removed: true },
       }).catch(() => { });
 
-      return wh(Response.json({ ok: true, previous: orgRow2?.logo ?? null }), request);
+      return withCors(Response.json({ ok: true, previous: orgRow2?.logo ?? null }), request);
     }
 
     // Better Auth's admin.setUserPassword doesn't create a credential
@@ -726,7 +726,7 @@ export default {
       // 1. Require a valid session
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
 
       // 2. Parse + validate password (same rules enforced client-side too)
@@ -735,12 +735,12 @@ export default {
         const body = await request.json() as { newPassword?: string };
         rawPassword = body.newPassword;
       } catch {
-        return wh(Response.json({ error: "Invalid request body" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Invalid request body" }, { status: 400 }), request);
       }
       const newPassword = rawPassword ?? "";
       const { valid, errors } = validatePassword(newPassword);
       if (!valid) {
-        return wh(
+        return withCors(
           Response.json({ error: errors[0] ?? "Password does not meet requirements" }, { status: 400 }),
           request
         );
@@ -752,7 +752,7 @@ export default {
         .bind(session.user.id)
         .first<{ id: string }>();
       if (existing) {
-        return wh(
+        return withCors(
           Response.json(
             { error: "You already have a password. Use 'Change Password' to update it." },
             { status: 409 }
@@ -792,13 +792,13 @@ export default {
         actorEmail: session.user.email,
       }).catch(() => { });
 
-      return wh(Response.json({ success: true }), request);
+      return withCors(Response.json({ success: true }), request);
     }
 
     // â”€â”€ Health check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Minimal response â€” no service name or timestamp to avoid info leakage.
     if (url.pathname === "/health") {
-      return wh(Response.json({ status: "ok" }), request);
+      return withCors(Response.json({ status: "ok" }), request);
     }
 
     // â”€â”€ Audit log query â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -816,11 +816,11 @@ export default {
 
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(role)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const params = url.searchParams;
@@ -838,7 +838,7 @@ export default {
         metadata: row.metadata ? JSON.parse(row.metadata) : null,
       }));
 
-      return wh(
+      return withCors(
         Response.json({ logs: parsed, nextCursor }),
         request
       );
@@ -856,11 +856,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(role)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const targetId = userDetailMatch[1];
@@ -876,7 +876,7 @@ export default {
           createdAt: number; updatedAt: number; username: string | null;
         }>();
       if (!user) {
-        return wh(Response.json({ error: "User not found" }, { status: 404 }), request);
+        return withCors(Response.json({ error: "User not found" }, { status: 404 }), request);
       }
 
       // 2. Linked accounts (OAuth providers + credential)
@@ -905,7 +905,7 @@ export default {
         metadata: row.metadata ? JSON.parse(row.metadata) : null,
       }));
 
-      return wh(Response.json({
+      return withCors(Response.json({
         user: {
           ...user,
           emailVerified: Boolean(user.emailVerified),
@@ -934,11 +934,11 @@ export default {
 
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(role)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const filterUserId = url.searchParams.get("userId");
@@ -1031,7 +1031,7 @@ export default {
         };
       });
 
-      return wh(Response.json({
+      return withCors(Response.json({
         sessions: enriched,
         currentSessionToken: callerToken,
       }), request);
@@ -1049,11 +1049,11 @@ export default {
 
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(role)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       let exceptToken: string;
@@ -1088,7 +1088,7 @@ export default {
         revokedCount: result.meta?.changes ?? 0,
       }).catch(() => { });
 
-      return wh(Response.json({
+      return withCors(Response.json({
         success: true,
         revokedCount: result.meta?.changes ?? 0,
       }), request);
@@ -1104,18 +1104,18 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(role)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       // ── GET: list all endpoints ───────────────────────────────────────────
       if (request.method === "GET") {
         const orgId = url.searchParams.get("orgId") ?? undefined;
         const endpoints = await listWebhookEndpoints(env.DB, { orgId });
-        return wh(Response.json({ endpoints }), request);
+        return withCors(Response.json({ endpoints }), request);
       }
 
       // ── POST: create endpoint ─────────────────────────────────────────────
@@ -1124,20 +1124,20 @@ export default {
         try {
           body = await request.json() as { url?: string; events?: unknown; orgId?: string };
         } catch {
-          return wh(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+          return withCors(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
         }
 
         if (!body.url || typeof body.url !== "string") {
-          return wh(Response.json({ error: "'url' is required" }, { status: 400 }), request);
+          return withCors(Response.json({ error: "'url' is required" }, { status: 400 }), request);
         }
         // Must be HTTPS in production; allow HTTP for localhost dev
         try {
           const parsed = new URL(body.url);
           if (parsed.protocol !== "https:" && parsed.hostname !== "localhost" && !parsed.hostname.startsWith("127.")) {
-            return wh(Response.json({ error: "Webhook URL must use HTTPS" }, { status: 400 }), request);
+            return withCors(Response.json({ error: "Webhook URL must use HTTPS" }, { status: 400 }), request);
           }
         } catch {
-          return wh(Response.json({ error: "Invalid URL" }, { status: 400 }), request);
+          return withCors(Response.json({ error: "Invalid URL" }, { status: 400 }), request);
         }
 
         const events = Array.isArray(body.events) && body.events.length > 0
@@ -1151,14 +1151,14 @@ export default {
           events,
         });
 
-        return wh(Response.json({
+        return withCors(Response.json({
           endpoint,
           // Raw secret shown ONCE — consumer must store it now
           rawSecret,
         }, { status: 201 }), request);
       }
 
-      return wh(new Response("Method Not Allowed", { status: 405 }), request);
+      return withCors(new Response("Method Not Allowed", { status: 405 }), request);
     }
 
     // ── Webhook endpoint: delete ─────────────────────────────────────────────
@@ -1169,19 +1169,19 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(role)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const endpointId = webhookDeleteMatch[1]!;
       const deleted = await deleteWebhookEndpoint(env.DB, endpointId);
       if (!deleted) {
-        return wh(Response.json({ error: "Endpoint not found" }, { status: 404 }), request);
+        return withCors(Response.json({ error: "Endpoint not found" }, { status: 404 }), request);
       }
-      return wh(Response.json({ success: true }), request);
+      return withCors(Response.json({ success: true }), request);
     }
 
     // ── Webhook endpoint: toggle enabled ─────────────────────────────────────
@@ -1192,11 +1192,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(role)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const endpointId = webhookPatchMatch[1]!;
@@ -1204,17 +1204,17 @@ export default {
       try {
         body = await request.json() as { enabled?: boolean };
       } catch {
-        return wh(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
       }
       if (typeof body.enabled !== "boolean") {
-        return wh(Response.json({ error: "'enabled' (boolean) is required" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "'enabled' (boolean) is required" }, { status: 400 }), request);
       }
 
       const updated = await setWebhookEnabled(env.DB, endpointId, body.enabled);
       if (!updated) {
-        return wh(Response.json({ error: "Endpoint not found" }, { status: 404 }), request);
+        return withCors(Response.json({ error: "Endpoint not found" }, { status: 404 }), request);
       }
-      return wh(Response.json({ success: true, enabled: body.enabled }), request);
+      return withCors(Response.json({ success: true, enabled: body.enabled }), request);
     }
 
     // ── Webhook endpoint: test ping ──────────────────────────────────────────
@@ -1225,17 +1225,17 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(role)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const endpointId = webhookTestMatch[1]!;
       const result = await sendTestPing(env.DB, endpointId);
       const statusCode = result.status === 404 ? 404 : 200;
-      return wh(Response.json(result, { status: statusCode }), request);
+      return withCors(Response.json(result, { status: statusCode }), request);
     }
 
     // ── Additional Fields: schema introspection ───────────────────────────────
@@ -1247,7 +1247,7 @@ export default {
     // No authentication required — definitions are not sensitive.
     if (url.pathname === "/api/user/fields/schema" && request.method === "GET") {
       const publicDefs = FIELD_DEFINITIONS.map(toPublicDef);
-      return wh(Response.json({ fields: publicDefs }), request);
+      return withCors(Response.json({ fields: publicDefs }), request);
     }
 
     // ── Additional Fields: self-service read ──────────────────────────────────
@@ -1260,11 +1260,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const storedMap = await getAdditionalFields(env.DB, session.user.id);
       const fields = hydrateFields(storedMap);
-      return wh(Response.json({ fields }), request);
+      return withCors(Response.json({ fields }), request);
     }
 
     // ── Additional Fields: self-service write ─────────────────────────────────
@@ -1279,28 +1279,28 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
 
       let patch: Record<string, unknown>;
       try {
         patch = await request.json() as Record<string, unknown>;
       } catch {
-        return wh(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
       }
 
       if (typeof patch !== "object" || Array.isArray(patch) || patch === null) {
-        return wh(Response.json({ error: "Body must be a JSON object" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Body must be a JSON object" }, { status: 400 }), request);
       }
 
       if (Object.keys(patch).length === 0) {
-        return wh(Response.json({ error: "Patch must contain at least one field" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Patch must contain at least one field" }, { status: 400 }), request);
       }
 
       // Validate — reject unknown keys AND admin-only keys (selfEditableOnly: true)
       const validation = validatePatch(patch, /* selfEditableOnly */ true);
       if (!validation.valid) {
-        return wh(
+        return withCors(
           Response.json({ error: "Validation failed", fieldErrors: validation.errors }, { status: 422 }),
           request,
         );
@@ -1328,12 +1328,12 @@ export default {
 
       if (errors.length > 0) {
         // Partial success — some fields saved, some had errors
-        return wh(
+        return withCors(
           Response.json({ fields, partialErrors: errors }, { status: 207 }),
           request,
         );
       }
-      return wh(Response.json({ fields }), request);
+      return withCors(Response.json({ fields }), request);
     }
 
     // ── Additional Fields: admin read (any user) ──────────────────────────────
@@ -1346,11 +1346,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const callerRole = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(callerRole)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const targetUserId = adminFieldsReadMatch[1]!;
@@ -1362,12 +1362,12 @@ export default {
         .first<{ id: string }>()
         .catch(() => null);
       if (!userExists) {
-        return wh(Response.json({ error: "User not found" }, { status: 404 }), request);
+        return withCors(Response.json({ error: "User not found" }, { status: 404 }), request);
       }
 
       const storedMap = await getAdditionalFields(env.DB, targetUserId);
       const fields = hydrateFields(storedMap);
-      return wh(Response.json({ fields }), request);
+      return withCors(Response.json({ fields }), request);
     }
 
     // ── Additional Fields: admin write (any user, all fields) ─────────────────
@@ -1382,11 +1382,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const callerRole = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(callerRole)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const targetUserId = adminFieldsWriteMatch[1]!;
@@ -1398,28 +1398,28 @@ export default {
         .first<{ id: string; name: string; email: string }>()
         .catch(() => null);
       if (!targetUser) {
-        return wh(Response.json({ error: "User not found" }, { status: 404 }), request);
+        return withCors(Response.json({ error: "User not found" }, { status: 404 }), request);
       }
 
       let patch: Record<string, unknown>;
       try {
         patch = await request.json() as Record<string, unknown>;
       } catch {
-        return wh(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
       }
 
       if (typeof patch !== "object" || Array.isArray(patch) || patch === null) {
-        return wh(Response.json({ error: "Body must be a JSON object" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Body must be a JSON object" }, { status: 400 }), request);
       }
 
       if (Object.keys(patch).length === 0) {
-        return wh(Response.json({ error: "Patch must contain at least one field" }, { status: 400 }), request);
+        return withCors(Response.json({ error: "Patch must contain at least one field" }, { status: 400 }), request);
       }
 
       // Admin: selfEditableOnly = false — all registered fields are permitted
       const validation = validatePatch(patch, /* selfEditableOnly */ false);
       if (!validation.valid) {
-        return wh(
+        return withCors(
           Response.json({ error: "Validation failed", fieldErrors: validation.errors }, { status: 422 }),
           request,
         );
@@ -1447,12 +1447,12 @@ export default {
       const fields = hydrateFields(storedMap);
 
       if (errors.length > 0) {
-        return wh(
+        return withCors(
           Response.json({ fields, partialErrors: errors }, { status: 207 }),
           request,
         );
       }
-      return wh(Response.json({ fields }), request);
+      return withCors(Response.json({ fields }), request);
     }
 
     // ── Org Settings — GET + PATCH ─────────────────────────────────────────────
@@ -1467,11 +1467,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(role)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const orgId = orgSettingsMatch[1]!;
@@ -1479,7 +1479,7 @@ export default {
 
       if (request.method === "GET") {
         const settings = await getOrgSettings(env.DB, orgId);
-        return wh(Response.json(settings), request);
+        return withCors(Response.json(settings), request);
       }
 
       if (request.method === "PATCH") {
@@ -1487,7 +1487,7 @@ export default {
         try {
           body = await request.json() as { require_mfa?: boolean };
         } catch {
-          return wh(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+          return withCors(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
         }
         if (typeof body.require_mfa === "boolean") {
           await setRequireMFA(env.DB, orgId, body.require_mfa);
@@ -1506,7 +1506,7 @@ export default {
           }).catch(() => { });
         }
         const settings = await getOrgSettings(env.DB, orgId);
-        return wh(Response.json(settings), request);
+        return withCors(Response.json(settings), request);
       }
     }
 
@@ -1524,11 +1524,11 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user) {
-        return wh(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
+        return withCors(Response.json({ error: "Not authenticated" }, { status: 401 }), request);
       }
       const role = (session.user as { role?: string }).role ?? "";
       if (!hasAdminRole(role)) {
-        return wh(Response.json({ error: "Admin access required" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Admin access required" }, { status: 403 }), request);
       }
 
       const { listOrgDomains, addOrgDomain, removeOrgDomain } = await import("./org-settings");
@@ -1537,17 +1537,17 @@ export default {
         const orgId = orgDomainsListMatch[1]!;
         if (request.method === "GET") {
           const domains = await listOrgDomains(env.DB, orgId);
-          return wh(Response.json({ domains }), request);
+          return withCors(Response.json({ domains }), request);
         }
         if (request.method === "POST") {
           let body: { domain?: string; enrollment_mode?: string; default_role?: string };
           try {
             body = await request.json() as typeof body;
           } catch {
-            return wh(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
+            return withCors(Response.json({ error: "Invalid JSON body" }, { status: 400 }), request);
           }
           if (!body.domain || typeof body.domain !== "string") {
-            return wh(Response.json({ error: "domain is required" }, { status: 400 }), request);
+            return withCors(Response.json({ error: "domain is required" }, { status: 400 }), request);
           }
           const domain = await addOrgDomain(env.DB, {
             orgId,
@@ -1555,7 +1555,7 @@ export default {
             enrollment_mode: (body.enrollment_mode === "automatic_join" ? "automatic_join" : "automatic_invitation"),
             default_role: body.default_role ?? "member",
           });
-          return wh(Response.json({ domain }), request);
+          return withCors(Response.json({ domain }), request);
         }
       }
 
@@ -1564,7 +1564,7 @@ export default {
         const domainId = orgDomainItemMatch[2]!;
         if (request.method === "DELETE") {
           await removeOrgDomain(env.DB, domainId, orgId);
-          return wh(Response.json({ ok: true }), request);
+          return withCors(Response.json({ ok: true }), request);
         }
       }
     }
@@ -1586,20 +1586,20 @@ export default {
       const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
       const session = await auth.api.getSession({ headers: request.headers });
       if (!session?.user || (session.user as { role?: string }).role !== "admin") {
-        return wh(Response.json({ error: "Forbidden" }, { status: 403 }), request);
+        return withCors(Response.json({ error: "Forbidden" }, { status: 403 }), request);
       }
 
       // POST /api/admin/apps/:id/rotate-secret
       if (appRotateMatch && request.method === "POST") {
         const id = appRotateMatch[1]!;
         const rawSecretKey = await rotateSecretKey(env.DB, id, env.BETTER_AUTH_SECRET);
-        return wh(Response.json({ rawSecretKey }), request);
+        return withCors(Response.json({ rawSecretKey }), request);
       }
 
       // GET /api/admin/apps
       if (appListPath && request.method === "GET") {
         const apps = await listApplications(env.DB);
-        return wh(Response.json({ apps }), request);
+        return withCors(Response.json({ apps }), request);
       }
 
       // POST /api/admin/apps
@@ -1611,7 +1611,7 @@ export default {
           redirect_uris: string[];
         };
         if (!body.name) {
-          return wh(Response.json({ error: "name is required" }, { status: 400 }), request);
+          return withCors(Response.json({ error: "name is required" }, { status: 400 }), request);
         }
         const result = await createApplication(env.DB, {
           name: body.name,
@@ -1621,7 +1621,7 @@ export default {
           createdBy: session.user.id,
           signingSecret: env.BETTER_AUTH_SECRET,
         });
-        return wh(Response.json(result, { status: 201 }), request);
+        return withCors(Response.json(result, { status: 201 }), request);
       }
 
       if (appItemMatch) {
@@ -1630,8 +1630,8 @@ export default {
         // GET /api/admin/apps/:id
         if (request.method === "GET") {
           const app = await (await import("./applications")).getApplicationById(env.DB, id);
-          if (!app) return wh(Response.json({ error: "Not found" }, { status: 404 }), request);
-          return wh(Response.json({ app }), request);
+          if (!app) return withCors(Response.json({ error: "Not found" }, { status: 404 }), request);
+          return withCors(Response.json({ app }), request);
         }
 
         // PATCH /api/admin/apps/:id
@@ -1642,19 +1642,19 @@ export default {
             redirect_uris?: string[];
           };
           const app = await updateApplication(env.DB, id, body);
-          if (!app) return wh(Response.json({ error: "Not found" }, { status: 404 }), request);
-          return wh(Response.json({ app }), request);
+          if (!app) return withCors(Response.json({ error: "Not found" }, { status: 404 }), request);
+          return withCors(Response.json({ app }), request);
         }
 
         // DELETE /api/admin/apps/:id
         if (request.method === "DELETE") {
           await deleteApplication(env.DB, id);
-          return wh(Response.json({ ok: true }), request);
+          return withCors(Response.json({ ok: true }), request);
         }
       }
     }
 
-    return wh(new Response("Not found", { status: 404 }), request);
+    return withCors(new Response("Not found", { status: 404 }), request);
 
 
 
