@@ -16,10 +16,19 @@ import { OrgPage } from "./pages/OrgPage";
 
 // ── SDK configuration ─────────────────────────────────────────────────────────
 //
-// Because we're running behind the Vite proxy (see vite.config.ts),
-// all /api/* requests resolve to http://localhost:8787.
-// So we point authUrl at the current origin and the proxy handles the rest.
-const AUTH_URL = "http://localhost:8787";
+// IMPORTANT: authUrl MUST point at THIS app's origin (not at Wrangler directly).
+// The Vite dev proxy (see vite.config.ts) intercepts /api/* and forwards it to
+// http://localhost:8787 transparently.  If we pointed directly at :8787 the
+// browser would treat it as a cross-origin request and CORS would block it.
+//
+// PUBLISHABLE KEY: identifies this app to the ralph-auth server.
+// The server validates origin + key and applies per-app CORS allowlists.
+// See Dashboard → Applications to manage keys.
+const AUTH_URL = typeof window !== "undefined"
+  ? window.location.origin   // http://localhost:5180 in dev → proxied to :8787
+  : "http://localhost:5180";
+
+const PUBLISHABLE_KEY = "pk_dev_TlwQ68U4ywaqK8VDMUJKi7zl";
 
 type Page = "auth" | "hooks" | "org" | "linked";
 
@@ -36,14 +45,15 @@ export default function App() {
   return (
     <RalphAuthProvider
       authUrl={AUTH_URL}
+      publishableKey={PUBLISHABLE_KEY}
       afterSignInUrl="/"
       afterSignUpUrl="/"
       afterSignOutUrl="/"
       oauthProviders={[
-        { id: "google", name: "Google" },
-        { id: "github", name: "GitHub" },
-        { id: "discord", name: "Discord" },
-        { id: "microsoft", name: "Microsoft" },
+        { id: "google", label: "Google" },
+        { id: "github", label: "GitHub" },
+        { id: "discord", label: "Discord" },
+        { id: "microsoft", label: "Microsoft" },
       ]}
     >
       <div className="app">

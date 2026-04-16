@@ -39,7 +39,7 @@ export function AuthDemoPage() {
     return (
       <div className="page">
         <div className="hero">
-          <h1>You are <span>signed in</span> ✓</h1>
+          <h1>You are <span>signed in</span> ✅</h1>
           <p>The SDK correctly returned an active session. Use the tabs to explore other features.</p>
         </div>
 
@@ -142,8 +142,8 @@ function ManualAuthForm({ onLog }: { onLog: ReturnType<typeof useLog>["log"] }) 
   const [name, setName] = useState("Test User");
   const [error, setError] = useState<string | null>(null);
 
-  const { signIn, loading: siLoading } = useSignIn();
-  const { signUp, loading: suLoading } = useSignUp();
+  const { signIn, isLoading: siLoading } = useSignIn();
+  const { signUp, isLoading: suLoading } = useSignUp();
   const loading = siLoading || suLoading;
 
   const handleSubmit = async (e: React.FormEvent) => {
