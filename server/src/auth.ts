@@ -59,32 +59,6 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         baseURL: env.AUTH_URL,
         basePath: "/api/auth",
 
-        // ── Cross-subdomain session cookies ───────────────────────
-        //
-        // Both auth.115jon.site (dashboard) and cdn.115jon.site share
-        // the same parent domain 115jon.site. By scoping the session
-        // cookie to the parent domain we allow the CDN's session-check
-        // proxy to forward a real credential to Better Auth.
-        //
-        // In local dev AUTH_URL is localhost so this block is skipped
-        // (localhost has no meaningful parent domain to share).
-        advanced: {
-          cookies: (() => {
-            try {
-              const host = new URL(env.AUTH_URL ?? "").hostname;
-              // Only scope to parent when there's a real registered domain
-              // (i.e. more than one dot, not "localhost" / bare IP).
-              const parts = host.split(".");
-              if (parts.length >= 3) {
-                // e.g. auth.115jon.site → .115jon.site
-                const parentDomain = "." + parts.slice(-2).join(".");
-                return { sessionToken: { domain: parentDomain } };
-              }
-            } catch { /* ignore parse errors in dev */ }
-            return {};
-          })(),
-        },
-
         // ── Account linking ───────────────────────────────────────
         //
         // Prevents duplicate accounts when the same email is used with
