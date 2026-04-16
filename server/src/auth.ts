@@ -542,30 +542,27 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
 
         // ── Trusted origins (CORS) ────────────────────────────────
         //
-        // ⚠️  PRODUCTION NOTE: Also update ALLOWED_ORIGINS in index.ts.
-        //     Auth server will be reachable at:
-        //       https://auth.115jon.site
-        //       https://ralph-auth.jontitor.workers.dev
-        //     TODO: add production dashboard Pages URL once deployed, e.g.:
-        //       "https://ralph-auth-dashboard.pages.dev"
-        // ────────────────────────────────────────────────────────
+        // Combined worker: dashboard + server share one origin so the auth
+        // server's own origin is the only Cloudflare URL needed.
+        // SDK consumers (ralph-meet, CDN, etc.) are listed explicitly.
+        //
+        // ⚠️  PRODUCTION: set to https://auth.115jon.site once deployed.
         trustedOrigins: [
-          // Dev
+          // Dev — combined Vite + Miniflare dev server
+          "http://localhost:5174",
+          // Dev — other local services
           "http://localhost:3000",
           "http://localhost:5173",
-          "http://localhost:5174",  // dashboard dev server
+          "http://localhost:5175",
           "http://localhost:5180",  // SDK demo app
-          "http://localhost:8787",  // wrangler dev server itself
           "http://localhost:8888",  // ralph-meet dev port
-          // Production — auth server self (needed for server-side calls)
+          // Production — auth server (combined)
           "https://auth.115jon.site",
-          "https://ralph-auth.jontitor.workers.dev",
+          "https://ralph-auth-server.jontitor.workers.dev",
           // Production — external consumers
           "https://meet.115jon.site",
           "https://ralph-meet.jontitor.workers.dev",
-          // Production dashboard
-          "https://ralph-auth-dashboard.jontitor.workers.dev",
-          // "https://dash.115jon.site",  // uncomment if you add a custom domain
+          "https://cdn.115jon.site",
         ],
       }
     )

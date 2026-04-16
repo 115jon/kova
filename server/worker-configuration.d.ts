@@ -4,6 +4,7 @@ interface Env {
   // ── Cloudflare bindings ──────────────────────────────────────
   DB: D1Database;
   KV: KVNamespace;
+  ASSETS: Fetcher;  // Workers Assets — serves the dashboard SPA
 
   // ── Runtime vars (wrangler.toml [vars] + secrets) ────────────
   AUTH_URL: string;

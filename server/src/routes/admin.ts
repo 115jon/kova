@@ -12,6 +12,13 @@ import { createAuth } from "../auth";
 import { parseDevice, parseGeo } from "../device";
 import { ALLOWED_IMAGE_TYPES, isFileLike, scanUpload } from "../lib/cdn";
 import { hasAdminRole } from "../lib/roles";
+import {
+  addOrgDomain,
+  getOrgSettings,
+  listOrgDomains,
+  removeOrgDomain,
+  setRequireMFA,
+} from "../org-settings";
 import { deliverEvent } from "../webhook";
 
 const adminRouter = new Hono<{ Bindings: Env }>();
@@ -476,7 +483,6 @@ adminRouter.get("/orgs/:orgId/settings", async (c) => {
   if (!hasAdminRole((session.user as { role?: string }).role)) {
     return Response.json({ error: "Admin access required" }, { status: 403 });
   }
-  const { getOrgSettings } = await import("../org-settings");
   const settings = await getOrgSettings(env.DB, orgId);
   return Response.json(settings);
 });
@@ -501,7 +507,6 @@ adminRouter.patch("/orgs/:orgId/settings", async (c) => {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { getOrgSettings, setRequireMFA } = await import("../org-settings");
   if (typeof body.require_mfa === "boolean") {
     await setRequireMFA(env.DB, orgId, body.require_mfa);
     await logAudit(env.DB, {
@@ -538,7 +543,6 @@ adminRouter.get("/orgs/:orgId/domains", async (c) => {
   if (!hasAdminRole((session.user as { role?: string }).role)) {
     return Response.json({ error: "Admin access required" }, { status: 403 });
   }
-  const { listOrgDomains } = await import("../org-settings");
   const domains = await listOrgDomains(env.DB, orgId);
   return Response.json({ domains });
 });
@@ -563,7 +567,6 @@ adminRouter.post("/orgs/:orgId/domains", async (c) => {
   if (!body.domain || typeof body.domain !== "string") {
     return Response.json({ error: "domain is required" }, { status: 400 });
   }
-  const { addOrgDomain } = await import("../org-settings");
   const domain = await addOrgDomain(env.DB, {
     orgId,
     domain: body.domain,
@@ -585,7 +588,6 @@ adminRouter.delete("/orgs/:orgId/domains/:domainId", async (c) => {
   if (!hasAdminRole((session.user as { role?: string }).role)) {
     return Response.json({ error: "Admin access required" }, { status: 403 });
   }
-  const { removeOrgDomain } = await import("../org-settings");
   await removeOrgDomain(env.DB, domainId, orgId);
   return Response.json({ ok: true });
 });

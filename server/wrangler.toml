@@ -3,13 +3,23 @@ main = "src/index.ts"
 compatibility_date = "2026-04-12"
 compatibility_flags = ["nodejs_compat"]
 
+# ── Static Assets (dashboard SPA) ─────────────────────────────────────────────
+# run_worker_first = true  → ALL requests hit the Hono worker first.
+# API routes (/api/*, /health) are handled by Hono.
+# SPA routes (/, /sign-in, /dashboard/*) fall through to app.notFound()
+# which calls env.ASSETS.fetch(request) → Workers Assets serves index.html.
+[assets]
+binding = "ASSETS"
+directory = "../dashboard/dist/client"
+not_found_handling = "single-page-application"
+html_handling = "auto-trailing-slash"
+run_worker_first = true
+
 [vars]
 # ── Dev defaults — override in production via: wrangler secret put <NAME> ──────
-# Production AUTH_URL will be:   https://auth.115jon.site
-#                           or:  https://ralph-auth.jontitor.workers.dev
-AUTH_URL = "http://localhost:8787"
-# Production DASHBOARD_URL will be your Cloudflare Pages URL, e.g.:
-#   https://ralph-auth-dashboard.pages.dev   (or a custom domain)
+# Combined worker: dashboard + server share one origin.
+# Production URL: https://auth.115jon.site
+AUTH_URL = "http://localhost:5174"
 DASHBOARD_URL = "http://localhost:5174"
 # CDN — set as secret in production: wrangler secret put CDN_API_KEY
 # Dev URL overridden in .dev.vars; prod points to deployed worker.
@@ -28,7 +38,7 @@ id = "aecb44a2caff4a65a65a6f5c8e5c375e"
 
 
 [dev]
-port = 8787
+port = 5174
 
 [observability.logs]
 enabled = true

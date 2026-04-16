@@ -7,7 +7,11 @@
  *   Prod: wrangler secret put GITHUB_CLIENT_ID
  */
 
-const AUTH_SERVER = import.meta.env.VITE_AUTH_URL || "http://localhost:8787";
+// Combined worker: dashboard + server share the same origin.
+// VITE_AUTH_URL is intentionally empty in the combined setup — callback URLs
+// are built as relative paths (empty prefix) which resolve to the current host.
+// Set VITE_AUTH_URL only if the server is on a different origin than the dashboard.
+const AUTH_SERVER = import.meta.env.VITE_AUTH_URL || "";
 
 export type ProviderId =
   | "google"

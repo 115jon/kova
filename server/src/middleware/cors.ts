@@ -11,16 +11,20 @@ import { getApplicationByPublishableKey, isOriginAllowed } from "../applications
 //     to this set AND to trustedOrigins in auth.ts.
 //     Auth server URLs: https://auth.115jon.site, https://ralph-auth.jontitor.workers.dev
 export const STATIC_ORIGINS = new Set([
+  // Dev — combined Vite + Miniflare dev server
+  "http://localhost:5174",
+  // Dev — other local services
   "http://localhost:3000",
   "http://localhost:5173",
-  "http://localhost:5174",
   "http://localhost:5175",
   "http://localhost:5180",   // SDK demo app
-  "http://localhost:8787",
-  "http://localhost:8888",
+  "http://localhost:8888",   // ralph-meet dev port
+  // Production — combined auth worker
+  "https://auth.115jon.site",
+  "https://ralph-auth-server.jontitor.workers.dev",
+  // Production — external SDK consumers
   "https://meet.115jon.site",
   "https://ralph-meet.jontitor.workers.dev",
-  "https://ralph-auth-dashboard.jontitor.workers.dev",
   "https://cdn.115jon.site",
 ]);
 

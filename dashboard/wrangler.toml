@@ -1,16 +1,15 @@
-name = "ralph-auth-dashboard"
+# ── NOTE ─────────────────────────────────────────────────────────────────────
+# The dashboard is no longer deployed as a standalone worker.
+# It is bundled into the auth server via [assets] in server/wrangler.toml.
+#
+# Dev:    pnpm --filter dashboard dev      → Vite + Miniflare (Hono worker at :5174)
+# Build:  pnpm --filter dashboard build    → emit SPA to dist/client/
+# Deploy: pnpm --filter server deploy      → builds dashboard first, then deploys
+#         (or: pnpm --filter dashboard deploy  → build + wrangler deploy from server/)
+# ─────────────────────────────────────────────────────────────────────────────
+name = "ralph-auth-server"
 compatibility_date = "2026-04-12"
 compatibility_flags = ["nodejs_compat"]
-
-# This worker serves the dashboard SPA as static assets via Cloudflare Workers Assets.
-# Deploy with: pnpm --filter dashboard deploy
-# URL: https://ralph-auth-dashboard.jontitor.workers.dev
-#      (or https://dash.115jon.site if you add a custom domain)
-
-[assets]
-directory = "./dist/client"
-html_handling = "auto-trailing-slash"
-not_found_handling = "single-page-application"
 
 [dev]
 port = 5174

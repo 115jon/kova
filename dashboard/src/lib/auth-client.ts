@@ -10,8 +10,9 @@ import {
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
-// In dev: Vite proxies /api → http://localhost:8787, so we use a relative
-// base URL. In prod: set VITE_AUTH_URL to the real auth server URL.
+// Combined worker: server + dashboard share the same origin, so AUTH_URL is
+// intentionally empty (relative URLs). Set VITE_AUTH_URL only when running the
+// server on a separate origin (e.g. standalone wrangler dev at :8787).
 const AUTH_URL = (import.meta.env.VITE_AUTH_URL as string) ?? "";
 
 export const authClient = createAuthClient({

@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "deploy": "vite build && wrangler deploy",
-    "cf-typegen": "wrangler types"
+    "deploy": "pnpm build && wrangler deploy --config ../server/wrangler.toml",
+    "cf-typegen": "wrangler types --config ../server/wrangler.toml"
   },
   "dependencies": {
     "@better-auth/api-key": "^1.6.2",
