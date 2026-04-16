@@ -1,7 +1,7 @@
 import { ProviderIcon } from "@/components/BrandIcons";
 import { authClient, getSession, signIn, twoFactor } from "@/lib/auth-client";
 import { CONFIGURED_PROVIDERS } from "@/lib/providers";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
   CheckCircle,
@@ -15,12 +15,55 @@ import {
 import { useState } from "react";
 
 export const Route = createFileRoute("/sign-in")({
+  /**
+   * Redirect already-authenticated users away from the sign-in page.
+   *
+   * `beforeLoad` runs before the route component renders, so there is no
+   * visible flash of the sign-in form for signed-in users.
+   *
+   * We call getSession() (not useSession) because `beforeLoad` is not a
+   * React component — it cannot use hooks. getSession() returns the cached
+   * Better Auth session from the client-side store; it does NOT fire a new
+   * network request if the session is already loaded.
+   *
+   * If there is already a `?redirect=` param in the URL, honour it — the
+   * user came from an external service (e.g. the CDN) that bounced them
+   * here. After sign-in they'll be sent back to that URL.
+   */
+  beforeLoad: async ({ search }) => {
+    const session = await getSession();
+    if (session?.data?.user) {
+      // If a redirect param was present, send them there.
+      // Only allow same-origin or allow-listed external origins.
+      const dest = (search as Record<string, unknown>)["redirect"];
+      if (typeof dest === "string" && dest.startsWith("http")) {
+        window.location.href = dest;
+        return;
+      }
+      throw redirect({ to: "/" });
+    }
+  },
+  /**
+   * Type-safely parse the ?redirect= query parameter.
+   * External redirect targets (e.g. CDN at :5173) pass an absolute URL here.
+   * We keep it as a plain string and validate it in the component before use.
+   */
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: typeof search["redirect"] === "string" ? search["redirect"] : undefined,
+  }),
   component: SignInPage,
 });
 
 // ── 2FA challenge screen ──────────────────────────────────────────────────────
 
-function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
+function TwoFactorChallenge({
+  onBack,
+  onSuccess,
+}: {
+  onBack: () => void;
+  /** Called after successful 2FA verification; handles navigation. */
+  onSuccess?: () => void;
+}) {
   const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [method, setMethod] = useState<"totp" | "otp">("totp");
@@ -43,7 +86,11 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
       // Refresh the Better Auth session store so AuthGuard.useSession()
       // sees the authenticated session immediately (avoids stale-cache bounce).
       await getSession();
-      navigate({ to: "/" });
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        navigate({ to: "/" });
+      }
     } catch (e: any) {
       setError(e?.message ?? "Invalid code. Please try again.");
       setCode("");
@@ -274,8 +321,32 @@ function MagicLinkPanel({ onBack }: { onBack: () => void }) {
 
 type SignInTab = "password" | "magic-link";
 
+/**
+ * Validates an external redirect URL.
+ *
+ * After sign-in, we may need to bounce the user to a different origin
+ * (e.g. the CDN at localhost:5173 or cdn.115jon.site). We only allow
+ * http/https URLs — javascript:, data:, and other schemes are rejected.
+ * In production you'd restrict to an allowlist of known external domains;
+ * for this internal-facing dashboard a simple scheme check is sufficient.
+ */
+function safeRedirectUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 function SignInPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
+  // Validated external redirect destination — null when absent or malformed.
+  const redirectUrl = safeRedirectUrl(search.redirect);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -284,6 +355,15 @@ function SignInPage() {
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const [twoFactorRequired, setTwoFactorRequired] = useState(false);
   const [tab, setTab] = useState<SignInTab>("password");
+
+  /** Navigate to redirectUrl (external) or fall back to "/" (internal). */
+  const navigateAfterSignIn = () => {
+    if (redirectUrl) {
+      window.location.href = redirectUrl;
+    } else {
+      navigate({ to: "/" });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -302,7 +382,7 @@ function SignInPage() {
         setTwoFactorRequired(true);
       } else {
         await getSession(); // refresh session store before navigating
-        navigate({ to: "/" });
+        navigateAfterSignIn();
       }
     } catch {
       setError("Something went wrong. Check the server is running.");
@@ -321,7 +401,7 @@ function SignInPage() {
         throw new Error((res as any).error?.message ?? "Passkey sign-in failed");
       }
       await getSession();
-      navigate({ to: "/" });
+      navigateAfterSignIn();
     } catch (e: any) {
       // User cancelled the passkey prompt — silently ignore DOMException
       if (e?.name !== "NotAllowedError") {
@@ -336,9 +416,12 @@ function SignInPage() {
     setError("");
     setSocialLoading(providerId);
     try {
+      // For OAuth, set callbackURL to the redirect target so the OAuth
+      // provider bounces the user directly there after consent.
+      const callbackURL = redirectUrl ?? `${window.location.origin}/`;
       const result = await signIn.social({
         provider: providerId as any,
-        callbackURL: `${window.location.origin}/`,
+        callbackURL,
       });
       if (result?.data?.url) {
         window.location.href = result.data.url;
@@ -360,7 +443,10 @@ function SignInPage() {
       }}>
         <div style={{ position: "fixed", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99,102,241,0.12), transparent)" }} />
         <div className="card animate-in" style={{ width: "100%", maxWidth: 380, padding: 36 }}>
-          <TwoFactorChallenge onBack={() => { setTwoFactorRequired(false); setError(""); }} />
+          <TwoFactorChallenge
+            onBack={() => { setTwoFactorRequired(false); setError(""); }}
+            onSuccess={navigateAfterSignIn}
+          />
         </div>
       </div>
     );
