@@ -286,22 +286,26 @@ export async function validateSecretKey(
 
 // ── Origin / redirect validation ───────────────────────────────────────────────
 
-/**
- * Returns true if the given origin is allowed by the application.
- * Also returns true if the app has no origin restrictions (empty list) so
- * that newly created apps work before origins are configured.
- */
-export function isOriginAllowed(app: Application, origin: string): boolean {
-  if (app.allowed_origins.length === 0) return true; // unrestricted
-  return app.allowed_origins.some(o => o === origin);
+export function isRedirectUriAllowed(app: Application, uri: string): boolean {
+  if (app.environment === "development") {
+    // In dev: localhost on any port is always permitted
+    try {
+      const u = new URL(uri);
+      if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return true;
+    } catch { /* invalid URL, fall through */ }
+  }
+  if (app.redirect_uris.length === 0) return true; // Fail-open if not configured (as before)
+  return app.redirect_uris.some((allowed) => uri.startsWith(allowed));
 }
 
-/**
- * Returns true if the given redirect URI is in the app's allowlist.
- * Performs prefix matching so "/dashboard/callback" matches
- * "https://app.example.com/dashboard/callback".
- */
-export function isRedirectUriAllowed(app: Application, uri: string): boolean {
-  if (app.redirect_uris.length === 0) return true; // unrestricted
-  return app.redirect_uris.some(allowed => uri.startsWith(allowed));
+export function isOriginAllowed(app: Application, origin: string): boolean {
+  if (app.environment === "development") {
+    // In dev: localhost origins are always permitted
+    try {
+      const u = new URL(origin);
+      if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return true;
+    } catch { /* invalid origin, fall through */ }
+  }
+  if (app.allowed_origins.length === 0) return true; // Default allow (as before, for newly created apps)
+  return app.allowed_origins.some(o => o === origin);
 }
