@@ -12,6 +12,7 @@ import {
   Copy,
   Globe,
   Key,
+  Layers,
   LogOut,
   PlusCircle,
   RefreshCw,
@@ -123,6 +124,7 @@ const NAV_ITEMS = [
   { to: "/oauth-apps", label: "OAuth Apps", icon: <Globe size={14} /> },
   { to: "/api-keys", label: "API Keys", icon: <Key size={14} /> },
   { to: "/webhooks", label: "Webhooks", icon: <Webhook size={14} /> },
+  { to: "/applications", label: "Applications", icon: <Layers size={14} /> },
   { to: "/settings", label: "Settings", icon: <Settings size={14} /> },
 ];
 
@@ -333,6 +335,7 @@ const NAV = [
   { to: "/oauth-apps", label: "OAuth Apps", icon: Globe, exact: false },
   { to: "/api-keys", label: "API Keys", icon: Key, exact: false },
   { to: "/webhooks", label: "Webhooks", icon: Webhook, exact: false },
+  { to: "/applications", label: "Applications", icon: Layers, exact: false },
 ];
 
 // ── Org Switcher ──────────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import { Route as OrganizationsRouteImport } from './routes/organizations'
 import { Route as OauthAppsRouteImport } from './routes/oauth-apps'
 import { Route as AuthErrorRouteImport } from './routes/auth-error'
 import { Route as AuditLogsRouteImport } from './routes/audit-logs'
+import { Route as ApplicationsRouteImport } from './routes/applications'
 import { Route as ApiKeysRouteImport } from './routes/api-keys'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersUserIdRouteImport } from './routes/users_.$userId'
@@ -69,6 +70,11 @@ const AuditLogsRoute = AuditLogsRouteImport.update({
   path: '/audit-logs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApplicationsRoute = ApplicationsRouteImport.update({
+  id: '/applications',
+  path: '/applications',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiKeysRoute = ApiKeysRouteImport.update({
   id: '/api-keys',
   path: '/api-keys',
@@ -99,6 +105,7 @@ const AcceptInvitationInvitationIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
+  '/applications': typeof ApplicationsRoute
   '/audit-logs': typeof AuditLogsRoute
   '/auth-error': typeof AuthErrorRoute
   '/oauth-apps': typeof OauthAppsRoute
@@ -115,6 +122,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
+  '/applications': typeof ApplicationsRoute
   '/audit-logs': typeof AuditLogsRoute
   '/auth-error': typeof AuthErrorRoute
   '/oauth-apps': typeof OauthAppsRoute
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api-keys': typeof ApiKeysRoute
+  '/applications': typeof ApplicationsRoute
   '/audit-logs': typeof AuditLogsRoute
   '/auth-error': typeof AuthErrorRoute
   '/oauth-apps': typeof OauthAppsRoute
@@ -150,6 +159,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/api-keys'
+    | '/applications'
     | '/audit-logs'
     | '/auth-error'
     | '/oauth-apps'
@@ -166,6 +176,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/api-keys'
+    | '/applications'
     | '/audit-logs'
     | '/auth-error'
     | '/oauth-apps'
@@ -182,6 +193,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/api-keys'
+    | '/applications'
     | '/audit-logs'
     | '/auth-error'
     | '/oauth-apps'
@@ -199,6 +211,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiKeysRoute: typeof ApiKeysRoute
+  ApplicationsRoute: typeof ApplicationsRoute
   AuditLogsRoute: typeof AuditLogsRoute
   AuthErrorRoute: typeof AuthErrorRoute
   OauthAppsRoute: typeof OauthAppsRoute
@@ -278,6 +291,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuditLogsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/applications': {
+      id: '/applications'
+      path: '/applications'
+      fullPath: '/applications'
+      preLoaderRoute: typeof ApplicationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api-keys': {
       id: '/api-keys'
       path: '/api-keys'
@@ -319,6 +339,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiKeysRoute: ApiKeysRoute,
+  ApplicationsRoute: ApplicationsRoute,
   AuditLogsRoute: AuditLogsRoute,
   AuthErrorRoute: AuthErrorRoute,
   OauthAppsRoute: OauthAppsRoute,

@@ -109,6 +109,15 @@ export const profileKeys = {
   user: (userId: string) => [...profileKeys.users(), userId] as const,
 } as const;
 
+// ── Applications ───────────────────────────────────────────────────────────────
+
+export const appKeys = {
+  all: ["applications"] as const,
+  lists: () => [...appKeys.all, "list"] as const,
+  list: () => [...appKeys.lists()] as const,
+  detail: (id: string) => [...appKeys.all, "detail", id] as const,
+} as const;
+
 // ── Re-export all keys in a single namespace for convenience ──────────────────
 
 export const queryKeys = {
@@ -120,4 +129,6 @@ export const queryKeys = {
   webhooks: webhookKeys,
   overview: overviewKeys,
   profile: profileKeys,
+  apps: appKeys,
 } as const;
+
