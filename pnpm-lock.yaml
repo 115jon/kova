@@ -175,6 +175,9 @@ importers:
       better-auth-cloudflare:
         specifier: ^0.3.0
         version: 0.3.0(@better-auth/drizzle-adapter@1.6.2(@better-auth/core@1.6.2(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(@cloudflare/workers-types@4.20260413.1)(@opentelemetry/api@1.9.1)(better-call@1.3.5(zod@4.3.6))(jose@6.2.2)(kysely@0.28.16)(nanostores@1.2.0))(@better-auth/utils@0.4.0)(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260413.1)(@opentelemetry/api@1.9.1)(kysely@0.28.16)))(@cloudflare/workers-types@4.20260413.1)(@opentelemetry/api@1.9.1)(better-auth@1.6.2(@cloudflare/workers-types@4.20260413.1)(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.167.34(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vite@7.3.2(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260413.1)(@opentelemetry/api@1.9.1)(kysely@0.28.16))(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(kysely@0.28.16)
+      hono:
+        specifier: ^4.12.14
+        version: 4.12.14
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260214.0
@@ -1947,6 +1950,10 @@ packages:
     peerDependenciesMeta:
       crossws:
         optional: true
+
+  hono@4.12.14:
+    resolution: {integrity: sha512-am5zfg3yu6sqn5yjKBNqhnTX7Cv+m00ox+7jbaKkrLMRJ4rAdldd1xPd/JzbBWspqaQv6RSTrgFN95EsfhC+7w==}
+    engines: {node: '>=16.9.0'}
 
   htmlparser2@10.1.0:
     resolution: {integrity: sha512-VTZkM9GWRAtEpveh7MSF6SjjrpNVNNVJfFup7xTY3UpFtm67foy9HDVXneLtFVt4pMz5kZtgNcvCniNFb1hlEQ==}
@@ -4183,6 +4190,8 @@ snapshots:
     dependencies:
       rou3: 0.8.1
       srvx: 0.11.15
+
+  hono@4.12.14: {}
 
   htmlparser2@10.1.0:
     dependencies:
