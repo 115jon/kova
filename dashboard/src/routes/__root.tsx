@@ -730,7 +730,7 @@ function Sidebar() {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate({ to: "/sign-in", search: { redirect: undefined } });
+    navigate({ to: "/sign-in" });
   };
 
   return (
@@ -905,7 +905,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate({ to: "/sign-in", search: { redirect: undefined } });
+    navigate({ to: "/sign-in" });
   };
 
   if (isPending) {
@@ -920,7 +920,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) {
-    setTimeout(() => navigate({ to: "/sign-in", search: { redirect: undefined } }), 0);
+    setTimeout(() => navigate({ to: "/sign-in" }), 0);
     return null;
   }
 

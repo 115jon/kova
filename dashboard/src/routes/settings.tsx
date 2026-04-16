@@ -707,7 +707,7 @@ function SettingsPage() {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate({ to: "/sign-in", search: { redirect: undefined } });
+    navigate({ to: "/sign-in" });
   };
 
   const currentUsername = (session?.user as any)?.username as string | null | undefined;
