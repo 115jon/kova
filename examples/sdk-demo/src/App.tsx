@@ -16,19 +16,19 @@ import { OrgPage } from "./pages/OrgPage";
 
 // ── SDK configuration ─────────────────────────────────────────────────────────
 //
-// IMPORTANT: authUrl MUST point at THIS app's origin (not at the combined worker directly).
-// The Vite dev proxy (see vite.config.ts) intercepts /api/* and forwards it to
-// http://localhost:5174 transparently.  If we pointed directly at :5174 the
-// browser would treat it as a cross-origin request and CORS would block it.
+// Values are injected at build time via Vite env variables:
+//   VITE_AUTH_URL         — the ralph-auth server origin
+//   VITE_PUBLISHABLE_KEY  — the per-app publishable key from the Admin Dashboard
 //
-// PUBLISHABLE KEY: identifies this app to the ralph-auth server.
-// The server validates origin + key and applies per-app CORS allowlists.
-// See Dashboard → Applications to manage keys.
-const AUTH_URL = typeof window !== "undefined"
-  ? window.location.origin   // http://localhost:5180 in dev → proxied to :5174
-  : "http://localhost:5180";
+// In development (pnpm dev) the Vite proxy in vite.config.ts forwards /api/*
+// to localhost:5174, so AUTH_URL = window.location.origin works automatically.
+// In production the .env.production values are baked in at `pnpm build`.
+const AUTH_URL =
+  import.meta.env.VITE_AUTH_URL ??
+  (typeof window !== "undefined" ? window.location.origin : "http://localhost:5180");
 
-const PUBLISHABLE_KEY = "pk_dev_TlwQ68U4ywaqK8VDMUJKi7zl";
+const PUBLISHABLE_KEY =
+  import.meta.env.VITE_PUBLISHABLE_KEY ?? "pk_dev_TlwQ68U4ywaqK8VDMUJKi7zl";
 
 type Page = "auth" | "hooks" | "org" | "linked";
 

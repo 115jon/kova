@@ -7,3 +7,4 @@ dist/
 .dev.vars
 .prod.vars
 .vscode/
+.dry-out

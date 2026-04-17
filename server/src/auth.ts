@@ -13,6 +13,7 @@ import {
   twoFactorOtpEmail,
   verificationEmail,
 } from "./email";
+import { resolveOrigin, STATIC_ORIGINS } from "./middleware/cors";
 import {
   findAutoJoinDomainForEmail,
   findMFAEnforcedOrgBlockingUser,
@@ -58,6 +59,52 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
         secret: env.BETTER_AUTH_SECRET,
         baseURL: env.AUTH_URL,
         basePath: "/api/auth",
+
+        // ── Cross-origin cookie policy ────────────────────────────
+        //
+        // Better Auth issues session cookies at auth.115jon.site (the auth
+        // server's own domain).  SDK consumers run on different origins
+        // (e.g., *.workers.dev, *.115jon.site sub-apps).
+        //
+        // Problem: browsers default to SameSite=Lax for cookies.
+        // SameSite=Lax blocks cookie attachment on cross-origin subresource
+        // requests (XMLHttpRequest, fetch) even when `credentials: "include"`
+        // is set, so get-session always returns `null` for consumers on a
+        // different origin than the auth server.
+        //
+        // Solution: SameSite=None; Secure — the W3C-specified cookie
+        // attribute that allows cross-origin credentialed requests.  This
+        // is the same configuration used by Clerk, Auth0, Kinde, and every
+        // other multi-tenant auth service that issues cookies.
+        //
+        // Security posture: the cookie is still HttpOnly (no JS access),
+        // Secure (HTTPS only), and the CORS layer already enforces per-app
+        // origin allowlists via the X-Publishable-Key mechanism, so the
+        // only new attack surface is CSRF from an unregistered origin — which
+        // is already prevented because (a) state-mutating endpoints require
+        // JSON bodies (not HTML-form-submittable) and (b) the CORS preflight
+        // blocks unregistered origins before any request body is consumed.
+        advanced: {
+          // SameSite=None; Secure — the W3C-specified cookie attribute that
+          // allows browsers to send cookies on cross-origin credentialed fetch()
+          // requests (the fundamental requirement for any multi-tenant auth
+          // service such as Clerk, Auth0, Kinde, etc.).
+          //
+          // DO NOT add `partitioned: true` (CHIPS) here.
+          // CHIPS keys the cookie by (top-level-site × cookie-domain), so a
+          // session cookie issued when the user was at auth.115jon.site would
+          // have partition key auth.115jon.site.  When the SDK demo at
+          // ralph-auth-sdk-demo.jontitor.workers.dev later fetches
+          // auth.115jon.site/api/auth/get-session, the browser uses the NEW
+          // partition key workers.dev — which has no stored cookie — so the
+          // session is never sent.  CHIPS is designed for tracker isolation,
+          // not cross-site session sharing.
+          defaultCookieAttributes: {
+            sameSite: "none" as const,
+            secure: true,
+          },
+        },
+
 
         // ── Account linking ───────────────────────────────────────
         //
@@ -542,28 +589,37 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
 
         // ── Trusted origins (CORS) ────────────────────────────────
         //
-        // Combined worker: dashboard + server share one origin so the auth
-        // server's own origin is the only Cloudflare URL needed.
-        // SDK consumers (ralph-meet, CDN, etc.) are listed explicitly.
+        // Delegates to `resolveOrigin` — the single authoritative resolver
+        // shared with the Hono corsMiddleware.  resolveOrigin implements the
+        // full three-tier waterfall:
         //
-        // ⚠️  PRODUCTION: set to https://auth.115jon.site once deployed.
-        trustedOrigins: [
-          // Dev — combined Vite + Miniflare dev server
-          "http://localhost:5174",
-          // Dev — other local services
-          "http://localhost:3000",
-          "http://localhost:5173",
-          "http://localhost:5175",
-          "http://localhost:5180",  // SDK demo app
-          "http://localhost:8888",  // ralph-meet dev port
-          // Production — auth server (combined)
-          "https://auth.115jon.site",
-          "https://ralph-auth-server.jontitor.workers.dev",
-          // Production — external consumers
-          "https://meet.115jon.site",
-          "https://ralph-meet.jontitor.workers.dev",
-          "https://cdn.115jon.site",
-        ],
+        //   Tier 0  KV write-through cache (60 s TTL, ~1 ms)
+        //   Tier 1  X-Publishable-Key → per-app D1 row (actual requests)
+        //   Tier 2  STATIC_ORIGINS in-process Set
+        //   Tier 3  Full application-table scan via char(10)+instr (preflight)
+        //
+        // Better Auth calls trustedOrigins with the raw Request and expects
+        // an array of trusted origin strings (or a truthy indicator).  We
+        // resolve the requesting origin: if allowed we return a single-element
+        // array containing it (satisfies Better Auth's allowlist check); if
+        // denied we return only STATIC_ORIGINS so Better Auth's own guard
+        // still protects first-party routes.
+        trustedOrigins: async (request?: Request) => {
+          if (!request) return [...STATIC_ORIGINS];
+
+          const resolved = await resolveOrigin(request, env.DB, env.KV).catch(
+            () => ""
+          );
+
+          if (resolved) {
+            // The origin is allowed — include it so Better Auth's internal
+            // CORS logic also accepts it for /api/auth/* responses.
+            return [resolved, ...STATIC_ORIGINS];
+          }
+
+          // Origin not allowed — restrict to first-party origins only.
+          return [...STATIC_ORIGINS];
+        },
       }
     )
   );

@@ -1,0 +1,10 @@
+name = "ralph-auth-sdk-demo"
+compatibility_date = "2026-04-12"
+
+# Pure static-asset worker — no custom domain, uses the stock
+# https://ralph-auth-sdk-demo.<account>.workers.dev URL.
+
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
+html_handling = "auto-trailing-slash"

@@ -41,7 +41,8 @@ authRouter.all("/*", async (c) => {
             { status: 403 }
           ),
           request,
-          db
+          db,
+          env.KV
         );
       }
 
@@ -68,7 +69,8 @@ authRouter.all("/*", async (c) => {
                 { status: 403 }
               ),
               request,
-              db
+              db,
+              env.KV
             );
           }
         } catch {
@@ -87,7 +89,7 @@ authRouter.all("/*", async (c) => {
   // the CORS access-control and security (X-Frame-Options, etc.) headers are
   // added on top. Without this, cross-origin clients receive a CORS failure
   // on every 429, preventing the JS from reading Retry-After.
-  return withHeaders(await auth.handler(request), request, db);
+  return withHeaders(await auth.handler(request), request, db, env.KV);
 });
 
 export { authRouter };
