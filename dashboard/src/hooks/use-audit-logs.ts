@@ -55,7 +55,7 @@ async function fetchAuditLogs(
   if (cursor) params.set("before", cursor);
   params.set("limit", "50");
 
-  const res = await fetch(`/api/audit/logs?${params}`, {
+  const res = await fetch(`/api/admin/audit/logs?${params}`, {
     credentials: "include",
   });
   if (!res.ok) {

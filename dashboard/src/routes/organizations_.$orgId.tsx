@@ -437,7 +437,7 @@ function OrgAuditLog({ orgId }: { orgId: string }) {
     try {
       const params = new URLSearchParams({ orgId, limit: "30" });
       if (!replace && nextCursorRef.current) params.set("before", nextCursorRef.current);
-      const res = await fetch(`/api/audit/logs?${params}`, { credentials: "include" });
+      const res = await fetch(`/api/admin/audit/logs?${params}`, { credentials: "include" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
         throw new Error(err.error ?? `Failed (${res.status})`);
