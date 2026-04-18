@@ -70,9 +70,16 @@ export function createRalphAuthClient(opts: ClientOptions) {
   // Merge in the X-Publishable-Key header when a key is provided.
   // This is how the server identifies which registered application is making
   // the request and enforces its per-app CORS + redirect URI allowlists.
-  const pkHeaders: HeadersInit = publishableKey
-    ? { "X-Publishable-Key": publishableKey }
-    : {};
+  //
+  // X-Ralph-Auth-SDK signals that the request originates from official SDK
+  // components. The server uses this to enforce the branding requirement on
+  // free-plan apps: if the header is absent on a sign-in/sign-up call, the
+  // server rejects it, making it impractical to build a custom login UI
+  // without showing the "Secured by ralph-auth" badge (same model as Clerk).
+  const sdkHeaders: Record<string, string> = {
+    "X-Ralph-Auth-SDK": "ralph-auth-react",
+    ...(publishableKey ? { "X-Publishable-Key": publishableKey } : {}),
+  };
 
   const pluginList = buildPluginList(plugins);
 
@@ -83,7 +90,7 @@ export function createRalphAuthClient(opts: ClientOptions) {
       credentials: "include",
       ...fetchOptions,
       headers: {
-        ...pkHeaders,
+        ...sdkHeaders,
         ...(fetchOptions.headers as Record<string, string> | undefined ?? {}),
       },
     },

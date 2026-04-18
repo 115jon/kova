@@ -23,6 +23,7 @@ import { Route as ApiKeysRouteImport } from './routes/api-keys'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersUserIdRouteImport } from './routes/users_.$userId'
 import { Route as OrganizationsOrgIdRouteImport } from './routes/organizations_.$orgId'
+import { Route as ApplicationsAppIdRouteImport } from './routes/applications_.$appId'
 import { Route as AcceptInvitationInvitationIdRouteImport } from './routes/accept-invitation.$invitationId'
 
 const WebhooksRoute = WebhooksRouteImport.update({
@@ -95,6 +96,11 @@ const OrganizationsOrgIdRoute = OrganizationsOrgIdRouteImport.update({
   path: '/organizations/$orgId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApplicationsAppIdRoute = ApplicationsAppIdRouteImport.update({
+  id: '/applications_/$appId',
+  path: '/applications/$appId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AcceptInvitationInvitationIdRoute =
   AcceptInvitationInvitationIdRouteImport.update({
     id: '/accept-invitation/$invitationId',
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/users': typeof UsersRoute
   '/webhooks': typeof WebhooksRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
+  '/applications/$appId': typeof ApplicationsAppIdRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
   '/users/$userId': typeof UsersUserIdRoute
 }
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/users': typeof UsersRoute
   '/webhooks': typeof WebhooksRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
+  '/applications/$appId': typeof ApplicationsAppIdRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
   '/users/$userId': typeof UsersUserIdRoute
 }
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/users': typeof UsersRoute
   '/webhooks': typeof WebhooksRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
+  '/applications_/$appId': typeof ApplicationsAppIdRoute
   '/organizations_/$orgId': typeof OrganizationsOrgIdRoute
   '/users_/$userId': typeof UsersUserIdRoute
 }
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/webhooks'
     | '/accept-invitation/$invitationId'
+    | '/applications/$appId'
     | '/organizations/$orgId'
     | '/users/$userId'
   fileRoutesByTo: FileRoutesByTo
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/webhooks'
     | '/accept-invitation/$invitationId'
+    | '/applications/$appId'
     | '/organizations/$orgId'
     | '/users/$userId'
   id:
@@ -204,6 +215,7 @@ export interface FileRouteTypes {
     | '/users'
     | '/webhooks'
     | '/accept-invitation/$invitationId'
+    | '/applications_/$appId'
     | '/organizations_/$orgId'
     | '/users_/$userId'
   fileRoutesById: FileRoutesById
@@ -222,6 +234,7 @@ export interface RootRouteChildren {
   UsersRoute: typeof UsersRoute
   WebhooksRoute: typeof WebhooksRoute
   AcceptInvitationInvitationIdRoute: typeof AcceptInvitationInvitationIdRoute
+  ApplicationsAppIdRoute: typeof ApplicationsAppIdRoute
   OrganizationsOrgIdRoute: typeof OrganizationsOrgIdRoute
   UsersUserIdRoute: typeof UsersUserIdRoute
 }
@@ -326,6 +339,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrganizationsOrgIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/applications_/$appId': {
+      id: '/applications_/$appId'
+      path: '/applications/$appId'
+      fullPath: '/applications/$appId'
+      preLoaderRoute: typeof ApplicationsAppIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/accept-invitation/$invitationId': {
       id: '/accept-invitation/$invitationId'
       path: '/accept-invitation/$invitationId'
@@ -350,6 +370,7 @@ const rootRouteChildren: RootRouteChildren = {
   UsersRoute: UsersRoute,
   WebhooksRoute: WebhooksRoute,
   AcceptInvitationInvitationIdRoute: AcceptInvitationInvitationIdRoute,
+  ApplicationsAppIdRoute: ApplicationsAppIdRoute,
   OrganizationsOrgIdRoute: OrganizationsOrgIdRoute,
   UsersUserIdRoute: UsersUserIdRoute,
 }

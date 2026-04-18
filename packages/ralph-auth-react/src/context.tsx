@@ -1,21 +1,13 @@
 /**
  * RalphAuthProvider + useRalphAuth context
  *
- * Wraps the root of your app. Supplies the resolved auth client and
- * merged config (appearance, URLs) to every SDK component and hook
- * via React context — no prop-drilling required.
+ * Appearance priority (highest wins):
+ *   component-level prop > provider-level prop > server-fetched > SDK defaults
  *
- * @example
- * ```tsx
- * // main.tsx
- * import { RalphAuthProvider } from "@ralph-auth/react";
- *
- * createRoot(document.getElementById("root")!).render(
- *   <RalphAuthProvider publishableKey="pk_live_...">
- *     <App />
- *   </RalphAuthProvider>
- * );
- * ```
+ * On mount, fetches /api/pub/apps/:pk/appearance and merges:
+ *  - primaryColor, backgroundColor → CSS vars
+ *  - enabledProviders → filters the OAuth buttons shown (no code change needed)
+ *  - faviconUrl → injected into <head>
  */
 
 import {
@@ -24,6 +16,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
 import {
@@ -61,36 +54,7 @@ const DEFAULT_VARS: Required<AppearanceVariables> = {
   fontSize: "14px",
 };
 
-/**
- * OAuth providers whose social-login buttons are shown by default.
- *
- * These reflect the social providers that ralph-auth supports server-side.
- * All providers except Google are **conditional** — they only activate when
- * the corresponding env vars are set on the server. If a provider is not
- * configured on your server, its button will trigger a 400/not-found error.
- *
- * To limit the displayed buttons to only what your server supports, pass
- * `oauthProviders` explicitly to `<RalphAuthProvider>`:
- *
- * ```tsx
- * // Only Google (minimal setup):
- * <RalphAuthProvider oauthProviders={[{ id: "google" }]} ... />
- *
- * // Google + Discord + GitHub:
- * <RalphAuthProvider oauthProviders={[
- *   { id: "google" }, { id: "discord" }, { id: "github" }
- * ]} ... />
- * ```
- *
- * Provider → required env vars:
- *  google    — always (GOOGLE_CLIENT_ID/SECRET)
- *  discord   — DISCORD_CLIENT_ID/SECRET
- *  github    — GITHUB_CLIENT_ID/SECRET
- *  microsoft — MICROSOFT_CLIENT_ID/SECRET
- *  apple     — APPLE_CLIENT_ID/SECRET + APPLE_TEAM_ID/KEY_ID/PRIVATE_KEY
- *  facebook  — FACEBOOK_CLIENT_ID/SECRET
- */
-const DEFAULT_OAUTH_PROVIDERS: OAuthProvider[] = [
+const ALL_OAUTH_PROVIDERS: OAuthProvider[] = [
   { id: "google", label: "Google" },
   { id: "discord", label: "Discord" },
   { id: "github", label: "GitHub" },
@@ -99,24 +63,48 @@ const DEFAULT_OAUTH_PROVIDERS: OAuthProvider[] = [
   { id: "facebook", label: "Facebook" },
 ];
 
+// ── Server appearance payload shape ──────────────────────────────────────────
+
+export interface ServerAppearance {
+  displayName: string;
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  primaryColor: string | null;
+  backgroundColor: string | null;
+  theme: "dark" | "light" | "auto";
+  homeUrl: string | null;
+  termsUrl: string | null;
+  privacyUrl: string | null;
+  /** Whether the app has paid to suppress the ralph-auth badge. */
+  hideBranding: boolean;
+  /** Provider IDs enabled in the dashboard, e.g. ["google","github"] */
+  enabledProviders: string[];
+}
 
 // ── Context value ────────────────────────────────────────────────────────────
 
 export interface RalphAuthContextValue {
-  /** The underlying Better Auth client instance. */
   client: RalphAuthClient;
-  /** Resolved base URL of the auth server. */
   authUrl: string;
-  /** Merged effective appearance (provider + optional instance override). */
   appearance: Appearance;
-  /** Merged appearance variable map (defaults + provider). */
   vars: Required<AppearanceVariables>;
-  /** OAuth provider list (from config or defaults). */
   oauthProviders: OAuthProvider[];
-  // ── Navigation URLs ────────────────────────────────────────────────────
+  /** Live server-fetched branding — null until the first fetch resolves. */
+  serverAppearance: ServerAppearance | null;
   afterSignInUrl: string;
   afterSignUpUrl: string;
   afterSignOutUrl: string;
+  /**
+   * "live" for pk_live_ keys (production), "test" for pk_dev_ / pk_test_ keys.
+   * Components use this to render the "Development" badge.
+   */
+  mode: "live" | "test";
+  /**
+   * True when the platform admin flag is set on the current user.
+   * Unlocks all plan-gated features without a paid subscription.
+   * Set by the consumer app (e.g. the ralph-auth dashboard itself).
+   */
+  isPlatformAdmin: boolean;
 }
 
 const RalphAuthContext = createContext<RalphAuthContextValue | null>(null);
@@ -128,11 +116,6 @@ export interface RalphAuthProviderProps extends RalphAuthConfig {
   children: ReactNode;
 }
 
-/**
- * Mount at the root of your application — above your router and any SDK
- * components. All `<SignIn>`, `<SignUp>`, `<UserButton>`, hooks, etc. must
- * be descendants of this provider.
- */
 export function RalphAuthProvider({
   children,
   publishableKey,
@@ -140,65 +123,113 @@ export function RalphAuthProvider({
   plugins,
   appearance,
   oauthProviders,
+  isPlatformAdmin = false,
   afterSignInUrl = "/",
   afterSignUpUrl = "/",
   afterSignOutUrl = "/sign-in",
   ...rest
-}: RalphAuthProviderProps) {
-  void rest; // absorb any extra props silently
+}: RalphAuthProviderProps & { isPlatformAdmin?: boolean }) {
+  void rest;
 
-  // Resolve auth URL once (throws early with a helpful message on misconfiguration)
+  // Derive mode from the publishable key prefix:
+  //   pk_live_ → "live"  (production)
+  //   pk_dev_ / pk_test_ → "test"  (shows Development badge)
+  //   fallback (authUrl-only) → "live"
+  const mode = useMemo<"live" | "test">(() => {
+    if (!publishableKey) return "live";
+    return publishableKey.startsWith("pk_live_") ? "live" : "test";
+  }, [publishableKey]);
+
   const resolvedAuthUrl = useMemo(
     () => resolveAuthUrl({ publishableKey, authUrl }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [publishableKey, authUrl]
   );
 
-  // Create the Better Auth client once per resolved URL + publishableKey.
-  // The key is forwarded as X-Publishable-Key on every request so the server
-  // can dynamically resolve per-app CORS and redirect URI allowlists.
   const client = useMemo(
     () => createRalphAuthClient({ authUrl: resolvedAuthUrl, publishableKey, plugins }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [resolvedAuthUrl, publishableKey]
   );
 
-  // Merge appearance variables (defaults → provider)
-  const vars = useMemo<Required<AppearanceVariables>>(
-    () => ({ ...DEFAULT_VARS, ...(appearance?.variables ?? {}) }),
-    [appearance?.variables]
-  );
+  // ── Server appearance ─────────────────────────────────────────────────────
+  const [serverAppearance, setServerAppearance] = useState<ServerAppearance | null>(null);
 
-  // Track previous CSS injection styleId so we can remove stale rules on update
+  useEffect(() => {
+    if (!publishableKey) return;
+    // Public endpoint — KV-cached for 5 min, so cost ≈ 0 after first load.
+    // NOTE: The path must include /api/ so Vite's dev proxy (sdk-demo) routes it
+    // correctly to the auth server.  Production workers handle /api/* natively.
+    void fetch(`${resolvedAuthUrl}/api/pub/apps/${publishableKey}/appearance`, {
+      cache: "default",
+    })
+      .then(r => r.ok ? (r.json() as Promise<ServerAppearance>) : null)
+      .then(data => { if (data) setServerAppearance(data); })
+      .catch(() => { /* progressive enhancement — never blocks sign-in */ });
+
+    // Register any pre-existing session into app_user (fire-and-forget).
+    // The session.create.after hook handles brand-new sign-ins, but if the
+    // user was already signed in before visiting this SDK-powered app, we
+    // upsert membership here so they appear in the app's user list.
+    void fetch(`${resolvedAuthUrl}/api/pub/apps/${publishableKey}/me`, {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => { /* best-effort */ });
+  }, [resolvedAuthUrl, publishableKey]);
+
+  // Inject/update favicon from server
+  useEffect(() => {
+    const url = serverAppearance?.faviconUrl;
+    if (!url) return;
+    let el = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+    if (!el) {
+      el = document.createElement("link");
+      el.rel = "icon";
+      document.head.appendChild(el);
+    }
+    el.href = url;
+  }, [serverAppearance?.faviconUrl]);
+
+  // ── Merge: defaults → server colors → developer prop ─────────────────────
+  const vars = useMemo<Required<AppearanceVariables>>(() => {
+    const serverOverrides: Partial<AppearanceVariables> = serverAppearance
+      ? {
+        ...(serverAppearance.primaryColor ? { colorPrimary: serverAppearance.primaryColor } : {}),
+        ...(serverAppearance.backgroundColor ? { colorBackground: serverAppearance.backgroundColor } : {}),
+      }
+      : {};
+    return { ...DEFAULT_VARS, ...serverOverrides, ...(appearance?.variables ?? {}) };
+  }, [serverAppearance, appearance?.variables]);
+
   const styleIdRef = useRef<string | null>(null);
-
   useEffect(() => {
     styleIdRef.current = injectAppearanceVars(vars, styleIdRef.current);
   }, [vars]);
 
-  const resolvedProviders = oauthProviders ?? DEFAULT_OAUTH_PROVIDERS;
+  // ── OAuth providers: server list → developer override ────────────────────
+  const resolvedProviders = useMemo<OAuthProvider[]>(() => {
+    if (oauthProviders) return oauthProviders;
+    if (serverAppearance?.enabledProviders?.length) {
+      return ALL_OAUTH_PROVIDERS.filter(p =>
+        (serverAppearance.enabledProviders).includes(p.id)
+      );
+    }
+    return ALL_OAUTH_PROVIDERS;
+  }, [oauthProviders, serverAppearance]);
 
   const value = useMemo<RalphAuthContextValue>(
     () => ({
-      client,
-      authUrl: resolvedAuthUrl,
-      appearance: appearance ?? {},
-      vars,
+      client, authUrl: resolvedAuthUrl,
+      appearance: appearance ?? {}, vars,
       oauthProviders: resolvedProviders,
-      afterSignInUrl,
-      afterSignUpUrl,
-      afterSignOutUrl,
+      serverAppearance,
+      afterSignInUrl, afterSignUpUrl, afterSignOutUrl,
+      mode,
+      isPlatformAdmin,
     }),
-    [
-      client,
-      resolvedAuthUrl,
-      appearance,
-      vars,
-      resolvedProviders,
-      afterSignInUrl,
-      afterSignUpUrl,
-      afterSignOutUrl,
-    ]
+    [client, resolvedAuthUrl, appearance, vars, resolvedProviders,
+      serverAppearance, afterSignInUrl, afterSignUpUrl, afterSignOutUrl,
+      mode, isPlatformAdmin]
   );
 
   return (
@@ -210,12 +241,6 @@ export function RalphAuthProvider({
 
 // ── useRalphAuth ─────────────────────────────────────────────────────────────
 
-/**
- * Low-level hook — returns the full context value.
- * Prefer the purpose-built hooks (`useSession`, `useUser`, etc.) in most cases.
- *
- * @throws {Error} When used outside `<RalphAuthProvider>`.
- */
 export function useRalphAuth(): RalphAuthContextValue {
   const ctx = useContext(RalphAuthContext);
   if (!ctx) {
@@ -229,14 +254,7 @@ export function useRalphAuth(): RalphAuthContextValue {
 
 // ── mergeAppearance ───────────────────────────────────────────────────────────
 
-/**
- * Merges a component-level appearance override into the provider-level one.
- * Component-level overrides win.
- */
-export function mergeAppearance(
-  base: Appearance,
-  override?: Appearance
-): Appearance {
+export function mergeAppearance(base: Appearance, override?: Appearance): Appearance {
   if (!override) return base;
   return {
     variables: { ...base.variables, ...override.variables },

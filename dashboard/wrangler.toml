@@ -1,12 +1,27 @@
-# ── NOTE ─────────────────────────────────────────────────────────────────────
-# The dashboard is no longer deployed as a standalone worker.
-# It is bundled into the auth server via [assets] in server/wrangler.toml.
+# ── dashboard/wrangler.toml ───────────────────────────────────────────────────
 #
-# Dev:    pnpm --filter dashboard dev      → Vite + Miniflare (Hono worker at :5174)
-# Build:  pnpm --filter dashboard build    → emit SPA to dist/client/
-# Deploy: pnpm --filter server deploy      → builds dashboard first, then deploys
-#         (or: pnpm --filter dashboard deploy  → build + wrangler deploy from server/)
+# This file is a THIN SHIM — all real configuration lives in server/wrangler.toml.
+# The dashboard is NOT a standalone worker. It is bundled as static assets into
+# the auth server via [assets] in server/wrangler.toml.
+#
+# ── Dev ───────────────────────────────────────────────────────────────────────
+#   pnpm --filter dashboard dev
+#   → Vite dev server at :5174, proxies /api/* to miniflare at :8787
+#   → Run `pnpm --filter server dev` in parallel to get the worker
+#
+# ── Migrations (local dev DB lives in dashboard/.wrangler/state) ──────────────
+#   pnpm --filter server run migrate:dev    ← applies pending migrations to local DB
+#   pnpm --filter server run migrate:prod   ← applies to production D1
+#
+# ── Build & Deploy ────────────────────────────────────────────────────────────
+#   pnpm --filter dashboard build           ← emits SPA to dist/client/
+#   pnpm --filter dashboard deploy          ← build + wrangler deploy (uses server/wrangler.toml)
+#   pnpm --filter server deploy             ← deploy server only (dashboard must be pre-built)
+#
+# ── DO NOT add bindings / D1 / KV / routes here ──────────────────────────────
+#   All of that belongs in server/wrangler.toml, which this file delegates to.
 # ─────────────────────────────────────────────────────────────────────────────
+
 name = "ralph-auth-server"
 compatibility_date = "2026-04-12"
 compatibility_flags = ["nodejs_compat"]

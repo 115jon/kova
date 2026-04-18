@@ -8,7 +8,7 @@ import {
   useUpdateApplication,
   type Application,
 } from "@/hooks/use-applications";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   Check,
@@ -325,7 +325,7 @@ function EditAppModal({ app, onClose }: { app: Application; onClose: () => void 
 
 // ── Application card ──────────────────────────────────────────────────────────
 
-function AppCard({ app, onDelete }: { app: Application; onDelete: (id: string) => void }) {
+function AppCard({ app, onDelete }: { app: Application; onDelete: (id: string, name: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [pkCopied, setPkCopied] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -355,7 +355,7 @@ function AppCard({ app, onDelete }: { app: Application; onDelete: (id: string) =
           body={`"${app.name}" and its publishable key will be permanently removed. SDK consumers using this key will stop working immediately.`}
           confirmLabel="Delete application"
           loading={false}
-          onConfirm={() => { setDeleteConfirm(false); onDelete(app.id); }}
+          onConfirm={() => { setDeleteConfirm(false); onDelete(app.id, app.name); }}
           onClose={() => setDeleteConfirm(false)}
         />
       )}
@@ -419,6 +419,10 @@ function AppCard({ app, onDelete }: { app: Application; onDelete: (id: string) =
 
         {/* Actions */}
         <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          <Link to="/applications/$appId" params={{ appId: app.id }}
+            className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: "0.74rem", textDecoration: "none" }}>
+            View
+          </Link>
           <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: "0.74rem" }}
             onClick={() => setEditOpen(true)}>
             Edit
@@ -666,7 +670,7 @@ function ApplicationsPage() {
           <AppCard
             key={app.id}
             app={app}
-            onDelete={(id) => deleteApp.mutate({ id })}
+            onDelete={(id, name) => deleteApp.mutate({ id, confirmedName: name })}
           />
         ))}
       </div>

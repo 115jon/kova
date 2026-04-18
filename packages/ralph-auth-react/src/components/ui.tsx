@@ -5,6 +5,7 @@
  */
 
 import React, { type CSSProperties, type ReactNode } from "react";
+import { useRalphAuth } from "../context";
 import type { AppearanceElements } from "../types";
 
 // ── Spinner ────────────────────────────────────────────────────────────────────
@@ -370,6 +371,79 @@ export function Avatar({
   );
 }
 
+// ── Branding badge ────────────────────────────────────────────────────────────
+// Shown in card footer unless the app has a paid plan with hide_branding = true.
+
+function RalphAuthBranding() {
+  const { serverAppearance } = useRalphAuth();
+  if (serverAppearance?.hideBranding) return null;
+  return (
+    <a
+      href="https://auth.115jon.site"
+      target="_blank"
+      rel="noopener noreferrer"
+      data-ra-element="brandingBadge"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        fontFamily: "var(--ra-font-mono)",
+        fontSize: "0.68rem",
+        color: "var(--ra-color-text-tertiary)",
+        textDecoration: "none",
+        opacity: 0.75,
+        transition: "opacity 0.15s",
+        marginTop: 8,
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = "0.75"; }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" fill="var(--ra-color-primary)" opacity="0.9" />
+        <path d="M8 16V8h5a3 3 0 0 1 0 6H8" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+      Secured by ralph-auth
+    </a>
+  );
+}
+
+// ── Development-mode badge ─────────────────────────────────────────────────────
+// Shown at the bottom of every sign-in/sign-up card for pk_dev_/pk_test_ apps.
+
+function DevModeBadge() {
+  const { mode } = useRalphAuth();
+  if (mode !== "test") return null;
+  return (
+    <div
+      data-ra-element="devModeBadge"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        padding: "6px 0 0",
+        borderTop: "1px dashed color-mix(in srgb, var(--ra-color-border-strong) 60%, transparent)",
+        marginTop: 10,
+        width: "100%",
+      }}
+    >
+      <span style={{
+        width: 6, height: 6, borderRadius: "50%",
+        background: "#f59e0b",
+        flexShrink: 0,
+        boxShadow: "0 0 5px #f59e0b88",
+      }} />
+      <span style={{
+        fontFamily: "var(--ra-font-mono)",
+        fontSize: "0.65rem",
+        color: "#f59e0b",
+        letterSpacing: "0.04em",
+        fontWeight: 600,
+      }}>DEVELOPMENT INSTANCE</span>
+    </div>
+  );
+}
+
 // ── Card shell ────────────────────────────────────────────────────────────────
 
 export function Card({
@@ -442,6 +516,11 @@ export function CardFooter({
   return (
     <div data-ra-element="cardFooter" style={elements?.cardFooter}>
       {children}
+      {/* Branding + dev badge injected at the bottom of every footer */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <RalphAuthBranding />
+        <DevModeBadge />
+      </div>
     </div>
   );
 }

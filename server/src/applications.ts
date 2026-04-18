@@ -7,10 +7,17 @@
  *   - A secret key       (sk_dev_* / sk_live_*) — shown once, stored as a hash
  *   - An origin allowlist — replaces the hardcoded ALLOWED_ORIGINS set
  *   - A redirect URI allowlist — for OAuth callback validation
+ *   - Branding settings  — logo, favicon, colors, theme (served to SDK sign-in card)
+ *   - Email settings     — from_name, from_email, per-app SMTP config
+ *   - Billing fields     — plan, Stripe customer/subscription IDs
  *
  * The middleware layer validates the `X-Publishable-Key` header on every request
  * coming from an SDK consumer, then derives CORS + redirect-URI policy from the
  * matching row instead of the server-wide hardcoded lists.
+ *
+ * Plan + appearance data is KV-cached to avoid D1 on every SDK request.
+ *   KV key: `appearance:{publishable_key}` (TTL: 5 min)
+ *   KV key: `plan:{app_id}`               (TTL: 60 s)
  */
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -27,6 +34,34 @@ export interface Application {
   createdBy: string | null;
   createdAt: number;
   updatedAt: number;
+  // ── Branding / Appearance (migration 0014)
+  display_name: string | null;
+  logo_url: string | null;
+  favicon_url: string | null;
+  primary_color: string;
+  background_color: string;
+  theme: "dark" | "light" | "auto";
+  home_url: string | null;
+  terms_url: string | null;
+  privacy_url: string | null;
+  hide_branding: boolean;
+  // ── Email sender identity
+  from_name: string | null;
+  from_email: string | null;
+  support_email: string | null;
+  // ── Per-app SMTP (Pro+)
+  smtp_host: string | null;
+  smtp_port: number;
+  smtp_user: string | null;
+  smtp_secure: boolean;
+  // smtp_pass_enc intentionally omitted from the public shape — never returned to API consumers
+  // ── Billing
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  plan: "free" | "starter" | "pro" | "enterprise";
+  plan_expires_at: number | null;
+  // ── Platform lifecycle
+  suspended_at: number | null;
 }
 
 /** DB row as stored in D1 (origins/uris are newline-delimited strings). */
@@ -41,6 +76,33 @@ interface AppRow {
   createdBy: string | null;
   createdAt: number;
   updatedAt: number;
+  // Branding
+  display_name: string | null;
+  logo_url: string | null;
+  favicon_url: string | null;
+  primary_color: string | null;
+  background_color: string | null;
+  theme: string | null;
+  home_url: string | null;
+  terms_url: string | null;
+  privacy_url: string | null;
+  hide_branding: number | null;
+  // Email
+  from_name: string | null;
+  from_email: string | null;
+  support_email: string | null;
+  // SMTP
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_user: string | null;
+  smtp_secure: number | null;
+  // Billing
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  plan: string | null;
+  plan_expires_at: number | null;
+  // Lifecycle
+  suspended_at: number | null;
 }
 
 // ── Key generation ─────────────────────────────────────────────────────────────
@@ -106,6 +168,33 @@ function rowToApp(row: AppRow): Application {
     createdBy: row.createdBy,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    // Branding
+    display_name: row.display_name ?? null,
+    logo_url: row.logo_url ?? null,
+    favicon_url: row.favicon_url ?? null,
+    primary_color: row.primary_color ?? "#3b82f6",
+    background_color: row.background_color ?? "#0f172a",
+    theme: (row.theme ?? "dark") as "dark" | "light" | "auto",
+    home_url: row.home_url ?? null,
+    terms_url: row.terms_url ?? null,
+    privacy_url: row.privacy_url ?? null,
+    hide_branding: Boolean(row.hide_branding),
+    // Email
+    from_name: row.from_name ?? null,
+    from_email: row.from_email ?? null,
+    support_email: row.support_email ?? null,
+    // SMTP
+    smtp_host: row.smtp_host ?? null,
+    smtp_port: row.smtp_port ?? 587,
+    smtp_user: row.smtp_user ?? null,
+    smtp_secure: Boolean(row.smtp_secure),
+    // Billing
+    stripe_customer_id: row.stripe_customer_id ?? null,
+    stripe_subscription_id: row.stripe_subscription_id ?? null,
+    plan: (row.plan ?? "free") as "free" | "starter" | "pro" | "enterprise",
+    plan_expires_at: row.plan_expires_at ?? null,
+    // Lifecycle
+    suspended_at: row.suspended_at ?? null,
   };
 }
 
@@ -115,7 +204,13 @@ export async function listApplications(db: D1Database): Promise<Application[]> {
   const result = await db
     .prepare(
       `SELECT id, name, environment, publishable_key, secret_key_hash,
-              allowed_origins, redirect_uris, createdBy, createdAt, updatedAt
+              allowed_origins, redirect_uris, createdBy, createdAt, updatedAt,
+              display_name, logo_url, favicon_url, primary_color, background_color,
+              theme, home_url, terms_url, privacy_url,
+              from_name, from_email, support_email,
+              smtp_host, smtp_port, smtp_user, smtp_secure,
+              stripe_customer_id, stripe_subscription_id, plan, plan_expires_at,
+              suspended_at
        FROM application ORDER BY createdAt DESC`
     )
     .all<AppRow>();
@@ -129,7 +224,13 @@ export async function getApplicationByPublishableKey(
   const row = await db
     .prepare(
       `SELECT id, name, environment, publishable_key, secret_key_hash,
-              allowed_origins, redirect_uris, createdBy, createdAt, updatedAt
+              allowed_origins, redirect_uris, createdBy, createdAt, updatedAt,
+              display_name, logo_url, favicon_url, primary_color, background_color,
+              theme, home_url, terms_url, privacy_url,
+              from_name, from_email, support_email,
+              smtp_host, smtp_port, smtp_user, smtp_secure,
+              stripe_customer_id, stripe_subscription_id, plan, plan_expires_at,
+              suspended_at
        FROM application WHERE publishable_key = ? LIMIT 1`
     )
     .bind(publishableKey)
@@ -144,7 +245,13 @@ export async function getApplicationById(
   const row = await db
     .prepare(
       `SELECT id, name, environment, publishable_key, secret_key_hash,
-              allowed_origins, redirect_uris, createdBy, createdAt, updatedAt
+              allowed_origins, redirect_uris, createdBy, createdAt, updatedAt,
+              display_name, logo_url, favicon_url, primary_color, background_color,
+              theme, home_url, terms_url, privacy_url,
+              from_name, from_email, support_email,
+              smtp_host, smtp_port, smtp_user, smtp_secure,
+              stripe_customer_id, stripe_subscription_id, plan, plan_expires_at,
+              suspended_at
        FROM application WHERE id = ? LIMIT 1`
     )
     .bind(id)
@@ -203,6 +310,26 @@ export interface UpdateApplicationInput {
   name?: string;
   allowed_origins?: string[];
   redirect_uris?: string[];
+  // Branding
+  display_name?: string | null;
+  logo_url?: string | null;
+  favicon_url?: string | null;
+  primary_color?: string;
+  background_color?: string;
+  theme?: "dark" | "light" | "auto";
+  home_url?: string | null;
+  terms_url?: string | null;
+  privacy_url?: string | null;
+  // Email identity
+  from_name?: string | null;
+  from_email?: string | null;
+  support_email?: string | null;
+  // SMTP (Pro+) — pass null fields to clear
+  smtp_host?: string | null;
+  smtp_port?: number;
+  smtp_user?: string | null;
+  smtp_pass_enc?: string | null;  // already encrypted by caller
+  smtp_secure?: boolean;
 }
 
 export async function updateApplication(
@@ -212,12 +339,34 @@ export async function updateApplication(
 ): Promise<Application | null> {
   const now = Date.now();
   const sets: string[] = ["updatedAt = ?"];
-  const bindings: (string | number)[] = [now];
+  const bindings: (string | number | null)[] = [now];
 
-  if (input.name !== undefined) {
-    sets.push("name = ?");
-    bindings.push(input.name);
-  }
+  // Helper to conditionally push a field
+  const addField = (col: string, val: string | number | boolean | null | undefined) => {
+    if (val === undefined) return;
+    sets.push(`${col} = ?`);
+    bindings.push(typeof val === "boolean" ? (val ? 1 : 0) : val);
+  };
+
+  addField("name", input.name);
+  addField("display_name", input.display_name);
+  addField("logo_url", input.logo_url);
+  addField("favicon_url", input.favicon_url);
+  addField("primary_color", input.primary_color);
+  addField("background_color", input.background_color);
+  addField("theme", input.theme);
+  addField("home_url", input.home_url);
+  addField("terms_url", input.terms_url);
+  addField("privacy_url", input.privacy_url);
+  addField("from_name", input.from_name);
+  addField("from_email", input.from_email);
+  addField("support_email", input.support_email);
+  addField("smtp_host", input.smtp_host);
+  addField("smtp_port", input.smtp_port);
+  addField("smtp_user", input.smtp_user);
+  addField("smtp_pass_enc", input.smtp_pass_enc);
+  addField("smtp_secure", input.smtp_secure);
+
   if (input.allowed_origins !== undefined) {
     sets.push("allowed_origins = ?");
     bindings.push(input.allowed_origins.join("\n"));

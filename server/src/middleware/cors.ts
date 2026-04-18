@@ -43,6 +43,7 @@ import {
   getApplicationByPublishableKey,
   isOriginAllowed,
 } from "../applications";
+import { setAppId } from "../lib/app-context";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -156,6 +157,8 @@ export async function resolveOrigin(
       // Key resolved — apply per-app policy; cache the decision either way.
       const allowed = isOriginAllowed(app, origin);
       kvPutOrigin(kv, origin, allowed);
+      // Store app_id on the Request so databaseHooks in auth.ts can access it.
+      if (allowed) setAppId(request, app.id);
       return allowed ? origin : "";
     }
     // Key not found in DB — fall through to static + global checks.

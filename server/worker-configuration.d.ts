@@ -6,6 +6,12 @@ interface Env {
   KV: KVNamespace;
   ASSETS: Fetcher;  // Workers Assets — serves the dashboard SPA
 
+  // ── App Events Queue (async fan-out: deletion, email, billing) ─
+  APP_EVENTS: Queue<import("./src/queue-consumer").AppEventMessage>;
+
+  // ── AppCounter Durable Object (per-app atomic stat counters) ───
+  APP_COUNTER: DurableObjectNamespace;
+
   // ── Runtime vars (wrangler.toml [vars] + secrets) ────────────
   AUTH_URL: string;
   DASHBOARD_URL: string;
@@ -38,4 +44,11 @@ interface Env {
   // ── CDN integration ──────────────────────────────────────────
   CDN_URL: string;
   CDN_API_KEY: string;
+
+  // ── Stripe (billing) ─────────────────────────────────────────
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_PRICE_STARTER?: string;
+  STRIPE_PRICE_PRO?: string;
+  STRIPE_PRICE_ENTERPRISE?: string;
 }

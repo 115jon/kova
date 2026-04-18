@@ -77,6 +77,15 @@ authRouter.all("/*", async (c) => {
           // Body not JSON or missing — non-standard flow, pass through.
         }
       }
+      // NOTE: SDK UI enforcement is intentionally NOT implemented via a
+      // request header check here. Headers are trivially spoofable and provide
+      // no real protection.
+      //
+      // The correct enforcement model — used by Clerk — is a HOSTED REDIRECT
+      // FLOW: apps redirect to auth.115jon.site/sign-in?pk=...&redirect_uri=...
+      // Our server renders the sign-in page (always with our branding) and mints
+      // a short-lived auth ticket. Since we control the hosted page's HTML,
+      // branding cannot be removed. This is the planned "dynamic domains" feature.
     }
   }
 

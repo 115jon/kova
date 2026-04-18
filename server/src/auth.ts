@@ -13,6 +13,7 @@ import {
   twoFactorOtpEmail,
   verificationEmail,
 } from "./email";
+import { getAppId } from "./lib/app-context";
 import { resolveOrigin, STATIC_ORIGINS } from "./middleware/cors";
 import {
   findAutoJoinDomainForEmail,
@@ -36,7 +37,7 @@ import { deliverEvent } from "./webhook";
  *   withCloudflare sets `database` internally from d1Native — don't
  *   set it again in the second arg or it will conflict.
  */
-export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
+export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Request) {
   return betterAuth(
     withCloudflare(
       // ── First arg: Cloudflare bindings + options ──────────────
@@ -302,6 +303,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
               },
               after: async (session: {
                 userId: string;
+                id: string;
                 ipAddress?: string | null;
                 userAgent?: string | null;
               }) => {
@@ -330,6 +332,38 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties) {
                   ipAddress: session.ipAddress ?? null,
                   userAgent: session.userAgent ?? null,
                 }).catch(() => { });
+
+                // ── Per-app membership + counter tracking ─────────────────
+                // Resolve app_id from the request that triggered this session
+                // via the WeakMap set by the CORS middleware's PK lookup.
+                const appId = req ? getAppId(req) : undefined;
+                if (appId) {
+                  const { generateId } = await import("better-auth");
+
+                  // 1. Upsert app_user — first time this user touches this app
+                  env.DB.prepare(
+                    `INSERT OR IGNORE INTO app_user (id, app_id, user_id, role)
+                     VALUES (?, ?, ?, 'member')`
+                  ).bind(`apu_${generateId(12)}`, appId, session.userId)
+                    .run()
+                    .catch(() => { });
+
+                  // 2. Stamp session with app_id for per-app analytics
+                  env.DB.prepare(
+                    `UPDATE session SET app_id = ? WHERE id = ?`
+                  ).bind(appId, session.id)
+                    .run()
+                    .catch(() => { });
+
+                  // 3. Increment AppCounter DO — atomic, no D1 COUNT(*) needed
+                  try {
+                    const doId = env.APP_COUNTER.idFromName(appId);
+                    env.APP_COUNTER.get(doId).fetch(
+                      "https://do/increment",
+                      { method: "POST", body: JSON.stringify({ counter: "logins_24h" }) }
+                    ).catch(() => { });
+                  } catch { /* DO not available in local dev without --remote */ }
+                }
               },
             },
             delete: {

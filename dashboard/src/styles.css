@@ -330,6 +330,9 @@ code, .mono {
   font-weight: 600;
   color: var(--color-text-primary);
   letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
 /* ─────────────────────────────────────────────────────────────

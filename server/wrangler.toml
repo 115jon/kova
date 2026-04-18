@@ -39,6 +39,29 @@ database_id = "aefbb49d-1582-4052-bd4e-77e5d559a3c6"
 binding = "KV"
 id = "aecb44a2caff4a65a65a6f5c8e5c375e"
 
+# ── App Events Queue ─────────────────────────────────────────
+# Async fan-out: app deletion (R2 + Stripe cleanup), email SMTP dispatch,
+# plan.updated cache invalidation.
+[[queues.producers]]
+binding = "APP_EVENTS"
+queue   = "ralph-auth-app-events"
+
+[[queues.consumers]]
+queue             = "ralph-auth-app-events"
+max_batch_size    = 10
+max_batch_timeout = 5
+max_retries       = 3
+
+# ── AppCounter Durable Object ─────────────────────────────────
+# Per-app atomic counters: total_users, total_orgs, logins_24h.
+# Incremented by session.create hook; powers Overview tab without D1 COUNT(*).
+[[durable_objects.bindings]]
+name       = "APP_COUNTER"
+class_name = "AppCounter"
+
+[[migrations]]
+tag                = "v1"
+new_sqlite_classes = ["AppCounter"]
 
 [dev]
 port = 5174

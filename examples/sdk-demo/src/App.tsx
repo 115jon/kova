@@ -28,7 +28,7 @@ const AUTH_URL =
   (typeof window !== "undefined" ? window.location.origin : "http://localhost:5180");
 
 const PUBLISHABLE_KEY =
-  import.meta.env.VITE_PUBLISHABLE_KEY ?? "pk_dev_TlwQ68U4ywaqK8VDMUJKi7zl";
+  import.meta.env.VITE_PUBLISHABLE_KEY ?? "pk_dev_sYq5sn1jU9MTMSHKx4QdkZJf";
 
 type Page = "auth" | "hooks" | "org" | "linked";
 
