@@ -27,7 +27,6 @@ export const Route = createFileRoute("/sessions")({
 type EnrichedSession = {
   id: string;
   userId: string;
-  token: string;
   userAgent: string | null;
   ipAddress: string | null;
   createdAt: number;
@@ -194,7 +193,7 @@ function SessionCard({
 }: {
   session: EnrichedSession;
   revoking: boolean;
-  onRevoke: (token: string) => void;
+  onRevoke: (sessionId: string) => void;
 }) {
   const deviceColor = session.isCurrent ? "var(--color-accent)" : "var(--color-text-secondary)";
 
@@ -314,7 +313,7 @@ function SessionCard({
           opacity: revoking ? 0.5 : 1,
         }}
         disabled={revoking}
-        onClick={() => onRevoke(session.token)}
+        onClick={() => onRevoke(session.id)}
         title={session.isCurrent ? "You cannot revoke your own current session" : "Revoke this session"}
         onMouseEnter={e => {
           if (!session.isCurrent && !revoking) {
@@ -347,7 +346,7 @@ function SessionsPage() {
   // ── Data ───────────────────────────────────────────────────────────────────
   const { data, isLoading } = useSessions();
   const sessions = data?.sessions ?? [];
-  const currentToken = data?.currentSessionToken ?? null;
+  const currentSessionId = data?.currentSessionId ?? null;
 
   // ── Mutations ───────────────────────────────────────────────────────────────
   const revokeMut = useRevokeSession();
@@ -369,14 +368,14 @@ function SessionsPage() {
   const dismissToast = (id: number) => setToasts(prev => prev.filter(t => t.id !== id));
 
   // ── Handlers ────────────────────────────────────────────────────────────────
-  const revoke = (token: string) => {
-    const session = sessions.find(s => s.token === token);
+  const revoke = (sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
     if (session?.isCurrent) {
       addToast("error", "Cannot revoke your own current session");
       return;
     }
     revokeMut.mutate(
-      { token },
+      { sessionId },
       {
         onSuccess: () => addToast("success", "Session revoked"),
         onError: (err) => addToast("error", err.message ?? "Failed to revoke session"),
@@ -391,9 +390,9 @@ function SessionsPage() {
       confirmLabel: "Revoke all",
       onConfirm: () => {
         setConfirmState(null);
-        if (!currentToken) return;
+        if (!currentSessionId) return;
         revokeAllMut.mutate(
-          { exceptToken: currentToken },
+          { exceptSessionId: currentSessionId },
           {
             onSuccess: (data) =>
               addToast("success", `Revoked ${data.revokedCount} session${data.revokedCount !== 1 ? "s" : ""}`),
@@ -509,7 +508,7 @@ function SessionsPage() {
           <p className="section-label" style={{ marginBottom: 8 }}>Your current session</p>
           <SessionCard
             session={currentSession}
-            revoking={revokeMut.isPending && revokeMut.variables?.token === currentSession.token}
+            revoking={revokeMut.isPending && revokeMut.variables?.sessionId === currentSession.id}
             onRevoke={revoke}
           />
         </div>
@@ -542,7 +541,7 @@ function SessionsPage() {
                     <SessionCard
                       key={s.id}
                       session={s}
-                      revoking={revokeMut.isPending && revokeMut.variables?.token === s.token}
+                      revoking={revokeMut.isPending && revokeMut.variables?.sessionId === s.id}
                       onRevoke={revoke}
                     />
                   ))}

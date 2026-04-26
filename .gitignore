@@ -1,11 +1,16 @@
 node_modules/
 dist/
+dashboard/dist/
+server/dist/
 .wrangler/
 *.tsbuildinfo
 .env
+.env.*
 .env.local
 .env.production
 .dev.vars
 .prod.vars
+**/.dev.vars
+**/.prod.vars
 .vscode/
 .dry-out

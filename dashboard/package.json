@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "vite build && node scripts/remove-generated-secrets.mjs",
     "deploy": "pnpm build && wrangler deploy --config ../wrangler.toml",
     "cf-typegen": "wrangler types --config ../wrangler.toml",
     "migrate:dev": "wrangler d1 migrations apply ralph-auth-db --local --config ../wrangler.toml",

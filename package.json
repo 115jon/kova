@@ -1,8 +1,16 @@
 {
   "name": "ralph-auth",
   "private": true,
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.10"
+    }
+  },
   "scripts": {
     "dev": "pnpm --filter dashboard run dev",
+    "build": "pnpm --filter dashboard run build && pnpm --filter @ralph-auth/react run build",
+    "typecheck": "pnpm --filter server run typecheck && pnpm --filter @ralph-auth/react run typecheck",
+    "test": "pnpm --filter server run test",
     "deploy": "pnpm --filter dashboard run deploy",
     "migrate:dev": "pnpm --filter dashboard run migrate:dev",
     "migrate:prod": "pnpm --filter dashboard run migrate:prod",

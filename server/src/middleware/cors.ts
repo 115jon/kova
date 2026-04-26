@@ -59,6 +59,7 @@ const ORIGIN_CACHE_TTL_SECONDS = 60;
  * Format: `cors:origin:<origin>` → `"1"` (allowed) | `"0"` (denied).
  */
 const CACHE_KEY_PREFIX = "cors:origin:";
+const PK_CACHE_KEY_PREFIX = "cors:pk-origin:";
 
 // ── Static origin allowlist ────────────────────────────────────────────────────
 //
@@ -103,9 +104,13 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
  */
 async function kvGetOrigin(
   kv: KVNamespace,
-  origin: string
+  origin: string,
+  publishableKey?: string | null
 ): Promise<boolean | null> {
-  const value = await kv.get(`${CACHE_KEY_PREFIX}${origin}`).catch(() => null);
+  const key = publishableKey
+    ? `${PK_CACHE_KEY_PREFIX}${publishableKey}:${origin}`
+    : `${CACHE_KEY_PREFIX}${origin}`;
+  const value = await kv.get(key).catch(() => null);
   if (value === "1") return true;
   if (value === "0") return false;
   return null; // cache miss
@@ -118,6 +123,21 @@ async function kvGetOrigin(
 function kvPutOrigin(kv: KVNamespace, origin: string, allowed: boolean): void {
   kv
     .put(`${CACHE_KEY_PREFIX}${origin}`, allowed ? "1" : "0", {
+      expirationTtl: ORIGIN_CACHE_TTL_SECONDS,
+    })
+    .catch(() => {
+      /* non-fatal — best-effort cache warm */
+    });
+}
+
+function kvPutPublishableKeyOrigin(
+  kv: KVNamespace,
+  publishableKey: string,
+  origin: string,
+  allowed: boolean
+): void {
+  kv
+    .put(`${PK_CACHE_KEY_PREFIX}${publishableKey}:${origin}`, allowed ? "1" : "0", {
       expirationTtl: ORIGIN_CACHE_TTL_SECONDS,
     })
     .catch(() => {
@@ -144,9 +164,9 @@ export async function resolveOrigin(
   if (!origin) return "";
 
   // ── Tier 0: KV cache ─────────────────────────────────────────────────────
-  const cached = await kvGetOrigin(kv, origin);
-  if (cached === true) return origin;
-  if (cached === false) return "";
+  const globalCached = request.headers.get("X-Publishable-Key") ? null : await kvGetOrigin(kv, origin);
+  if (globalCached === true) return origin;
+  if (globalCached === false) return "";
 
   // ── Tier 1: publishable-key D1 lookup ────────────────────────────────────
   //
@@ -156,11 +176,15 @@ export async function resolveOrigin(
   // succeeds).  When present we can short-circuit to a single-row D1 read.
   const pk = request.headers.get("X-Publishable-Key");
   if (pk) {
+    const cached = await kvGetOrigin(kv, origin, pk);
+    if (cached === true) return origin;
+    if (cached === false) return "";
+
     const app = await getApplicationByPublishableKey(db, pk).catch(() => null);
     if (app) {
       // Key resolved — apply per-app policy; cache the decision either way.
       const allowed = isOriginAllowed(app, origin);
-      kvPutOrigin(kv, origin, allowed);
+      kvPutPublishableKeyOrigin(kv, pk, origin, allowed);
       // Store app_id on the Request so databaseHooks in auth.ts can access it.
       if (allowed) setAppId(request, app.id);
       return allowed ? origin : "";

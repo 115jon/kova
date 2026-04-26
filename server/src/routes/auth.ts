@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getApplicationByPublishableKey, isOriginAllowed, isRedirectUriAllowed } from "../applications";
+import { getApplicationByPublishableKey, isApplicationSuspended, isOriginAllowed, isRedirectUriAllowed } from "../applications";
 import { createAuth } from "../auth";
 import { withHeaders } from "../middleware/cors";
 
@@ -29,6 +29,18 @@ authRouter.all("/*", async (c) => {
   if (pk) {
     const app = await getApplicationByPublishableKey(db, pk).catch(() => null);
     if (app) {
+      if (isApplicationSuspended(app)) {
+        return withHeaders(
+          Response.json(
+            { error: "application_suspended", message: "This application is suspended." },
+            { status: 403 }
+          ),
+          request,
+          db,
+          env.KV
+        );
+      }
+
       // -- 1. Origin check --
       const origin = req.header("Origin") ?? "";
       if (origin && !isOriginAllowed(app, origin)) {
@@ -107,4 +119,3 @@ authRouter.all("/*", async (c) => {
 });
 
 export { authRouter };
-

@@ -214,6 +214,10 @@ pubAppsRouter.post("/:pk/me", async (c) => {
 pubAppsRouter.post("/:pk/exchange-code", async (c) => {
   const pk = c.req.param("pk");
 
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+  if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+
   let body: { code?: string };
   try {
     body = (await c.req.json()) as { code?: string };
@@ -242,4 +246,3 @@ pubAppsRouter.post("/:pk/exchange-code", async (c) => {
 });
 
 export { pubAppsRouter };
-

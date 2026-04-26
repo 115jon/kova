@@ -24,7 +24,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 export type EnrichedSession = {
   id: string;
   userId: string;
-  token: string;
   userAgent: string | null;
   ipAddress: string | null;
   createdAt: number;
@@ -48,7 +47,7 @@ export type EnrichedSession = {
 
 export interface SessionsResponse {
   sessions: EnrichedSession[];
-  currentSessionToken: string;
+  currentSessionId: string;
 }
 
 // ── Fetcher ────────────────────────────────────────────────────────────────────
@@ -74,13 +73,11 @@ export function useSessions() {
 
 export function useRevokeSession() {
   const qc = useQueryClient();
-  return useMutation<void, Error, { token: string }>({
-    mutationFn: async ({ token }) => {
-      const res = await fetch("/api/auth/admin/revoke-user-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+  return useMutation<void, Error, { sessionId: string }>({
+    mutationFn: async ({ sessionId }) => {
+      const res = await fetch(`/api/admin/sessions/${encodeURIComponent(sessionId)}`, {
+        method: "DELETE",
         credentials: "include",
-        body: JSON.stringify({ sessionToken: token }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { message?: string };
@@ -88,13 +85,13 @@ export function useRevokeSession() {
       }
     },
     // Optimistic removal — update cache before server responds
-    onMutate: async ({ token }) => {
+    onMutate: async ({ sessionId }) => {
       await qc.cancelQueries({ queryKey: sessionKeys.list() });
       const snapshot = qc.getQueryData<SessionsResponse>(sessionKeys.list());
       if (snapshot) {
         qc.setQueryData<SessionsResponse>(sessionKeys.list(), {
           ...snapshot,
-          sessions: snapshot.sessions.filter((s) => s.token !== token),
+          sessions: snapshot.sessions.filter((s) => s.id !== sessionId),
         });
       }
       return { snapshot };
@@ -116,13 +113,13 @@ export function useRevokeSession() {
 
 export function useRevokeAllOtherSessions() {
   const qc = useQueryClient();
-  return useMutation<{ revokedCount: number }, Error, { exceptToken: string }>({
-    mutationFn: async ({ exceptToken }) => {
+  return useMutation<{ revokedCount: number }, Error, { exceptSessionId: string }>({
+    mutationFn: async ({ exceptSessionId }) => {
       const res = await fetch("/api/admin/sessions/revoke-all-others", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ exceptToken }),
+        body: JSON.stringify({ exceptSessionId }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };

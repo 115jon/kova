@@ -5,10 +5,12 @@ import {
   listApplications,
   rotateSecretKey,
   updateApplication,
+  validateApplicationPolicy,
 } from "../applications";
 import { createAuth } from "../auth";
 import { syncPlanFeatures } from "../lib/plan-limits";
 import { hasAdminRole } from "../lib/roles";
+import { verifyStripeWebhookSignature } from "../lib/stripe-webhook";
 import type { AppEventMessage } from "../queue-consumer";
 
 const appsRouter = new Hono<{ Bindings: Env }>();
@@ -77,11 +79,22 @@ appsRouter.post("/", async (c) => {
   if (!body.name) {
     return Response.json({ error: "name is required" }, { status: 400 });
   }
+  const environment = body.environment ?? "development";
+  const allowedOrigins = body.allowed_origins ?? [];
+  const redirectUris = body.redirect_uris ?? [];
+  const policyError = validateApplicationPolicy({
+    environment,
+    allowed_origins: allowedOrigins,
+    redirect_uris: redirectUris,
+  });
+  if (policyError) {
+    return Response.json({ error: policyError }, { status: 400 });
+  }
   const result = await createApplication(c.env.DB, {
     name: body.name,
-    environment: body.environment ?? "development",
-    allowed_origins: body.allowed_origins ?? [],
-    redirect_uris: body.redirect_uris ?? [],
+    environment,
+    allowed_origins: allowedOrigins,
+    redirect_uris: redirectUris,
     createdBy: session.user.id,
     signingSecret: c.env.BETTER_AUTH_SECRET,
   });
@@ -109,6 +122,16 @@ appsRouter.patch("/:id", async (c) => {
   if (!existing) return Response.json({ error: "Not found" }, { status: 404 });
 
   const body = (await c.req.raw.json()) as Record<string, unknown>;
+  const nextAllowedOrigins = (body.allowed_origins as string[] | undefined) ?? existing.allowed_origins;
+  const nextRedirectUris = (body.redirect_uris as string[] | undefined) ?? existing.redirect_uris;
+  const policyError = validateApplicationPolicy({
+    environment: existing.environment,
+    allowed_origins: nextAllowedOrigins,
+    redirect_uris: nextRedirectUris,
+  });
+  if (policyError) {
+    return Response.json({ error: policyError }, { status: 400 });
+  }
   const app = await updateApplication(c.env.DB, id, {
     name: body.name as string | undefined,
     allowed_origins: body.allowed_origins as string[] | undefined,
@@ -496,20 +519,7 @@ appsRouter.post("/billing/webhook", async (c) => {
   const sig = c.req.raw.headers.get("stripe-signature") ?? "";
   const body = await c.req.raw.text();
 
-  // Lightweight HMAC-SHA256 Stripe signature verification (no stripe-node needed)
-  const parts = Object.fromEntries(sig.split(",").map(p => p.split("="))) as Record<string, string>;
-  const payload = `${parts["t"]}.${body}`;
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(c.env.STRIPE_WEBHOOK_SECRET),
-    { name: "HMAC", hash: "SHA-256" },
-    false, ["sign"]
-  );
-  const expected = Array.from(
-    new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload)))
-  ).map(b => b.toString(16).padStart(2, "0")).join("");
-
-  if (expected !== parts["v1"]) {
+  if (!(await verifyStripeWebhookSignature(body, sig, c.env.STRIPE_WEBHOOK_SECRET))) {
     return Response.json({ error: "Invalid signature" }, { status: 400 });
   }
 
@@ -631,4 +641,3 @@ appsRouter.put("/:id/oauth-providers", async (c) => {
 });
 
 export { appsRouter };
-

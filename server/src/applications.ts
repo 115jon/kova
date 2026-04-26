@@ -122,13 +122,12 @@ export interface AppRow {
  * Format: `{prefix}_{base62(32 random bytes)}`
  * e.g. `pk_dev_4aB9kLm2...`
  */
-function generateKey(prefix: string): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "";
-  for (const b of bytes) {
-    result += chars[b % chars.length];
-  }
+export function generateKey(prefix: string): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const result = btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
   return `${prefix}_${result}`;
 }
 
@@ -471,26 +470,88 @@ export async function validateSecretKey(
 
 // ── Origin / redirect validation ───────────────────────────────────────────────
 
-export function isRedirectUriAllowed(app: Application, uri: string): boolean {
-  if (app.environment === "development") {
-    // In dev: localhost on any port is always permitted
-    try {
-      const u = new URL(uri);
-      if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return true;
-    } catch { /* invalid URL, fall through */ }
+function isLocalhostUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.hostname === "localhost" || u.hostname === "127.0.0.1";
+  } catch {
+    return false;
   }
-  if (app.redirect_uris.length === 0) return true; // Fail-open if not configured (as before)
-  return app.redirect_uris.some((allowed) => uri.startsWith(allowed));
+}
+
+export function isApplicationSuspended(app: Pick<Application, "suspended_at">): boolean {
+  return app.suspended_at !== null && app.suspended_at !== undefined;
+}
+
+export function isValidOrigin(value: string, environment: Application["environment"]): boolean {
+  try {
+    const u = new URL(value);
+    if (u.origin !== value) return false;
+    if (environment === "development" && isLocalhostUrl(value)) return true;
+    return u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function isValidRedirectUri(value: string, environment: Application["environment"]): boolean {
+  try {
+    const u = new URL(value);
+    if (environment === "development" && isLocalhostUrl(value)) return true;
+    return u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function validateApplicationPolicy(input: {
+  environment: Application["environment"];
+  allowed_origins: string[];
+  redirect_uris: string[];
+}): string | null {
+  if (input.environment === "production") {
+    if (input.allowed_origins.length === 0) return "production apps require at least one allowed origin";
+    if (input.redirect_uris.length === 0) return "production apps require at least one redirect URI";
+  }
+
+  const invalidOrigin = input.allowed_origins.find((origin) => !isValidOrigin(origin, input.environment));
+  if (invalidOrigin) return `invalid allowed origin: ${invalidOrigin}`;
+
+  const invalidRedirect = input.redirect_uris.find((uri) => !isValidRedirectUri(uri, input.environment));
+  if (invalidRedirect) return `invalid redirect URI: ${invalidRedirect}`;
+
+  return null;
+}
+
+export function isRedirectUriAllowed(app: Application, uri: string): boolean {
+  if (isApplicationSuspended(app)) return false;
+  if (app.environment === "development" && isLocalhostUrl(uri)) return true;
+  if (app.redirect_uris.length === 0) return app.environment === "development";
+
+  let requested: URL;
+  try {
+    requested = new URL(uri);
+  } catch {
+    return false;
+  }
+
+  return app.redirect_uris.some((allowed) => {
+    let registered: URL;
+    try {
+      registered = new URL(allowed);
+    } catch {
+      return false;
+    }
+    if (registered.origin !== requested.origin) return false;
+    if (registered.pathname !== requested.pathname) return false;
+    if (registered.search && registered.search !== requested.search) return false;
+    return true;
+  });
 }
 
 export function isOriginAllowed(app: Application, origin: string): boolean {
-  if (app.environment === "development") {
-    // In dev: localhost origins are always permitted
-    try {
-      const u = new URL(origin);
-      if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return true;
-    } catch { /* invalid origin, fall through */ }
-  }
-  if (app.allowed_origins.length === 0) return true; // Default allow (as before, for newly created apps)
+  if (isApplicationSuspended(app)) return false;
+  if (app.environment === "development" && isLocalhostUrl(origin)) return true;
+  if (app.allowed_origins.length === 0) return app.environment === "development";
   return app.allowed_origins.some(o => o === origin);
 }

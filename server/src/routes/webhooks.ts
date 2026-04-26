@@ -12,6 +12,26 @@ import {
 
 const webhooksRouter = new Hono<{ Bindings: Env }>();
 
+function isDevelopmentEnv(env: Env): boolean {
+  try {
+    const host = new URL(env.AUTH_URL).hostname;
+    return host === "localhost" || host.endsWith(".localhost") || host.endsWith(".lvh.me");
+  } catch {
+    return false;
+  }
+}
+
+function isBlockedWebhookHostname(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  if (lower === "localhost" || lower.endsWith(".localhost")) return true;
+  if (lower === "169.254.169.254") return true;
+  if (/^127\./.test(lower)) return true;
+  if (/^10\./.test(lower)) return true;
+  if (/^192\.168\./.test(lower)) return true;
+  const match = lower.match(/^172\.(\d+)\./);
+  return !!match && Number(match[1]) >= 16 && Number(match[1]) <= 31;
+}
+
 // ── Webhook endpoints: list + create ─────────────────────────────────────────
 //
 // GET  /api/webhooks/endpoints
@@ -52,12 +72,12 @@ webhooksRouter.post("/endpoints", async (c) => {
   }
   try {
     const parsed = new URL(body.url);
-    if (
-      parsed.protocol !== "https:" &&
-      parsed.hostname !== "localhost" &&
-      !parsed.hostname.startsWith("127.")
-    ) {
+    const isDevLocal = isDevelopmentEnv(env) && (parsed.hostname === "localhost" || parsed.hostname.startsWith("127."));
+    if (parsed.protocol !== "https:" && !isDevLocal) {
       return Response.json({ error: "Webhook URL must use HTTPS" }, { status: 400 });
+    }
+    if (!isDevelopmentEnv(env) && isBlockedWebhookHostname(parsed.hostname)) {
+      return Response.json({ error: "Webhook URL host is not allowed" }, { status: 400 });
     }
   } catch {
     return Response.json({ error: "Invalid URL" }, { status: 400 });
@@ -148,4 +168,3 @@ webhooksRouter.post("/endpoints/:id/test", async (c) => {
 });
 
 export { webhooksRouter };
-

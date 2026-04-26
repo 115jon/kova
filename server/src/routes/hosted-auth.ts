@@ -75,14 +75,15 @@ type HostedPageMode = "sign-in" | "sign-up";
  * JS bundle served from Workers Assets. Phase 1 uses the shared bundle;
  * a standalone hosted-auth build target is deferred to Tier 3 (see TASKS.md).
  */
-function buildHostedPage(opts: {
+async function buildHostedPage(opts: {
   app: Application;
   mode: HostedPageMode;
   redirectUri: string;
   state: string;
   authUrl: string;       // subdomain URL — used for non-OAuth auth endpoints
   mainAuthUrl: string;   // main platform URL — used for OAuth provider initiation
-}): string {
+  signingSecret: string;
+}): Promise<string> {
   const { app, mode, redirectUri, state, authUrl, mainAuthUrl } = opts;
   const title = mode === "sign-in"
     ? `Sign in to ${esc(app.display_name ?? app.name)}`
@@ -118,12 +119,12 @@ function buildHostedPage(opts: {
     // oauthCtx: pre-encoded bounce context to embed in the OAuth callbackURL.
     // The hosted UI appends this to the mainAuthUrl sign-in link so the
     // central OAuth bounce handler knows which app to redirect back to.
-    oauthCtx: encodeOAuthCtx({
+    oauthCtx: await encodeOAuthCtx({
       slug: app.auth_slug ?? "",
       appId: app.id,
       redirect_uri: redirectUri,
       state,
-    }),
+    }, opts.signingSecret),
   });
 
   return `<!DOCTYPE html>
@@ -165,8 +166,9 @@ function buildHostedPage(opts: {
 
 // ── GET /sign-in ───────────────────────────────────────────────────────────────
 
-hostedAuthRouter.get("/sign-in", (c) => {
+hostedAuthRouter.get("/sign-in", async (c) => {
   const app = getApp(c);
+  if (app.suspended_at) return c.html(`<p style="font-family:monospace;color:#f87171;padding:32px">Application suspended.</p>`, 403);
   const host = getHost(c);
   const redirectUri = c.req.query("redirect_uri") ?? "";
   const state = c.req.query("state") ?? "";
@@ -178,17 +180,19 @@ hostedAuthRouter.get("/sign-in", (c) => {
     );
   }
 
-  return c.html(buildHostedPage({
+  return c.html(await buildHostedPage({
     app, mode: "sign-in", redirectUri, state,
     authUrl: `https://${host}`,
     mainAuthUrl: c.env.AUTH_URL,
+    signingSecret: c.env.BETTER_AUTH_SECRET,
   }));
 });
 
 // ── GET /sign-up ───────────────────────────────────────────────────────────────
 
-hostedAuthRouter.get("/sign-up", (c) => {
+hostedAuthRouter.get("/sign-up", async (c) => {
   const app = getApp(c);
+  if (app.suspended_at) return c.html(`<p style="font-family:monospace;color:#f87171;padding:32px">Application suspended.</p>`, 403);
   const host = getHost(c);
   const redirectUri = c.req.query("redirect_uri") ?? "";
   const state = c.req.query("state") ?? "";
@@ -200,10 +204,11 @@ hostedAuthRouter.get("/sign-up", (c) => {
     );
   }
 
-  return c.html(buildHostedPage({
+  return c.html(await buildHostedPage({
     app, mode: "sign-up", redirectUri, state,
     authUrl: `https://${host}`,
     mainAuthUrl: c.env.AUTH_URL,
+    signingSecret: c.env.BETTER_AUTH_SECRET,
   }));
 });
 
@@ -214,6 +219,8 @@ hostedAuthRouter.get("/sign-up", (c) => {
 // exact subdomain hostname by the browser (RFC 6265 §5.2).
 
 hostedAuthRouter.all("/api/auth/*", async (c) => {
+  const app = getApp(c);
+  if (app.suspended_at) return c.json({ error: "Application suspended" }, 403);
   const host = getHost(c);
   const subdomainUrl = `https://${host}`;
   const auth = createAuth(
@@ -232,6 +239,7 @@ hostedAuthRouter.all("/api/auth/*", async (c) => {
 
 hostedAuthRouter.post("/api/hosted/create-ticket", async (c) => {
   const app = getApp(c);
+  if (app.suspended_at) return c.json({ error: "Application suspended" }, 403);
   const host = getHost(c);
   const subdomainUrl = `https://${host}`;
 
@@ -272,6 +280,7 @@ hostedAuthRouter.post("/api/hosted/create-ticket", async (c) => {
 
 hostedAuthRouter.post("/api/hosted/exchange-ticket", async (c) => {
   const app = getApp(c);
+  if (app.suspended_at) return c.json({ error: "Application suspended" }, 403);
 
   const authHeader = c.req.header("Authorization") ?? "";
   const secretKey = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
@@ -312,6 +321,7 @@ hostedAuthRouter.post("/api/hosted/exchange-ticket", async (c) => {
 
 hostedAuthRouter.get("/oauth-complete", async (c) => {
   const app = getApp(c);
+  if (app.suspended_at) return c.html(`<p style="font-family:monospace;color:#f87171;padding:32px">Application suspended.</p>`, 403);
   const host = getHost(c);
   const subdomainUrl = `https://${host}`;
 
@@ -351,17 +361,19 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
   try {
     const { generateId } = await import("better-auth");
     const sessionId = generateId();
+    const sessionToken = generateId(32);
     const now = Date.now();
     const expiresAt = now + 7 * 24 * 60 * 60 * 1000; // 7 days — matches auth.ts session.expiresIn
 
     // Insert session row directly — same schema Better Auth uses
     await c.env.DB.prepare(
-      `INSERT INTO session (id, userId, expiresAt, createdAt, updatedAt, ipAddress, userAgent, app_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO session (id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, app_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         sessionId,
         ticketResult.userId,
+        sessionToken,
         new Date(expiresAt).toISOString(),
         new Date(now).toISOString(),
         new Date(now).toISOString(),
@@ -371,10 +383,10 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
       )
       .run();
 
-    // Better Auth session cookies are named "session_token" and contain the session ID.
+    // Better Auth session cookies are named "better-auth.session_token" and contain session.token.
     // SameSite=None; Secure; HttpOnly — matches the advanced.defaultCookieAttributes in auth.ts.
     // No Domain= attribute → cookie scoped to this exact subdomain hostname (RFC 6265 §5.2).
-    setCookieHeader = `session_token=${sessionId}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${7 * 24 * 60 * 60}`;
+    setCookieHeader = `better-auth.session_token=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${7 * 24 * 60 * 60}`;
   } catch {
     // Non-fatal — user can still complete the redirect flow; they just won't
     // have a local subdomain session cookie (OAuth session on main domain is still valid).

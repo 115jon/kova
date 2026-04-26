@@ -46,7 +46,7 @@
  */
 
 import type { Context } from "hono";
-import { getApplicationByPublishableKey, isRedirectUriAllowed } from "../applications";
+import { getApplicationById, getApplicationByPublishableKey, isRedirectUriAllowed } from "../applications";
 import { createAuth } from "../auth";
 import { createAuthTicket, createSessionTransferCode } from "../lib/auth-ticket";
 
@@ -55,6 +55,7 @@ export interface OAuthBounceCtx {
   appId: string;
   redirect_uri: string;
   state: string;
+  exp?: number;
 }
 
 /**
@@ -75,20 +76,57 @@ export interface OAuthBounceSDKParams {
  * This is passed as the `callbackURL` query param when initiating OAuth,
  * so Better Auth appends it to the post-OAuth redirect automatically.
  */
-export function encodeOAuthCtx(ctx: OAuthBounceCtx): string {
-  return btoa(JSON.stringify(ctx)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+function base64UrlEncode(input: string): string {
+  return btoa(input).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+function base64UrlDecode(input: string): string {
+  const padded = input.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((input.length + 3) % 4);
+  return atob(padded);
+}
+
+async function hmacSha256Hex(secret: string, value: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+export async function encodeOAuthCtx(ctx: OAuthBounceCtx, secret: string): Promise<string> {
+  const payload = base64UrlEncode(JSON.stringify({
+    ...ctx,
+    exp: ctx.exp ?? Date.now() + 10 * 60 * 1000,
+  }));
+  const sig = await hmacSha256Hex(secret, payload);
+  return `${payload}.${sig}`;
 }
 
 /**
  * Decodes a bounce context from a URL-safe base64 string.
  * Returns null if the ctx param is missing or malformed.
  */
-export function decodeOAuthCtx(raw: string | null): OAuthBounceCtx | null {
+export async function decodeOAuthCtx(raw: string | null, secret: string): Promise<OAuthBounceCtx | null> {
   if (!raw) return null;
   try {
-    // Re-pad base64url → standard base64
-    const padded = raw.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((raw.length + 3) % 4);
-    return JSON.parse(atob(padded)) as OAuthBounceCtx;
+    const [payload, sig] = raw.split(".");
+    if (!payload || !sig) return null;
+    const expected = await hmacSha256Hex(secret, payload);
+    if (!constantTimeEqual(expected, sig)) return null;
+    const parsed = JSON.parse(base64UrlDecode(payload)) as OAuthBounceCtx;
+    if (!parsed.exp || parsed.exp < Date.now()) return null;
+    return parsed;
   } catch {
     return null;
   }
@@ -125,7 +163,7 @@ export async function handleOAuthBounce(
 
   // ── Hosted subdomain flow (ctx=<b64>) ───────────────────────────────────────
   const rawCtx = c.req.query("ctx");
-  const ctx = decodeOAuthCtx(rawCtx ?? null);
+  const ctx = await decodeOAuthCtx(rawCtx ?? null, c.env.BETTER_AUTH_SECRET);
 
   if (!ctx?.slug || !ctx?.appId) {
     return c.html(
@@ -133,6 +171,14 @@ export async function handleOAuthBounce(
         OAuth bounce failed: missing or invalid context.<br>
         <a href="javascript:history.back()">Go back</a>
       </p>`,
+      400
+    );
+  }
+
+  const app = await getApplicationById(c.env.DB, ctx.appId).catch(() => null);
+  if (!app || app.suspended_at || app.auth_slug !== ctx.slug || !isRedirectUriAllowed(app, ctx.redirect_uri)) {
+    return c.html(
+      `<p style="font-family:monospace;color:#f87171;padding:32px">OAuth bounce failed: invalid application context.</p>`,
       400
     );
   }
@@ -157,7 +203,7 @@ export async function handleOAuthBounce(
   const ticket = await createAuthTicket(c.env.KV, {
     userId: session.user.id,
     sessionId: session.session.id,
-    appId: ctx.appId,
+    appId: app.id,
     redirectUri: ctx.redirect_uri,
   });
 
@@ -261,8 +307,6 @@ async function handleSdkBounce(
         session: Record<string, unknown>;
         user: Record<string, unknown>;
       }>;
-      console.log("[oauth-bounce] Found device sessions:", JSON.stringify(deviceSessions.map(s => s.user.email)));
-
       // Find any session that is NOT the one just created by OAuth
       const prevSession = Array.isArray(deviceSessions)
         ? deviceSessions.find(s => s.session["id"] !== session.session.id)

@@ -358,7 +358,7 @@ adminRouter.get("/sessions", async (c) => {
   const nowMs = Date.now();
 
   type RawSession = {
-    id: string; userId: string; token: string;
+    id: string; userId: string;
     userAgent: string | null; ipAddress: string | null;
     createdAt: number; updatedAt: number; expiresAt: number;
     userName: string; userEmail: string; userImage: string | null;
@@ -367,7 +367,7 @@ adminRouter.get("/sessions", async (c) => {
   let sessionsResult: D1Result<RawSession>;
   if (filterUserId) {
     sessionsResult = await env.DB.prepare(
-      `SELECT s.id, s.userId, s.token, s.userAgent, s.ipAddress,
+      `SELECT s.id, s.userId, s.userAgent, s.ipAddress,
               s.createdAt, s.updatedAt, s.expiresAt,
               u.name as userName, u.email as userEmail, u.image as userImage
        FROM session s
@@ -379,7 +379,7 @@ adminRouter.get("/sessions", async (c) => {
       .all<RawSession>();
   } else {
     sessionsResult = await env.DB.prepare(
-      `SELECT s.id, s.userId, s.token, s.userAgent, s.ipAddress,
+      `SELECT s.id, s.userId, s.userAgent, s.ipAddress,
               s.createdAt, s.updatedAt, s.expiresAt,
               u.name as userName, u.email as userEmail, u.image as userImage
        FROM session s
@@ -393,14 +393,14 @@ adminRouter.get("/sessions", async (c) => {
   }
 
   const rawSessions = sessionsResult.results ?? [];
-  const callerToken = session.session.token;
+  const callerSessionId = session.session.id;
   const geo = parseGeo(request.cf as IncomingRequestCfProperties | undefined);
 
   const enriched = rawSessions.map((s) => {
     const device = parseDevice(s.userAgent);
     return {
       ...s,
-      isCurrent: s.token === callerToken,
+      isCurrent: s.id === callerSessionId,
       deviceType: device.deviceType,
       browser: device.browser,
       browserVersion: device.browserVersion,
@@ -414,13 +414,35 @@ adminRouter.get("/sessions", async (c) => {
     };
   });
 
-  return Response.json({ sessions: enriched, currentSessionToken: callerToken });
+  return Response.json({ sessions: enriched, currentSessionId: callerSessionId });
+});
+
+adminRouter.delete("/sessions/:sessionId", async (c) => {
+  const { env } = c;
+  const request = c.req.raw;
+  const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session?.user) return Response.json({ error: "Not authenticated" }, { status: 401 });
+  if (!hasAdminRole((session.user as { role?: string }).role)) {
+    return Response.json({ error: "Admin access required" }, { status: 403 });
+  }
+
+  const sessionId = c.req.param("sessionId");
+  if (sessionId === session.session.id) {
+    return Response.json({ error: "Cannot revoke current session" }, { status: 400 });
+  }
+
+  const result = await env.DB.prepare(`DELETE FROM session WHERE id = ?`)
+    .bind(sessionId)
+    .run();
+
+  return Response.json({ success: true, revokedCount: result.meta?.changes ?? 0 });
 });
 
 // ── Bulk revoke other sessions ────────────────────────────────────────────────
 //
 // POST /api/admin/sessions/revoke-all-others
-// Body: { exceptToken: string }
+// Body: { exceptSessionId: string }
 adminRouter.post("/sessions/revoke-all-others", async (c) => {
   const { env } = c;
   const request = c.req.raw;
@@ -433,17 +455,17 @@ adminRouter.post("/sessions/revoke-all-others", async (c) => {
     return Response.json({ error: "Admin access required" }, { status: 403 });
   }
 
-  let exceptToken: string;
+  let exceptSessionId: string;
   try {
-    const body = (await request.json()) as { exceptToken?: string };
-    exceptToken = body.exceptToken ?? session.session.token;
+    const body = (await request.json()) as { exceptSessionId?: string };
+    exceptSessionId = body.exceptSessionId ?? session.session.id;
   } catch {
-    exceptToken = session.session.token;
+    exceptSessionId = session.session.id;
   }
 
   const nowMs = Date.now();
-  const result = await env.DB.prepare(`DELETE FROM session WHERE token != ? AND expiresAt > ?`)
-    .bind(exceptToken, nowMs)
+  const result = await env.DB.prepare(`DELETE FROM session WHERE id != ? AND expiresAt > ?`)
+    .bind(exceptSessionId, nowMs)
     .run();
 
   await logAudit(env.DB, {
@@ -593,4 +615,3 @@ adminRouter.delete("/orgs/:orgId/domains/:domainId", async (c) => {
 });
 
 export { adminRouter };
-
