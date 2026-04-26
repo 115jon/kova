@@ -37,7 +37,7 @@ import { deliverEvent } from "./webhook";
  *   withCloudflare sets `database` internally from d1Native — don't
  *   set it again in the second arg or it will conflict.
  */
-export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Request) {
+export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Request, baseURLOverride?: string) {
   return betterAuth(
     withCloudflare(
       // ── First arg: Cloudflare bindings + options ──────────────
@@ -58,7 +58,10 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
       // ── Second arg: Better Auth config ────────────────────────
       {
         secret: env.BETTER_AUTH_SECRET,
-        baseURL: env.AUTH_URL,
+        // When baseURLOverride is provided (by hostedAuthRouter for subdomain requests),
+        // cookies are scoped to that exact hostname (RFC 6265 §5.2 exact-hostname rule).
+        // NEVER set advanced.crossSubDomainCookies on these instances.
+        baseURL: baseURLOverride ?? env.AUTH_URL,
         basePath: "/api/auth",
 
         // ── Cross-origin cookie policy ────────────────────────────
@@ -119,6 +122,12 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
         // We mark all six social providers as trusted because each performs
         // email-ownership verification in their OAuth flow.
         account: {
+          // ── Account linking ─────────────────────────────────────
+          //
+          // Prevents duplicate accounts when the same email is used with
+          // different providers. All active social providers are trusted so that
+          // e.g. a user who signed up with Google can later sign in with GitHub
+          // (same verified email) and get one unified account.
           accountLinking: {
             enabled: true,
             trustedProviders: [
@@ -131,6 +140,18 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
               "email",          // credential accounts (email+password / magic-link)
             ],
           },
+
+          // ── OAuth state cookie check ────────────────────────────
+          //
+          // Better Auth validates OAuth state with TWO checks:
+          //   1. DB verification value (via KV secondaryStorage) ← always works
+          //   2. Signed "state" cookie on the auth domain        ← unreliable cross-origin
+          //
+          // In cross-origin SDK flows (e.g. localhost:5180 → auth.lvh.me), Chrome
+          // may drop the SameSite=None signed state cookie during the Google
+          // OAuth round-trip, causing "State not persisted correctly" on callback.
+          // Check #1 (DB verification) is sufficient — skip the cookie check.
+          skipStateCookieCheck: true,
         },
 
         // ── Error page ───────────────────────────────────────────

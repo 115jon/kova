@@ -20,6 +20,8 @@
  *   KV key: `plan:{app_id}`               (TTL: 60 s)
  */
 
+import { generateAuthSlug } from "./lib/slugify";
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface Application {
@@ -62,10 +64,15 @@ export interface Application {
   plan_expires_at: number | null;
   // ── Platform lifecycle
   suspended_at: number | null;
+  // ── Auth subdomain (migration 0018)
+  /** Auto-generated immutable slug: {slug}.auth.115jon.site */
+  auth_slug: string | null;
+  /** Optional custom domain alias (e.g. login.mycompany.com) */
+  custom_domain: string | null;
 }
 
 /** DB row as stored in D1 (origins/uris are newline-delimited strings). */
-interface AppRow {
+export interface AppRow {
   id: string;
   name: string;
   environment: string;
@@ -103,6 +110,9 @@ interface AppRow {
   plan_expires_at: number | null;
   // Lifecycle
   suspended_at: number | null;
+  // Auth subdomain (migration 0018)
+  auth_slug: string | null;
+  custom_domain: string | null;
 }
 
 // ── Key generation ─────────────────────────────────────────────────────────────
@@ -153,7 +163,7 @@ async function verifySecret(raw: string, stored: string, signingSecret: string):
 
 // ── Row transformer ────────────────────────────────────────────────────────────
 
-function rowToApp(row: AppRow): Application {
+export function rowToApp(row: AppRow): Application {
   return {
     id: row.id,
     name: row.name,
@@ -195,6 +205,9 @@ function rowToApp(row: AppRow): Application {
     plan_expires_at: row.plan_expires_at ?? null,
     // Lifecycle
     suspended_at: row.suspended_at ?? null,
+    // Auth subdomain
+    auth_slug: row.auth_slug ?? null,
+    custom_domain: row.custom_domain ?? null,
   };
 }
 
@@ -210,7 +223,7 @@ export async function listApplications(db: D1Database): Promise<Application[]> {
               from_name, from_email, support_email,
               smtp_host, smtp_port, smtp_user, smtp_secure,
               stripe_customer_id, stripe_subscription_id, plan, plan_expires_at,
-              suspended_at
+              suspended_at, auth_slug, custom_domain
        FROM application ORDER BY createdAt DESC`
     )
     .all<AppRow>();
@@ -230,7 +243,7 @@ export async function getApplicationByPublishableKey(
               from_name, from_email, support_email,
               smtp_host, smtp_port, smtp_user, smtp_secure,
               stripe_customer_id, stripe_subscription_id, plan, plan_expires_at,
-              suspended_at
+              suspended_at, auth_slug, custom_domain
        FROM application WHERE publishable_key = ? LIMIT 1`
     )
     .bind(publishableKey)
@@ -251,7 +264,7 @@ export async function getApplicationById(
               from_name, from_email, support_email,
               smtp_host, smtp_port, smtp_user, smtp_secure,
               stripe_customer_id, stripe_subscription_id, plan, plan_expires_at,
-              suspended_at
+              suspended_at, auth_slug, custom_domain
        FROM application WHERE id = ? LIMIT 1`
     )
     .bind(id)
@@ -283,14 +296,15 @@ export async function createApplication(
   const publishableKey = generateKey(`pk_${envPrefix}`);
   const rawSecretKey = generateKey(`sk_${envPrefix}`);
   const secretHash = await hashSecret(rawSecretKey, input.signingSecret);
+  const authSlug = generateAuthSlug(input.name);
   const now = Date.now();
 
   await db
     .prepare(
       `INSERT INTO application
          (id, name, environment, publishable_key, secret_key_hash,
-          allowed_origins, redirect_uris, createdBy, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          allowed_origins, redirect_uris, createdBy, createdAt, updatedAt, auth_slug)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id, input.name, input.environment,
@@ -298,7 +312,8 @@ export async function createApplication(
       input.allowed_origins.join("\n"),
       input.redirect_uris.join("\n"),
       input.createdBy,
-      now, now
+      now, now,
+      authSlug
     )
     .run();
 
@@ -330,12 +345,15 @@ export interface UpdateApplicationInput {
   smtp_user?: string | null;
   smtp_pass_enc?: string | null;  // already encrypted by caller
   smtp_secure?: boolean;
+  // Auth subdomain — only custom_domain is mutable; auth_slug is immutable
+  custom_domain?: string | null;
 }
 
 export async function updateApplication(
   db: D1Database,
   id: string,
-  input: UpdateApplicationInput
+  input: UpdateApplicationInput,
+  kv?: KVNamespace
 ): Promise<Application | null> {
   const now = Date.now();
   const sets: string[] = ["updatedAt = ?"];
@@ -366,6 +384,7 @@ export async function updateApplication(
   addField("smtp_user", input.smtp_user);
   addField("smtp_pass_enc", input.smtp_pass_enc);
   addField("smtp_secure", input.smtp_secure);
+  addField("custom_domain", input.custom_domain);
 
   if (input.allowed_origins !== undefined) {
     sets.push("allowed_origins = ?");
@@ -381,10 +400,27 @@ export async function updateApplication(
     .bind(...bindings, id)
     .run();
 
-  return getApplicationById(db, id);
+  const updated = await getApplicationById(db, id);
+
+  // Invalidate subdomain KV caches — fire-and-forget.
+  // Keys mirror the patterns in lib/subdomain.ts.
+  if (kv && updated?.auth_slug) kv.delete(`slug:${updated.auth_slug}`).catch(() => { });
+  if (kv && updated?.custom_domain) kv.delete(`domain:${updated.custom_domain}`).catch(() => { });
+  // Also bust the OLD custom_domain if it changed
+  if (kv && input.custom_domain !== undefined && input.custom_domain !== updated?.custom_domain) {
+    kv.delete(`domain:${input.custom_domain}`).catch(() => { });
+  }
+
+  return updated;
 }
 
-export async function deleteApplication(db: D1Database, id: string): Promise<void> {
+export async function deleteApplication(db: D1Database, id: string, kv?: KVNamespace): Promise<void> {
+  // Read the slug before deletion so we can invalidate the KV cache
+  if (kv) {
+    const app = await getApplicationById(db, id).catch(() => null);
+    if (app?.auth_slug) kv.delete(`slug:${app.auth_slug}`).catch(() => { });
+    if (app?.custom_domain) kv.delete(`domain:${app.custom_domain}`).catch(() => { });
+  }
   await db.prepare(`DELETE FROM application WHERE id = ?`).bind(id).run();
 }
 

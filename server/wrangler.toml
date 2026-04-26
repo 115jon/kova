@@ -1,71 +1,26 @@
+# ⚠ DEPRECATED — This file is no longer the authoritative Wrangler configuration.
+#
+# The single source of truth for all wrangler config, bindings, routes, D1, KV,
+# Durable Objects, and deploy settings is:
+#
+#   dashboard/wrangler.toml
+#
+# This file is kept here to avoid breaking any IDE integrations or tooling that
+# might expect a wrangler.toml next to the TypeScript source, but running
+# `wrangler dev` or `wrangler deploy` from this directory will NOT produce a
+# correct result (missing [assets], wrong paths, no migrations, etc.).
+#
+# ── Correct commands (always run from repo root or dashboard/) ────────────────
+#   pnpm dev              →  starts Vite + Miniflare on :5174
+#   pnpm migrate:dev      →  applies pending D1 migrations to local DB
+#   pnpm migrate:prod     →  applies migrations to production D1
+#   pnpm deploy           →  build + wrangler deploy
+#   pnpm cf-typegen       →  regenerate Cloudflare worker types
+# ─────────────────────────────────────────────────────────────────────────────
+
 name = "ralph-auth-server"
 main = "src/index.ts"
 compatibility_date = "2026-04-12"
 compatibility_flags = ["nodejs_compat"]
 
-# ── Static Assets (dashboard SPA) ─────────────────────────────────────────────
-# run_worker_first = true  → ALL requests hit the Hono worker first.
-# API routes (/api/*, /health) are handled by Hono.
-# SPA routes (/, /sign-in, /dashboard/*) fall through to app.notFound()
-# which calls env.ASSETS.fetch(request) → Workers Assets serves index.html.
-[assets]
-binding = "ASSETS"
-directory = "../dashboard/dist/client"
-not_found_handling = "single-page-application"
-html_handling = "auto-trailing-slash"
-run_worker_first = true
-
-# ── Routes ────────────────────────────────────────────────────────────────────
-[[routes]]
-pattern = "auth.115jon.site"
-zone_name = "115jon.site"
-custom_domain = true
-
-[vars]
-# ── Dev defaults — overridden in production via: wrangler secret put <NAME> ──────
-# Combined worker: dashboard + server share one origin.
-# Production URL is injected as a Cloudflare secret - not listed here.
-# CDN — production URL; not sensitive so kept as a plain var.
-CDN_URL = "https://cdn.115jon.site"
-
-# ── D1 Database ─────────────────────────────────────────────
-[[d1_databases]]
-binding = "DB"
-database_name = "ralph-auth-db"
-database_id = "aefbb49d-1582-4052-bd4e-77e5d559a3c6"
-
-# ── KV Session Cache ─────────────────────────────────────────
-[[kv_namespaces]]
-binding = "KV"
-id = "aecb44a2caff4a65a65a6f5c8e5c375e"
-
-# ── App Events Queue ─────────────────────────────────────────
-# Async fan-out: app deletion (R2 + Stripe cleanup), email SMTP dispatch,
-# plan.updated cache invalidation.
-[[queues.producers]]
-binding = "APP_EVENTS"
-queue   = "ralph-auth-app-events"
-
-[[queues.consumers]]
-queue             = "ralph-auth-app-events"
-max_batch_size    = 10
-max_batch_timeout = 5
-max_retries       = 3
-
-# ── AppCounter Durable Object ─────────────────────────────────
-# Per-app atomic counters: total_users, total_orgs, logins_24h.
-# Incremented by session.create hook; powers Overview tab without D1 COUNT(*).
-[[durable_objects.bindings]]
-name       = "APP_COUNTER"
-class_name = "AppCounter"
-
-[[migrations]]
-tag                = "v1"
-new_sqlite_classes = ["AppCounter"]
-
-[dev]
-port = 5174
-
-[observability.logs]
-enabled = true
-invocation_logs = true
+# DO NOT ADD BINDINGS HERE. See dashboard/wrangler.toml.

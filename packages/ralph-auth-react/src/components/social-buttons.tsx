@@ -20,7 +20,7 @@ import { Alert } from "./ui";
 
 /**
  * Resolves a potentially-relative path to an absolute URL rooted at the
- * client app's origin (authUrl from context).
+ * client app's origin (window.location.origin in the browser).
  *
  * Better Auth uses its own `baseURL` (the auth server) to resolve relative
  * callbackURL values, which would redirect the browser to the auth server
@@ -31,14 +31,62 @@ import { Alert } from "./ui";
 export function resolveAbsoluteUrl(authUrl: string, path?: string): string {
   const input = path ?? "/";
   try {
-    // Already absolute — trust it as-is.
     new URL(input);
     return input;
   } catch {
-    const base = authUrl.replace(/\/$/, "");
+    const appOrigin =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : authUrl.replace(/\/$/, "");
     const segment = input.startsWith("/") ? input : `/${input}`;
-    return `${base}${segment}`;
+    return `${appOrigin}${segment}`;
   }
+}
+
+/**
+ * Detects whether the consumer app is on a different registrable domain from
+ * the auth server. When true, the OAuth callbackURL must go through the
+ * oauth-complete bounce handler to avoid relying on SameSite=None cross-site
+ * cookie sharing (which browsers increasingly restrict).
+ *
+ * Same-domain example (no bounce needed):
+ *   authUrl = https://auth.115jon.site
+ *   appOrigin = https://app.115jon.site   → same registrable domain (.115jon.site)
+ *
+ * Cross-domain example (bounce needed):
+ *   authUrl = https://auth.115jon.site
+ *   appOrigin = https://example.workers.dev  → different registrable domain
+ */
+function isCrossOriginDomain(authUrl: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const authHostname = new URL(authUrl).hostname;
+    const appHostname = window.location.hostname;
+    // Extract the registrable domain: last two labels (handles .co.uk etc via simple heuristic)
+    const regDomain = (h: string) => h.split(".").slice(-2).join(".");
+    return regDomain(authHostname) !== regDomain(appHostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Builds the intermediate `oauth-complete` bounce URL that avoids cross-domain
+ * cookie sharing.  After the OAuth callback sets the session on the auth server,
+ * the browser navigates to this URL (same auth server domain — no cross-site
+ * restriction).  The handler reads the session, creates a 30s transfer code,
+ * and redirects to `redirectUri?ralph_auth_code=xxx`.
+ */
+function buildSdkBounceUrl(
+  authUrl: string,
+  publishableKey: string,
+  redirectUri: string
+): string {
+  const bounce = new URL(`${authUrl}/api/hosted/oauth-complete`);
+  bounce.searchParams.set("mode", "sdk");
+  bounce.searchParams.set("pk", publishableKey);
+  bounce.searchParams.set("redirect_uri", redirectUri);
+  return bounce.toString();
 }
 
 // ── Better Auth client response shape ─────────────────────────────────────────
@@ -82,15 +130,24 @@ export function SocialButtons({
   errorCallbackURL,
   elements,
 }: SocialButtonsProps) {
-  const { oauthProviders, client, authUrl } = useRalphAuth();
+  const { oauthProviders, client, authUrl, publishableKey } = useRalphAuth();
   const [oauthError, setOauthError] = useState<string | null>(null);
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
 
-  // Always rendered before early-return so hooks order is stable.
   if (!oauthProviders.length) return null;
 
   const absCallback = resolveAbsoluteUrl(authUrl, callbackURL);
   const absError = resolveAbsoluteUrl(authUrl, errorCallbackURL ?? "/sign-in?error=oauth");
+
+  // When the SDK consumer is on a different registrable domain from the auth
+  // server (e.g. workers.dev vs auth.115jon.site), cross-site cookies are
+  // unreliable. Route the callbackURL through the oauth-complete bounce handler
+  // so the server can read the session (same-domain, no restriction) and issue
+  // a short-lived transfer code instead.
+  const finalCallback =
+    publishableKey && isCrossOriginDomain(authUrl)
+      ? buildSdkBounceUrl(authUrl, publishableKey, absCallback)
+      : absCallback;
 
   const handleSocial = async (providerId: string) => {
     setOauthError(null);
@@ -98,7 +155,7 @@ export function SocialButtons({
     try {
       const result = await client.signIn.social({
         provider: providerId,
-        callbackURL: absCallback,
+        callbackURL: finalCallback,
         errorCallbackURL: absError,
       } as Parameters<typeof client.signIn.social>[0]);
 

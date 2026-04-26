@@ -1,0 +1,65 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Caddyfile — ralph-auth local development reverse proxy
+#
+# Uses lvh.me — a free public DNS service where *.lvh.me resolves to 127.0.0.1.
+# Because it's a real resolvable domain (not .localhost), Google OAuth accepts
+# it as an authorized origin and redirect URI.
+#
+# Domain structure (mirrors production exactly):
+#   Production:  auth.115jon.site       /  *.auth.115jon.site
+#   Local dev:   auth.lvh.me           /  *.auth.lvh.me
+#
+# How it works:
+#   1. Browser looks up auth.lvh.me → public DNS returns 127.0.0.1
+#   2. Browser connects to your machine on :443
+#   3. Caddy terminates TLS using its locally-trusted internal CA
+#   4. Caddy forwards to wrangler dev on :5174 with the original Host header
+#   5. Worker subdomain middleware extracts slug from Host → resolves app
+#
+# First-time CA trust (run once — Caddy does this automatically on `start`):
+#   caddy start --config Caddyfile   ← installs CA into Windows trust store
+#
+# Google OAuth Console settings:
+#   Authorized JavaScript origins:
+#     https://auth.lvh.me
+#   Authorized redirect URIs:
+#     https://auth.lvh.me/api/auth/callback/google
+#
+# AUTH_URL in .dev.vars must be:
+#   AUTH_URL=https://auth.lvh.me
+#
+# Usage:
+#   caddy start --config Caddyfile      (background daemon)
+#   caddy stop                          (stop daemon)
+#   caddy reload --config Caddyfile     (hot-reload after editing this file)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Root auth domain: https://auth.lvh.me → wrangler dev ─────────────────────
+#
+# Dashboard and platform sign-in live here.
+# Mirrors: https://auth.115jon.site
+auth.lvh.me {
+	tls internal
+
+	reverse_proxy localhost:5174 {
+		# Preserve original Host header — required for the Worker's subdomain
+		# middleware to know "this is the root domain, not a subdomain".
+		header_up Host {host}
+	}
+}
+
+# ── Wildcard app subdomains: https://*.auth.lvh.me → wrangler dev ────────────
+#
+# Every registered app gets: https://{auth_slug}.auth.lvh.me
+# Mirrors: https://{auth_slug}.auth.115jon.site
+#
+# The Host header forwarded upstream will be e.g. "my-app-a1b2c3.auth.lvh.me".
+# The subdomain middleware strips ".auth.lvh.me" to extract "my-app-a1b2c3"
+# and resolves it via KV cache → D1.
+*.auth.lvh.me {
+	tls internal
+
+	reverse_proxy localhost:5174 {
+		header_up Host {host}
+	}
+}

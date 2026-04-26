@@ -139,6 +139,42 @@ function OverviewTab({ app }: { app: Application }) {
           )}
         </div>
       </div>
+
+      {/* Auth subdomain panel */}
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="panel-header"><p className="panel-title">Auth Domain</p></div>
+        <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+          {app.auth_slug ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.73rem", color: "var(--color-text-secondary)", flexShrink: 0 }}>Sign-in URL</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                  <code style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 280 }}>
+                    {app.auth_slug}.auth.115jon.site
+                  </code>
+                  <CopyBtn value={`https://${app.auth_slug}.auth.115jon.site`} label="Copy URL" />
+                  <a
+                    href={`https://${app.auth_slug}.auth.115jon.site/sign-in`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-ghost"
+                    style={{ padding: "3px 7px", fontSize: "0.72rem" }}
+                  >
+                    <Globe size={11} /> Open
+                  </a>
+                </div>
+              </div>
+              <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", margin: 0 }}>
+                Auth slug is <strong style={{ color: "var(--color-text-secondary)" }}>immutable</strong> — changing it would break existing redirect configs. Custom domains can be set in Settings.
+              </p>
+            </>
+          ) : (
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.73rem", color: "var(--color-text-tertiary)", margin: 0 }}>
+              Auth slug not yet assigned. Recreate the app or apply migration 0018.
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

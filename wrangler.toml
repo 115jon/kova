@@ -1,0 +1,77 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# wrangler.toml — THE single Cloudflare Worker config for ralph-auth.
+#
+# Lives at the REPO ROOT so every command works without cd-ing into a subdir:
+#
+#   pnpm run dev        →  Vite + Miniflare on :5174  (runs from dashboard/)
+#   pnpm run deploy     →  build + wrangler deploy    (runs from repo root)
+#   pnpm run migrate:dev   →  local D1 migrations
+#   pnpm run migrate:prod  →  prod D1 migrations (careful!)
+#
+# Worker source:  server/src/index.ts   (Hono API + auth + hosted pages)
+# Dashboard SPA:  dashboard/dist/client (built by Vite, served as static assets)
+# Migrations:     server/migrations/
+# ─────────────────────────────────────────────────────────────────────────────
+
+name = "ralph-auth-server"
+main = "server/src/index.ts"
+compatibility_date = "2026-04-12"
+compatibility_flags = ["nodejs_compat"]
+
+# ── Static Assets (dashboard SPA) ─────────────────────────────────────────────
+# run_worker_first = true → ALL requests hit the Hono worker first.
+# API routes (/api/*, /health) are handled by Hono.
+# SPA routes (/, /sign-in, /dashboard/*) call env.ASSETS.fetch(request).
+[assets]
+binding = "ASSETS"
+directory = "dashboard/dist/client"
+not_found_handling = "single-page-application"
+html_handling = "auto-trailing-slash"
+run_worker_first = true
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+[[routes]]
+pattern = "auth.115jon.site"
+zone_name = "115jon.site"
+custom_domain = true
+
+# Wildcard subdomain route — handles {slug}.auth.115jon.site for all registered apps.
+[[routes]]
+pattern = "*.auth.115jon.site/*"
+zone_name = "115jon.site"
+
+[vars]
+CDN_URL = "https://cdn.115jon.site"
+
+# ── D1 Database ──────────────────────────────────────────────────────────────
+[[d1_databases]]
+binding = "DB"
+database_name = "ralph-auth-db"
+database_id = "aefbb49d-1582-4052-bd4e-77e5d559a3c6"
+migrations_dir = "server/migrations"
+
+# ── KV Session Cache ─────────────────────────────────────────────────────────
+[[kv_namespaces]]
+binding = "KV"
+id = "aecb44a2caff4a65a65a6f5c8e5c375e"
+
+# ── App Events Queue ──────────────────────────────────────────────────────────
+[[queues.producers]]
+binding = "APP_EVENTS"
+queue = "ralph-auth-app-events"
+
+# ── AppCounter Durable Object ─────────────────────────────────────────────────
+[[durable_objects.bindings]]
+name = "APP_COUNTER"
+class_name = "AppCounter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AppCounter"]
+
+[dev]
+port = 5174
+
+[observability.logs]
+enabled = true
+invocation_logs = true

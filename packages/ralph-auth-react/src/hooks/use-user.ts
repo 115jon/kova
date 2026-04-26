@@ -19,8 +19,9 @@ import { useRalphAuth } from "../context";
 import type { RalphUser, UseUserReturn } from "../types";
 
 export function useUser(): UseUserReturn {
-  const { client } = useRalphAuth();
-  const result = client.useSession();
+  const { client, sessionResult } = useRalphAuth();
+  // Shared session subscription — avoids a duplicate get-session request.
+  const result = sessionResult;
 
   const isLoaded = !result.isPending;
   const rawUser = result.data?.user ?? null;

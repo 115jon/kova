@@ -38,12 +38,7 @@ export default defineConfig({
   appType: "spa",
   plugins: [
     spaFallback(),
-    // Point the Cloudflare plugin at the server workspace wrangler.toml.
-    // In dev mode this runs the Hono worker inside Vite's dev server via
-    // Miniflare — all /api/* hits go directly to the worker, no proxy needed.
-    // In production `vite build` emits the SPA to dist/client/ which wrangler
-    // picks up via [assets] directory = "../dashboard/dist/client".
-    cloudflare({ configPath: "../server/wrangler.toml" }),
+    cloudflare(),
     tanstackRouter({
       routesDirectory: "./src/routes",
       generatedRouteTree: "./src/routeTree.gen.ts",
@@ -57,7 +52,22 @@ export default defineConfig({
   },
   server: {
     port: 5174,
-    // No proxy needed — @cloudflare/vite-plugin runs the worker in-process.
-    // API calls from the browser hit the same dev server origin (:5174).
+    // cors: false — CRITICAL for cross-origin SDK consumers (e.g. sdk-demo at :5180).
+    //
+    // By default Vite intercepts OPTIONS preflight requests and responds with its
+    // own CORS headers (Access-Control-Allow-Origin: *, no credentials support).
+    // This causes cross-origin credentialed requests from the SDK to fail with:
+    //   "Access-Control-Allow-Credentials: ''" must be "true"
+    //
+    // Setting cors: false passes OPTIONS through to the Hono worker, which has
+    // its own corsMiddleware() that returns per-origin credentialed CORS headers
+    // (including the response to preflight with Allow-Credentials: true).
+    cors: false,
+    allowedHosts: [
+      "auth.lvh.me",
+      ".auth.lvh.me",   // wildcard: any {slug}.auth.lvh.me
+      "auth.localhost",
+      ".auth.localhost", // wildcard: any {slug}.auth.localhost
+    ],
   },
 });

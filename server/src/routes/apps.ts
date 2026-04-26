@@ -253,22 +253,31 @@ appsRouter.get("/:id/stats", async (c) => {
     ).bind(id, Date.now()).first<{ n: number }>(),
   ]);
 
+  // D1 is always the source of truth for stable counts.
+  // The DO (APP_COUNTER) starts at 0 and is only incremented on new events,
+  // so it under-counts for users who signed up before the DO was created, or
+  // in local dev where the DO is reset between restarts.
+  //
+  // Only logins_24h needs the DO — it's a sliding-window counter that would
+  // require a full table scan with a time-window filter in D1.
   const stats = {
-    total_users: doStats?.total_users ?? userRow?.n ?? 0,
-    total_orgs: doStats?.total_orgs ?? orgRow?.n ?? 0,
+    total_users: userRow?.n ?? 0,
+    total_orgs: orgRow?.n ?? 0,
     logins_24h: doStats?.logins_24h ?? 0,
     active_sessions: sessionRow?.n ?? 0,
   };
 
-  // Sync DO if it had stale zeros but D1 has real counts (first load after migration)
-  if (doStats && doStats.total_users === 0 && stats.total_users > 0) {
+  // Sync DO total counters from D1 when they're stale (fire-and-forget).
+  // This corrects the DO after migrations or first-time deployments so
+  // future increments start from the right baseline.
+  if (doStats && (doStats.total_users < stats.total_users || doStats.total_orgs < stats.total_orgs)) {
     try {
       const doId = c.env.APP_COUNTER.idFromName(id);
       c.env.APP_COUNTER.get(doId).fetch("https://do/set", {
         method: "POST",
         body: JSON.stringify({ total_users: stats.total_users, total_orgs: stats.total_orgs }),
       }).catch(() => { });
-    } catch { /* ignore */ }
+    } catch { /* ignore — DO binding missing in local dev */ }
   }
 
   return Response.json({ stats });

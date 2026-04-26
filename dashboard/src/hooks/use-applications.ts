@@ -66,6 +66,9 @@ export interface Application {
   plan_expires_at: number | null;
   // Lifecycle
   suspended_at: number | null;
+  // Auth subdomain (migration 0018)
+  auth_slug: string | null;
+  custom_domain: string | null;
 }
 
 export interface AppStats {

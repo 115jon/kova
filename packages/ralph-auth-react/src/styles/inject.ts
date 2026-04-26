@@ -177,7 +177,7 @@ ${declarations}
 }
 [data-ra-element="formFieldInput"]:focus {
   border-color: var(--ra-color-primary);
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ra-color-primary) 15%, transparent);
 }
 [data-ra-element="formFieldInput"]::placeholder {
   color: var(--ra-color-text-tertiary);
@@ -308,8 +308,8 @@ ${declarations}
   color: var(--ra-color-success);
 }
 [data-ra-element="alertBanner"][data-variant="info"] {
-  background: rgba(59,130,246,0.08);
-  border: 1px solid rgba(59,130,246,0.18);
+  background: color-mix(in srgb, var(--ra-color-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ra-color-primary) 18%, transparent);
   color: var(--ra-color-primary);
 }
 

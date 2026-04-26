@@ -32,8 +32,9 @@ export interface UseAuthReturn {
 }
 
 export function useAuth(): UseAuthReturn {
-  const { client, afterSignOutUrl } = useRalphAuth();
-  const result = client.useSession();
+  const { client, afterSignOutUrl, sessionResult, clearSessionToken, hasBearerSession } = useRalphAuth();
+  // Shared session subscription — avoids a duplicate get-session request.
+  const result = sessionResult;
 
   const isLoaded = !result.isPending;
   const session = result.data;
@@ -42,18 +43,32 @@ export function useAuth(): UseAuthReturn {
 
   const signOut = useCallback(
     async (callbackURL?: string) => {
-      await client.signOut({
-        fetchOptions: {
-          onSuccess() {
-            const dest = callbackURL ?? afterSignOutUrl;
-            if (typeof window !== "undefined") {
-              window.location.href = dest;
-            }
-          },
-        },
-      });
+      const dest = callbackURL ?? afterSignOutUrl;
+      if (hasBearerSession) {
+        // Cross-origin Bearer flow: clearing the in-memory token is sufficient to
+        // sign out from this app. The platform session on auth.115jon.site stays
+        // intact so the admin dashboard remains signed in.
+        clearSessionToken();
+        if (typeof window !== "undefined") {
+          window.location.href = dest;
+        }
+      } else {
+        // Same-origin cookie flow: call the server to invalidate ONLY this specific session.
+        // Using `client.signOut()` with multi-session enabled deletes ALL sessions on the device.
+        if (rawSession?.token && (client as any).multiSession) {
+          await (client as any).multiSession.revokeDeviceSession({ sessionToken: rawSession.token });
+        } else {
+          try {
+            await client.signOut();
+          } catch { }
+        }
+
+        if (typeof window !== "undefined") {
+          window.location.href = dest;
+        }
+      }
     },
-    [client, afterSignOutUrl]
+    [client, afterSignOutUrl, clearSessionToken, hasBearerSession]
   );
 
   const activeOrgId =
@@ -67,7 +82,7 @@ export function useAuth(): UseAuthReturn {
     sessionId:
       (rawSession as { token?: string | null } | null)?.token ?? null,
     orgId: activeOrgId,
-    orgRole: null, // resolved per-request; use useOrganization() for membership role
+    orgRole: null,
     signOut,
   };
 }

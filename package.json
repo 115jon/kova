@@ -2,11 +2,12 @@
   "name": "ralph-auth",
   "private": true,
   "scripts": {
-    "dev:server": "pnpm --filter server dev",
-    "dev:dashboard": "pnpm --filter dashboard dev",
-    "deploy:server": "pnpm --filter server deploy",
-    "deploy:dashboard": "pnpm --filter dashboard deploy",
-    "migrate:local": "pnpm --filter server migrate:local",
-    "migrate:prod": "pnpm --filter server migrate:prod"
+    "dev": "pnpm --filter dashboard run dev",
+    "deploy": "pnpm --filter dashboard run deploy",
+    "migrate:dev": "pnpm --filter dashboard run migrate:dev",
+    "migrate:prod": "pnpm --filter dashboard run migrate:prod",
+    "cf-typegen": "pnpm --filter dashboard run cf-typegen",
+    "build:sdk": "pnpm --filter @ralph-auth/react run build",
+    "deploy:sdk-demo": "pnpm --filter @ralph-auth/sdk-demo run deploy"
   }
 }

@@ -17,17 +17,16 @@ import { useRalphAuth } from "../context";
 import type { RalphSession, RalphUser, UseSessionReturn } from "../types";
 
 export function useSession(): UseSessionReturn {
-  const { client } = useRalphAuth();
+  const { sessionResult, client } = useRalphAuth();
 
-  // Better Auth's reactive hook — re-renders when session changes
-  const result = client.useSession();
+  // Read from the shared subscription set up once in RalphAuthProvider.
+  // Do NOT call client.useSession() here — each independent call creates its
+  // own Better Auth subscription that fires a separate get-session request.
+  const result = sessionResult;
 
   const isLoaded = !result.isPending;
   const isSignedIn = !!result.data?.user && !result.error;
 
-  // Better Auth's base user type lacks plugin-extended fields (role, banned, etc.)
-  // We cast through unknown here; the actual values are present at runtime because
-  // the server always returns them — the type narrowing is a client-side limitation.
   const session = result.data
     ? ({
       user: result.data.user as unknown as RalphUser,

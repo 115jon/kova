@@ -59,7 +59,12 @@ authRouter.all("/*", async (c) => {
           const body = (await bodyClone.json()) as Record<string, unknown>;
           const callbackURL =
             typeof body["callbackURL"] === "string" ? body["callbackURL"] : null;
-          if (callbackURL && !isRedirectUriAllowed(app, callbackURL)) {
+          // Allow the auth server's own /api/hosted/* bounce endpoints as callbackURL
+          // without requiring them in the app's redirect_uris. These are internal
+          // handlers (oauth-complete) that we control — they validate redirect_uri
+          // against the app allowlist before forwarding to the actual consumer app.
+          const isInternalBounce = callbackURL?.startsWith(`${env.AUTH_URL}/api/hosted/`) ?? false;
+          if (callbackURL && !isInternalBounce && !isRedirectUriAllowed(app, callbackURL)) {
             return withHeaders(
               Response.json(
                 {

@@ -12,6 +12,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -86,6 +87,8 @@ export interface ServerAppearance {
 export interface RalphAuthContextValue {
   client: RalphAuthClient;
   authUrl: string;
+  /** The publishable key used to initialise this Provider instance. */
+  publishableKey?: string;
   appearance: Appearance;
   vars: Required<AppearanceVariables>;
   oauthProviders: OAuthProvider[];
@@ -94,17 +97,24 @@ export interface RalphAuthContextValue {
   afterSignInUrl: string;
   afterSignUpUrl: string;
   afterSignOutUrl: string;
-  /**
-   * "live" for pk_live_ keys (production), "test" for pk_dev_ / pk_test_ keys.
-   * Components use this to render the "Development" badge.
-   */
   mode: "live" | "test";
-  /**
-   * True when the platform admin flag is set on the current user.
-   * Unlocks all plan-gated features without a paid subscription.
-   * Set by the consumer app (e.g. the ralph-auth dashboard itself).
-   */
   isPlatformAdmin: boolean;
+  /** Shared session subscription — sourced once from client.useSession(). */
+  sessionResult: ReturnType<RalphAuthClient["useSession"]>;
+  /**
+   * Clears the in-memory Bearer session token (cross-origin SDK sign-out).
+   *
+   * Calling this signs the user out **of this SDK-powered app only** without
+   * invalidating the Better Auth session on the auth server. The platform
+   * admin dashboard (auth.115jon.site) remains signed in. Use `client.signOut()`
+   * when you also want to destroy the server-side session for everyone.
+   */
+  clearSessionToken: () => void;
+  /**
+   * True when a cross-origin Bearer token is active (OAuth transfer flow).
+   * Components can use this to adjust sign-out behaviour.
+   */
+  hasBearerSession: boolean;
 }
 
 const RalphAuthContext = createContext<RalphAuthContextValue | null>(null);
@@ -146,31 +156,85 @@ export function RalphAuthProvider({
     [publishableKey, authUrl]
   );
 
+  // ── Session token for cross-origin Bearer auth ───────────────────────────────
+  // Declared BEFORE `client` so the useMemo below can reference it as a dep.
+  // When null (normal same-origin flow), the client is created without a Bearer
+  // header. When set (after exchange-code on cross-origin OAuth return), the
+  // client is recreated exactly once with the Authorization header injected.
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const clearSessionToken = useCallback(() => setSessionToken(null), []);
+
+  // ── Auth client — recreated only when Bearer token changes ────────────────
   const client = useMemo(
-    () => createRalphAuthClient({ authUrl: resolvedAuthUrl, publishableKey, plugins }),
+    () => createRalphAuthClient({
+      authUrl: resolvedAuthUrl,
+      publishableKey,
+      plugins,
+      ...(sessionToken
+        ? { fetchOptions: { headers: { Authorization: `Bearer ${sessionToken}` } } }
+        : {}),
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [resolvedAuthUrl, publishableKey]
+    [resolvedAuthUrl, publishableKey, sessionToken]
   );
+
+  // ── Single session subscription — shared across all hooks ────────────────
+  const sessionResult = client.useSession();
+
+  // ── Detect OAuth transfer code on mount ──────────────────────────────────
+  // After the cross-origin OAuth flow lands at the consumer app with
+  // ?ralph_auth_code=xfr_..., we clean the URL immediately (prevents Referer
+  // leakage) then exchange the 30s single-use code for the raw session token.
+  useEffect(() => {
+    if (typeof window === "undefined" || !publishableKey) return;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("ralph_auth_code");
+    if (!code) return;
+
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("ralph_auth_code");
+    window.history.replaceState({}, "", cleanUrl.toString());
+
+    void fetch(`${resolvedAuthUrl}/api/pub/apps/${publishableKey}/exchange-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Publishable-Key": publishableKey },
+      body: JSON.stringify({ code }),
+    })
+      .then(r => r.ok ? (r.json() as Promise<{ sessionToken?: string }>) : null)
+      .then(data => {
+        if (!data?.sessionToken) return;
+        setSessionToken(data.sessionToken);
+        // Register the user in app_user immediately with the Bearer token.
+        // The mount-time /me call fires before the token is ready and may fail
+        // cross-origin (SameSite=None cookie blocked). This call is the reliable
+        // fallback that runs as soon as we have a valid token.
+        void fetch(`${resolvedAuthUrl}/api/pub/apps/${publishableKey}/me`, {
+          method: "POST",
+          credentials: "include",
+          headers: { Authorization: `Bearer ${data.sessionToken}` },
+        }).catch(() => { /* best-effort */ });
+      })
+      .catch(() => { /* best-effort */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedAuthUrl, publishableKey]); // intentionally run once on mount
 
   // ── Server appearance ─────────────────────────────────────────────────────
   const [serverAppearance, setServerAppearance] = useState<ServerAppearance | null>(null);
 
   useEffect(() => {
     if (!publishableKey) return;
-    // Public endpoint — KV-cached for 5 min, so cost ≈ 0 after first load.
-    // NOTE: The path must include /api/ so Vite's dev proxy (sdk-demo) routes it
-    // correctly to the auth server.  Production workers handle /api/* natively.
+    // Public endpoint — KV-cached server-side (5 min TTL).
+    // cache: "no-store" bypasses the browser cache so we always reflect the
+    // latest KV value. This prevents Cloudflare's CDN from serving a stale
+    // appearance after the operator changes colors in the dashboard.
     void fetch(`${resolvedAuthUrl}/api/pub/apps/${publishableKey}/appearance`, {
-      cache: "default",
+      cache: "no-store",
     })
       .then(r => r.ok ? (r.json() as Promise<ServerAppearance>) : null)
       .then(data => { if (data) setServerAppearance(data); })
       .catch(() => { /* progressive enhancement — never blocks sign-in */ });
 
     // Register any pre-existing session into app_user (fire-and-forget).
-    // The session.create.after hook handles brand-new sign-ins, but if the
-    // user was already signed in before visiting this SDK-powered app, we
-    // upsert membership here so they appear in the app's user list.
     void fetch(`${resolvedAuthUrl}/api/pub/apps/${publishableKey}/me`, {
       method: "POST",
       credentials: "include",
@@ -220,16 +284,20 @@ export function RalphAuthProvider({
   const value = useMemo<RalphAuthContextValue>(
     () => ({
       client, authUrl: resolvedAuthUrl,
+      publishableKey,
       appearance: appearance ?? {}, vars,
       oauthProviders: resolvedProviders,
       serverAppearance,
       afterSignInUrl, afterSignUpUrl, afterSignOutUrl,
       mode,
       isPlatformAdmin,
+      sessionResult,
+      clearSessionToken,
+      hasBearerSession: sessionToken !== null,
     }),
     [client, resolvedAuthUrl, appearance, vars, resolvedProviders,
       serverAppearance, afterSignInUrl, afterSignUpUrl, afterSignOutUrl,
-      mode, isPlatformAdmin]
+      mode, isPlatformAdmin, sessionResult, clearSessionToken, sessionToken]
   );
 
   return (

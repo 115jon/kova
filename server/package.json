@@ -4,12 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "cf-typegen": "wrangler types",
-    "migrate:dev": "wrangler d1 migrations apply ralph-auth-db --local --persist-to ../dashboard/.wrangler/state",
-    "migrate:local": "wrangler d1 migrations apply ralph-auth-db --local",
-    "migrate:prod": "wrangler d1 migrations apply ralph-auth-db --remote",
+    "typecheck": "tsc --noEmit",
     "generate": "better-auth generate --output src/db/migrations"
   },
   "dependencies": {

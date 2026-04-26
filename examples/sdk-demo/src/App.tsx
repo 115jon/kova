@@ -20,12 +20,17 @@ import { OrgPage } from "./pages/OrgPage";
 //   VITE_AUTH_URL         — the ralph-auth server origin
 //   VITE_PUBLISHABLE_KEY  — the per-app publishable key from the Admin Dashboard
 //
-// In development (pnpm dev) the Vite proxy in vite.config.ts forwards /api/*
-// to localhost:5174, so AUTH_URL = window.location.origin works automatically.
-// In production the .env.production values are baked in at `pnpm build`.
-const AUTH_URL =
-  import.meta.env.VITE_AUTH_URL ??
-  (typeof window !== "undefined" ? window.location.origin : "http://localhost:5180");
+// Dev:  set in examples/sdk-demo/.env          (VITE_AUTH_URL=https://auth.lvh.me)
+// Prod: set in examples/sdk-demo/.env.production (VITE_AUTH_URL=https://auth.115jon.site)
+//
+// NEVER fall back to window.location.origin — the SDK demo has no auth API routes.
+const AUTH_URL = import.meta.env.VITE_AUTH_URL as string;
+if (!AUTH_URL) {
+  console.error(
+    "[sdk-demo] VITE_AUTH_URL is not set. " +
+    "Create examples/sdk-demo/.env with VITE_AUTH_URL=https://auth.lvh.me"
+  );
+}
 
 const PUBLISHABLE_KEY =
   import.meta.env.VITE_PUBLISHABLE_KEY ?? "pk_dev_sYq5sn1jU9MTMSHKx4QdkZJf";

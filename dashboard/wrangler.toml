@@ -1,33 +1,66 @@
-# ── dashboard/wrangler.toml ───────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# DEV-ONLY — Do NOT use this file for deployment or migrations.
 #
-# This file is a THIN SHIM — all real configuration lives in server/wrangler.toml.
-# The dashboard is NOT a standalone worker. It is bundled as static assets into
-# the auth server via [assets] in server/wrangler.toml.
+# This wrangler.toml exists solely so the @cloudflare/vite-plugin can find
+# worker configuration when `vite dev` is run from the dashboard/ directory.
+# Paths here are relative to dashboard/.
 #
-# ── Dev ───────────────────────────────────────────────────────────────────────
-#   pnpm --filter dashboard dev
-#   → Vite dev server at :5174, proxies /api/* to miniflare at :8787
-#   → Run `pnpm --filter server dev` in parallel to get the worker
-#
-# ── Migrations (local dev DB lives in dashboard/.wrangler/state) ──────────────
-#   pnpm --filter server run migrate:dev    ← applies pending migrations to local DB
-#   pnpm --filter server run migrate:prod   ← applies to production D1
-#
-# ── Build & Deploy ────────────────────────────────────────────────────────────
-#   pnpm --filter dashboard build           ← emits SPA to dist/client/
-#   pnpm --filter dashboard deploy          ← build + wrangler deploy (uses server/wrangler.toml)
-#   pnpm --filter server deploy             ← deploy server only (dashboard must be pre-built)
-#
-# ── DO NOT add bindings / D1 / KV / routes here ──────────────────────────────
-#   All of that belongs in server/wrangler.toml, which this file delegates to.
-# ─────────────────────────────────────────────────────────────────────────────
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │  AUTHORITATIVE CONFIG  →  ../wrangler.toml  (repo root)                │
+# │  DEPLOY COMMAND        →  pnpm run deploy  (from repo root or here)    │
+# │  MIGRATE               →  pnpm run migrate:dev / migrate:prod          │
+# └─────────────────────────────────────────────────────────────────────────┘
+# ══════════════════════════════════════════════════════════════════════════════
 
 name = "ralph-auth-server"
+main = "../server/src/index.ts"
 compatibility_date = "2026-04-12"
 compatibility_flags = ["nodejs_compat"]
+
+[assets]
+binding = "ASSETS"
+directory = "dist/client"
+not_found_handling = "single-page-application"
+html_handling = "auto-trailing-slash"
+run_worker_first = true
+
+[[routes]]
+pattern = "auth.115jon.site"
+zone_name = "115jon.site"
+custom_domain = true
+
+[[routes]]
+pattern = "*.auth.115jon.site/*"
+zone_name = "115jon.site"
+
+[vars]
+CDN_URL = "https://cdn.115jon.site"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ralph-auth-db"
+database_id = "aefbb49d-1582-4052-bd4e-77e5d559a3c6"
+migrations_dir = "../server/migrations"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "aecb44a2caff4a65a65a6f5c8e5c375e"
+
+[[queues.producers]]
+binding = "APP_EVENTS"
+queue = "ralph-auth-app-events"
+
+[[durable_objects.bindings]]
+name = "APP_COUNTER"
+class_name = "AppCounter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AppCounter"]
 
 [dev]
 port = 5174
 
 [observability.logs]
 enabled = true
+invocation_logs = true

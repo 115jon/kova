@@ -69,7 +69,7 @@ const CACHE_KEY_PREFIX = "cors:origin:";
 // registered as Applications in the Admin Dashboard.  Do not add arbitrary
 // third-party origins here.
 export const STATIC_ORIGINS = new Set<string>([
-  // Dev — combined Vite + Miniflare dev server
+  // Dev — combined Vite + Miniflare dev server (direct port, no Caddy)
   "http://localhost:5174",
   // Dev — other local services
   "http://localhost:3000",
@@ -77,6 +77,10 @@ export const STATIC_ORIGINS = new Set<string>([
   "http://localhost:5175",
   "http://localhost:5180", // SDK demo app
   "http://localhost:8888", // ralph-meet dev port
+  // Dev — Caddy reverse proxy (auth.lvh.me → 127.0.0.1, Google OAuth-compatible)
+  "https://auth.lvh.me",
+  // Dev — Caddy reverse proxy (auth.localhost fallback for non-OAuth testing)
+  "https://auth.localhost",
   // Production — combined auth+dashboard worker
   "https://auth.115jon.site",
   "https://ralph-auth-server.jontitor.workers.dev",
@@ -218,7 +222,7 @@ export async function buildCorsHeaders(
     "Access-Control-Allow-Origin": origin || "null",
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers":
-      "Content-Type, Authorization, X-Publishable-Key",
+      "Content-Type, Authorization, X-Publishable-Key, X-Ralph-Auth-SDK",
     "Access-Control-Allow-Credentials": origin ? "true" : "false",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",

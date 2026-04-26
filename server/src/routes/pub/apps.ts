@@ -34,7 +34,7 @@ pubAppsRouter.get("/:pk/appearance", async (c) => {
     return new Response(cached, {
       headers: {
         "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=60",
+        "Cache-Control": "no-store",
         "X-Appearance-Source": "kv-cache",
       },
     });
@@ -89,7 +89,9 @@ pubAppsRouter.get("/:pk/appearance", async (c) => {
   return new Response(json, {
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": "public, max-age=60",
+      // No client/CDN caching — KV is the correct cache layer (server-side, 5-min TTL,
+      // invalidated immediately when the operator saves new branding in the dashboard).
+      "Cache-Control": "no-store",
       "X-Appearance-Source": "d1",
     },
   });
@@ -140,21 +142,103 @@ pubAppsRouter.post("/:pk/me", async (c) => {
   // Resolve the current session using the same Better Auth instance as auth.ts.
   // This correctly reads HttpOnly session cookies regardless of name/prefix.
   const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
-  const session = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+  const sessionData = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
 
-  if (!session?.user?.id) {
+  if (!sessionData?.user?.id) {
     return Response.json({ ok: false, reason: "no_session" });
   }
 
-  // Upsert app_user — idempotent, safe to call on every mount
   const { generateId } = await import("better-auth");
-  await c.env.DB
-    .prepare("INSERT OR IGNORE INTO app_user (id, app_id, user_id, role) VALUES (?, ?, ?, 'member')")
-    .bind(`apu_${generateId(12)}`, app.id, session.user.id)
-    .run()
-    .catch(() => { /* best-effort — never block the page */ });
+  const userId = sessionData.user.id;
+  const sessionId = (sessionData as { session?: { id?: string } }).session?.id;
 
-  return Response.json({ ok: true, userId: session.user.id });
+  // 1. Upsert app_user — idempotent, safe to call on every mount.
+  //    INSERT OR IGNORE means repeat calls after the first are no-ops.
+  const wasInserted = await c.env.DB
+    .prepare("INSERT OR IGNORE INTO app_user (id, app_id, user_id, role) VALUES (?, ?, ?, 'member')")
+    .bind(`apu_${generateId(12)}`, app.id, userId)
+    .run()
+    .then(r => r.meta.changes > 0)
+    .catch(() => false);
+
+  // 2. Stamp session.app_id — only if not already set.
+  //    The OAuth callback from Google carries no X-Publishable-Key so the
+  //    session.create.after hook cannot set app_id. This is the only place
+  //    in the cross-origin SDK flow where both pk→app_id and the session
+  //    are simultaneously resolvable.
+  if (sessionId) {
+    await c.env.DB
+      .prepare("UPDATE session SET app_id = ? WHERE id = ? AND app_id IS NULL")
+      .bind(app.id, sessionId)
+      .run()
+      .catch(() => { /* best-effort — never block the page */ });
+  }
+
+  // 3. Increment APP_COUNTER DO for real-time dashboard stats.
+  //    Only fires when a new app_user row was actually created (first visit),
+  //    to avoid double-counting repeat mounts.
+  if (wasInserted) {
+    try {
+      const doId = c.env.APP_COUNTER.idFromName(app.id);
+      c.env.APP_COUNTER.get(doId).fetch("https://do/increment", {
+        method: "POST",
+        body: JSON.stringify({ users: 1 }),
+      }).catch(() => { /* DO not available in local dev without --remote */ });
+    } catch { /* ignore — DO binding missing */ }
+  }
+
+  return Response.json({ ok: true, userId });
+});
+
+// ── POST /:pk/exchange-code — transfer code → session token ───────────────────
+//
+// Called by the SDK immediately after landing back at the consumer app from the
+// oauth-complete bounce (mode=sdk).  The SDK passes the `ralph_auth_code` that
+// was appended to the redirect URI.  The server:
+//   1. Verifies the code exists in KV, was created for this pk, and is < 30s old.
+//   2. Deletes the code (single-use).
+//   3. Returns the raw session token.
+//
+// The SDK stores the token in memory (React state) and injects it as
+// `Authorization: Bearer <token>` on all requests to the auth server.  Better Auth
+// validates Bearer tokens against its D1 sessions table — same code path as the
+// HttpOnly cookie, without requiring cross-site cookie support in the browser.
+//
+// Security:
+//   - No secret key required (equivalent security via code's TTL/binding/single-use).
+//   - The transfer code has 256-bit entropy — not brute-forceable in 30s.
+//   - CORS is enforced by the upstream corsMiddleware (origin must be in allowed_origins).
+//   - The session token IS the raw cookie value; once returned, it has the same
+//     lifetime as any other Better Auth session (default: 7 days with cookieCache).
+
+pubAppsRouter.post("/:pk/exchange-code", async (c) => {
+  const pk = c.req.param("pk");
+
+  let body: { code?: string };
+  try {
+    body = (await c.req.json()) as { code?: string };
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const code = typeof body.code === "string" ? body.code.trim() : "";
+  if (!code) {
+    return Response.json({ error: "code is required" }, { status: 400 });
+  }
+
+  // Validate the transfer code (single-use, pk-bound, 30s TTL)
+  const { exchangeSessionTransferCode } = await import("../../lib/auth-ticket");
+  const result = await exchangeSessionTransferCode(c.env.KV, code, pk);
+
+  if (!result) {
+    // Code expired, already used, or pk mismatch — all cases treated as invalid
+    return Response.json(
+      { error: "invalid_code", message: "The transfer code is invalid, expired, or already used." },
+      { status: 401 }
+    );
+  }
+
+  return Response.json({ sessionToken: result.sessionToken });
 });
 
 export { pubAppsRouter };
