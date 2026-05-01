@@ -190,6 +190,39 @@ pubAppsRouter.post("/:pk/me", async (c) => {
   return Response.json({ ok: true, userId });
 });
 
+// ── POST /:pk/session-token — mint bearer bootstrap for an existing session ──
+//
+// Direct visits to an SDK-powered app may arrive with only the auth-domain
+// session cookie available cross-site. The app can prove the user is signed in
+// via get-session, but it still needs the raw session token to authenticate its
+// own backend calls. This endpoint returns that token to an already-authenticated
+// caller after validating the publishable key and current session.
+//
+// Auth: requires a valid Better Auth session cookie or bearer token.
+// CORS: enforced by upstream cors middleware against the app's allowed origins.
+
+pubAppsRouter.post("/:pk/session-token", async (c) => {
+  const pk = c.req.param("pk");
+
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+  if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+
+  const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
+  const sessionData = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+  if (!sessionData?.user?.id || !sessionData?.session) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const rawTokenField = (sessionData.session as unknown as Record<string, unknown>)["token"];
+  const sessionToken = typeof rawTokenField === "string" ? rawTokenField : null;
+  if (!sessionToken) {
+    return Response.json({ error: "Session token unavailable" }, { status: 500 });
+  }
+
+  return Response.json({ sessionToken });
+});
+
 // ── POST /:pk/exchange-code — transfer code → session token ───────────────────
 //
 // Called by the SDK immediately after landing back at the consumer app from the

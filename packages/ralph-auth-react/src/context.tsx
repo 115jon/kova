@@ -101,6 +101,8 @@ export interface RalphAuthContextValue {
   isPlatformAdmin: boolean;
   /** Shared session subscription — sourced once from client.useSession(). */
   sessionResult: ReturnType<RalphAuthClient["useSession"]>;
+  /** Raw Better Auth session token suitable for Authorization: Bearer. */
+  sessionToken: string | null;
   /**
    * Clears the in-memory Bearer session token (cross-origin SDK sign-out).
    *
@@ -180,6 +182,27 @@ export function RalphAuthProvider({
 
   // ── Single session subscription — shared across all hooks ────────────────
   const sessionResult = client.useSession();
+
+  useEffect(() => {
+    if (!publishableKey || sessionToken) return;
+    if (sessionResult.isPending || !sessionResult.data?.user) return;
+
+    let cancelled = false;
+    void fetch(`${resolvedAuthUrl}/api/pub/apps/${publishableKey}/session-token`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "X-Publishable-Key": publishableKey },
+    })
+      .then(r => r.ok ? (r.json() as Promise<{ sessionToken?: string }>) : null)
+      .then(data => {
+        if (!cancelled && data?.sessionToken) setSessionToken(data.sessionToken);
+      })
+      .catch(() => { /* best-effort: normal sign-in still redirects if needed */ });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [publishableKey, resolvedAuthUrl, sessionResult.data, sessionResult.isPending, sessionToken]);
 
   // ── Detect OAuth transfer code on mount ──────────────────────────────────
   // After the cross-origin OAuth flow lands at the consumer app with
@@ -292,6 +315,10 @@ export function RalphAuthProvider({
       mode,
       isPlatformAdmin,
       sessionResult,
+      sessionToken:
+        sessionToken
+        ?? ((sessionResult.data?.session as unknown as Record<string, unknown> | undefined)?.["token"] as string | undefined)
+        ?? null,
       clearSessionToken,
       hasBearerSession: sessionToken !== null,
     }),

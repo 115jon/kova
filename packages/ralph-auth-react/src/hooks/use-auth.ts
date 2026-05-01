@@ -32,7 +32,7 @@ export interface UseAuthReturn {
 }
 
 export function useAuth(): UseAuthReturn {
-  const { client, afterSignOutUrl, sessionResult, clearSessionToken, hasBearerSession } = useRalphAuth();
+  const { client, afterSignOutUrl, sessionResult, clearSessionToken, hasBearerSession, sessionToken } = useRalphAuth();
   // Shared session subscription — avoids a duplicate get-session request.
   const result = sessionResult;
 
@@ -80,7 +80,7 @@ export function useAuth(): UseAuthReturn {
     isSignedIn: !!user,
     userId: user?.id ?? null,
     sessionId:
-      (rawSession as { token?: string | null } | null)?.token ?? null,
+      sessionToken ?? (rawSession as { token?: string | null } | null)?.token ?? null,
     orgId: activeOrgId,
     orgRole: null,
     signOut,
