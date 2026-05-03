@@ -32,7 +32,7 @@ export interface UseAuthReturn {
 }
 
 export function useAuth(): UseAuthReturn {
-  const { client, afterSignOutUrl, sessionResult, clearSessionToken, hasBearerSession, sessionToken } = useRalphAuth();
+  const { client, authUrl, publishableKey, afterSignOutUrl, sessionResult, clearSessionToken, hasBearerSession, sessionToken } = useRalphAuth();
   // Shared session subscription — avoids a duplicate get-session request.
   const result = sessionResult;
 
@@ -45,9 +45,16 @@ export function useAuth(): UseAuthReturn {
     async (callbackURL?: string) => {
       const dest = callbackURL ?? afterSignOutUrl;
       if (hasBearerSession) {
-        // Cross-origin Bearer flow: clearing the in-memory token is sufficient to
-        // sign out from this app. The platform session on auth.115jon.site stays
-        // intact so the admin dashboard remains signed in.
+        // Cross-origin Bearer flow: revoke this app-scoped session token, then
+        // clear it locally. The platform session on auth.115jon.site stays intact.
+        if (sessionToken && publishableKey) {
+          try {
+            await fetch(`${authUrl}/api/pub/apps/${publishableKey}/revoke-session`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${sessionToken}` },
+            });
+          } catch { }
+        }
         clearSessionToken();
         if (typeof window !== "undefined") {
           window.location.href = dest;
@@ -68,7 +75,7 @@ export function useAuth(): UseAuthReturn {
         }
       }
     },
-    [client, afterSignOutUrl, clearSessionToken, hasBearerSession]
+    [client, authUrl, publishableKey, afterSignOutUrl, clearSessionToken, hasBearerSession, sessionToken]
   );
 
   const activeOrgId =

@@ -122,6 +122,24 @@ export interface RalphAuthContextValue {
 const RalphAuthContext = createContext<RalphAuthContextValue | null>(null);
 RalphAuthContext.displayName = "RalphAuthContext";
 
+function sessionStorageKey(publishableKey?: string) {
+  return publishableKey ? `ralph-auth:${publishableKey}:session-token` : null;
+}
+
+function readStoredSessionToken(publishableKey?: string) {
+  if (typeof window === "undefined") return null;
+  const key = sessionStorageKey(publishableKey);
+  return key ? window.localStorage.getItem(key) : null;
+}
+
+function writeStoredSessionToken(publishableKey: string | undefined, token: string | null) {
+  if (typeof window === "undefined") return;
+  const key = sessionStorageKey(publishableKey);
+  if (!key) return;
+  if (token) window.localStorage.setItem(key, token);
+  else window.localStorage.removeItem(key);
+}
+
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 export interface RalphAuthProviderProps extends RalphAuthConfig {
@@ -163,8 +181,12 @@ export function RalphAuthProvider({
   // When null (normal same-origin flow), the client is created without a Bearer
   // header. When set (after exchange-code on cross-origin OAuth return), the
   // client is recreated exactly once with the Authorization header injected.
-  const [sessionToken, setSessionToken] = useState<string | null>(null);
-  const clearSessionToken = useCallback(() => setSessionToken(null), []);
+  const [sessionToken, setSessionToken] = useState<string | null>(() => readStoredSessionToken(publishableKey));
+  const setPersistentSessionToken = useCallback((token: string | null) => {
+    writeStoredSessionToken(publishableKey, token);
+    setSessionToken(token);
+  }, [publishableKey]);
+  const clearSessionToken = useCallback(() => setPersistentSessionToken(null), [setPersistentSessionToken]);
 
   // ── Auth client — recreated only when Bearer token changes ────────────────
   const client = useMemo(
@@ -195,14 +217,14 @@ export function RalphAuthProvider({
     })
       .then(r => r.ok ? (r.json() as Promise<{ sessionToken?: string }>) : null)
       .then(data => {
-        if (!cancelled && data?.sessionToken) setSessionToken(data.sessionToken);
+        if (!cancelled && data?.sessionToken) setPersistentSessionToken(data.sessionToken);
       })
       .catch(() => { /* best-effort: normal sign-in still redirects if needed */ });
 
     return () => {
       cancelled = true;
     };
-  }, [publishableKey, resolvedAuthUrl, sessionResult.data, sessionResult.isPending, sessionToken]);
+  }, [publishableKey, resolvedAuthUrl, sessionResult.data, sessionResult.isPending, sessionToken, setPersistentSessionToken]);
 
   // ── Detect OAuth transfer code on mount ──────────────────────────────────
   // After the cross-origin OAuth flow lands at the consumer app with
@@ -226,7 +248,7 @@ export function RalphAuthProvider({
       .then(r => r.ok ? (r.json() as Promise<{ sessionToken?: string }>) : null)
       .then(data => {
         if (!data?.sessionToken) return;
-        setSessionToken(data.sessionToken);
+        setPersistentSessionToken(data.sessionToken);
         // Register the user in app_user immediately with the Bearer token.
         // The mount-time /me call fires before the token is ready and may fail
         // cross-origin (SameSite=None cookie blocked). This call is the reliable
@@ -239,7 +261,13 @@ export function RalphAuthProvider({
       })
       .catch(() => { /* best-effort */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedAuthUrl, publishableKey]); // intentionally run once on mount
+  }, [resolvedAuthUrl, publishableKey, setPersistentSessionToken]); // intentionally run once on mount
+
+  useEffect(() => {
+    if (!sessionToken) return;
+    void sessionResult.refetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionToken]);
 
   // ── Server appearance ─────────────────────────────────────────────────────
   const [serverAppearance, setServerAppearance] = useState<ServerAppearance | null>(null);
@@ -257,11 +285,6 @@ export function RalphAuthProvider({
       .then(data => { if (data) setServerAppearance(data); })
       .catch(() => { /* progressive enhancement — never blocks sign-in */ });
 
-    // Register any pre-existing session into app_user (fire-and-forget).
-    void fetch(`${resolvedAuthUrl}/api/pub/apps/${publishableKey}/me`, {
-      method: "POST",
-      credentials: "include",
-    }).catch(() => { /* best-effort */ });
   }, [resolvedAuthUrl, publishableKey]);
 
   // Inject/update favicon from server

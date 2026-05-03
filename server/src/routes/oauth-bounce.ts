@@ -266,17 +266,32 @@ async function handleSdkBounce(
   // Better Auth's session object has `session.token` — the raw value stored as cookie.
   // We cast via unknown because the Better Auth types don't expose `token` on the
   // base Session shape, but it IS present at runtime (it's the primary session identifier).
-  const rawTokenField = (session.session as unknown as Record<string, unknown>)["token"];
-  const sessionToken = typeof rawTokenField === "string" ? rawTokenField : null;
+  const { generateId } = await import("better-auth");
+  const appSessionToken = generateId(32);
+  const now = Date.now();
 
-  if (!sessionToken) {
-    // Could not extract session token (should never happen with BA 1.x+)
-    console.error("[oauth-bounce] SDK bounce: session.token is missing on session object");
-    return Response.redirect(redirectUri, 302);
-  }
+  const appSessionId = generateId();
+  const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
+
+  await c.env.DB.prepare(
+    `INSERT INTO session (id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, app_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(
+      appSessionId,
+      session.user.id,
+      appSessionToken,
+      new Date(expiresAt).toISOString(),
+      new Date(now).toISOString(),
+      new Date(now).toISOString(),
+      c.req.header("CF-Connecting-IP") ?? null,
+      c.req.header("User-Agent") ?? null,
+      app.id
+    )
+    .run();
 
   // Create a 60-second single-use transfer code bound to this pk
-  const code = await createSessionTransferCode(c.env.KV, sessionToken, pk);
+  const code = await createSessionTransferCode(c.env.KV, appSessionToken, pk);
 
   // ── Build redirect URL ────────────────────────────────────────────────────
   const dest = new URL(redirectUri);

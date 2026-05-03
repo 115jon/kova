@@ -152,6 +152,18 @@ pubAppsRouter.post("/:pk/me", async (c) => {
   const userId = sessionData.user.id;
   const sessionId = (sessionData as { session?: { id?: string } }).session?.id;
 
+  const sessionRow = sessionId
+    ? await c.env.DB
+      .prepare("SELECT app_id FROM session WHERE id = ? LIMIT 1")
+      .bind(sessionId)
+      .first<{ app_id: string | null }>()
+      .catch(() => null)
+    : null;
+
+  if (sessionRow?.app_id !== app.id) {
+    return Response.json({ ok: false, reason: "wrong_app_session" });
+  }
+
   // 1. Upsert app_user — idempotent, safe to call on every mount.
   //    INSERT OR IGNORE means repeat calls after the first are no-ops.
   const wasInserted = await c.env.DB
@@ -214,6 +226,19 @@ pubAppsRouter.post("/:pk/session-token", async (c) => {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const sessionId = (sessionData.session as unknown as Record<string, unknown>)["id"];
+  const row = typeof sessionId === "string"
+    ? await c.env.DB
+      .prepare("SELECT app_id FROM session WHERE id = ? LIMIT 1")
+      .bind(sessionId)
+      .first<{ app_id: string | null }>()
+      .catch(() => null)
+    : null;
+
+  if (row?.app_id !== app.id) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   const rawTokenField = (sessionData.session as unknown as Record<string, unknown>)["token"];
   const sessionToken = typeof rawTokenField === "string" ? rawTokenField : null;
   if (!sessionToken) {
@@ -221,6 +246,57 @@ pubAppsRouter.post("/:pk/session-token", async (c) => {
   }
 
   return Response.json({ sessionToken });
+});
+
+// ── POST /:pk/revoke-session — revoke the current app-scoped bearer session ──
+//
+// SDK apps use bearer sessions so sign-out can be isolated from the platform
+// dashboard session. Better Auth's multi-session revoke endpoint only revokes
+// signed multi-session cookies, so bearer sessions need this app-scoped path.
+pubAppsRouter.post("/:pk/revoke-session", async (c) => {
+  const pk = c.req.param("pk");
+
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+  if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+
+  const bearerToken = c.req.header("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  if (bearerToken) {
+    await c.env.DB
+      .prepare("DELETE FROM session WHERE token = ? AND app_id = ?")
+      .bind(bearerToken, app.id)
+      .run()
+      .catch(() => { });
+
+    return Response.json({ ok: true });
+  }
+
+  const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
+  const sessionData = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+  const sessionId = (sessionData?.session as unknown as Record<string, unknown> | undefined)?.["id"];
+  const sessionToken = (sessionData?.session as unknown as Record<string, unknown> | undefined)?.["token"];
+
+  if (typeof sessionId !== "string" || typeof sessionToken !== "string") {
+    return Response.json({ ok: true });
+  }
+
+  const row = await c.env.DB
+    .prepare("SELECT app_id FROM session WHERE id = ? LIMIT 1")
+    .bind(sessionId)
+    .first<{ app_id: string | null }>()
+    .catch(() => null);
+
+  if (row?.app_id !== app.id) {
+    return Response.json({ ok: true });
+  }
+
+  await c.env.DB
+    .prepare("DELETE FROM session WHERE id = ? AND token = ? AND app_id = ?")
+    .bind(sessionId, sessionToken, app.id)
+    .run()
+    .catch(() => { });
+
+  return Response.json({ ok: true });
 });
 
 // ── POST /:pk/exchange-code — transfer code → session token ───────────────────

@@ -58,6 +58,13 @@ export interface ClientOptions {
    * `credentials: "include"` is always set.
    */
   fetchOptions?: RequestInit;
+
+  /** Better Auth session revalidation behavior. */
+  sessionOptions?: {
+    refetchInterval?: number;
+    refetchOnWindowFocus?: boolean;
+    refetchWhenOffline?: boolean;
+  };
 }
 
 /**
@@ -65,7 +72,7 @@ export interface ClientOptions {
  * Call once at module level and share the result via context.
  */
 export function createRalphAuthClient(opts: ClientOptions) {
-  const { authUrl, publishableKey, plugins = {}, fetchOptions = {} } = opts;
+  const { authUrl, publishableKey, plugins = {}, fetchOptions = {}, sessionOptions } = opts;
 
   // Merge in the X-Publishable-Key header when a key is provided.
   // This is how the server identifies which registered application is making
@@ -86,6 +93,7 @@ export function createRalphAuthClient(opts: ClientOptions) {
   return createAuthClient({
     baseURL: authUrl,
     plugins: pluginList,
+    ...(sessionOptions ? { sessionOptions } : {}),
     fetchOptions: {
       credentials: "include",
       ...fetchOptions,

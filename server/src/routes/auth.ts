@@ -26,8 +26,105 @@ authRouter.all("/*", async (c) => {
   const request = req.raw;
 
   const pk = req.header("X-Publishable-Key");
+  const app = pk ? await getApplicationByPublishableKey(db, pk).catch(() => null) : null;
+
+  if (req.method === "GET" && req.path.endsWith("/get-session")) {
+    const bearerToken = req.header("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+    if (bearerToken && pk && app && !isApplicationSuspended(app)) {
+      const origin = req.header("Origin") ?? "";
+      if (origin && !isOriginAllowed(app, origin)) {
+        return withHeaders(
+          Response.json(
+            {
+              error: "origin_not_allowed",
+              message: `Origin '${origin}' is not in the allowed origins list for application '${app.name}'. Update the application's allowed origins in the ralph-auth dashboard.`,
+            },
+            { status: 403 }
+          ),
+          request,
+          db,
+          env.KV
+        );
+      }
+
+      const now = Date.now();
+      const sessionRow = await db
+        .prepare(
+          `SELECT id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, activeOrganizationId, app_id
+           FROM session
+           WHERE token = ? AND app_id = ? AND expiresAt > ?
+           LIMIT 1`
+        )
+        .bind(bearerToken, app.id, now)
+        .first<Record<string, unknown>>()
+        .catch(() => null);
+
+      if (!sessionRow?.["userId"]) {
+        return withHeaders(Response.json(null), request, db, env.KV);
+      }
+
+      const userRow = await db
+        .prepare("SELECT id, name, email, emailVerified, image, role, banned, createdAt, updatedAt, username, twoFactorEnabled FROM user WHERE id = ? LIMIT 1")
+        .bind(sessionRow["userId"])
+        .first<Record<string, unknown>>()
+        .catch(() => null);
+
+      if (!userRow?.["id"]) {
+        return withHeaders(Response.json(null), request, db, env.KV);
+      }
+
+      return withHeaders(
+        Response.json({
+          session: sessionRow,
+          user: userRow,
+        }),
+        request,
+        db,
+        env.KV
+      );
+    }
+
+    const auth = createAuth(env, req.raw.cf as IncomingRequestCfProperties | undefined);
+    const sessionData = await auth.api.getSession({ headers: req.raw.headers }).catch(() => null);
+
+    if (!sessionData?.session?.id) {
+      return withHeaders(Response.json(null), request, db, env.KV);
+    }
+
+    const row = await db
+      .prepare("SELECT app_id FROM session WHERE id = ? LIMIT 1")
+      .bind(sessionData.session.id)
+      .first<{ app_id: string | null }>()
+      .catch(() => null);
+
+    if (pk) {
+      if (!app || isApplicationSuspended(app)) {
+        return withHeaders(Response.json(null), request, db, env.KV);
+      }
+
+      const origin = req.header("Origin") ?? "";
+      if (origin && !isOriginAllowed(app, origin)) {
+        return withHeaders(
+          Response.json(
+            {
+              error: "origin_not_allowed",
+              message: `Origin '${origin}' is not in the allowed origins list for application '${app.name}'. Update the application's allowed origins in the ralph-auth dashboard.`,
+            },
+            { status: 403 }
+          ),
+          request,
+          db,
+          env.KV
+        );
+      }
+
+      return withHeaders(Response.json(row?.app_id === app.id ? sessionData : null), request, db, env.KV);
+    }
+
+    return withHeaders(Response.json(row?.app_id ? null : sessionData), request, db, env.KV);
+  }
+
   if (pk) {
-    const app = await getApplicationByPublishableKey(db, pk).catch(() => null);
     if (app) {
       if (isApplicationSuspended(app)) {
         return withHeaders(

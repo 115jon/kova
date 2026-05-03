@@ -139,13 +139,10 @@ export function SocialButtons({
   const absCallback = resolveAbsoluteUrl(authUrl, callbackURL);
   const absError = resolveAbsoluteUrl(authUrl, errorCallbackURL ?? "/sign-in?error=oauth");
 
-  // When the SDK consumer is on a different registrable domain from the auth
-  // server (e.g. workers.dev vs auth.115jon.site), cross-site cookies are
-  // unreliable. Route the callbackURL through the oauth-complete bounce handler
-  // so the server can read the session (same-domain, no restriction) and issue
-  // a short-lived transfer code instead.
+  // SDK applications always route OAuth through the bounce handler so the
+  // server can mint an application-scoped session token.
   const finalCallback =
-    publishableKey && isCrossOriginDomain(authUrl)
+    publishableKey
       ? buildSdkBounceUrl(authUrl, publishableKey, absCallback)
       : absCallback;
 
