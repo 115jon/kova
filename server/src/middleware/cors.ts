@@ -60,6 +60,7 @@ const ORIGIN_CACHE_TTL_SECONDS = 60;
  */
 const CACHE_KEY_PREFIX = "cors:origin:";
 const PK_CACHE_KEY_PREFIX = "cors:pk-origin:";
+const memoryOriginCache = new Map<string, { allowed: boolean; expiresAt: number }>();
 
 // ── Static origin allowlist ────────────────────────────────────────────────────
 //
@@ -110,9 +111,19 @@ async function kvGetOrigin(
   const key = publishableKey
     ? `${PK_CACHE_KEY_PREFIX}${publishableKey}:${origin}`
     : `${CACHE_KEY_PREFIX}${origin}`;
+  const cached = memoryOriginCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.allowed;
+  if (cached) memoryOriginCache.delete(key);
+
   const value = await kv.get(key).catch(() => null);
-  if (value === "1") return true;
-  if (value === "0") return false;
+  if (value === "1" || value === "0") {
+    const allowed = value === "1";
+    memoryOriginCache.set(key, {
+      allowed,
+      expiresAt: Date.now() + ORIGIN_CACHE_TTL_SECONDS * 1000,
+    });
+    return allowed;
+  }
   return null; // cache miss
 }
 
@@ -121,6 +132,10 @@ async function kvGetOrigin(
  * Fire-and-forget: CORS headers must not be blocked on a KV write.
  */
 function kvPutOrigin(kv: KVNamespace, origin: string, allowed: boolean): void {
+  memoryOriginCache.set(`${CACHE_KEY_PREFIX}${origin}`, {
+    allowed,
+    expiresAt: Date.now() + ORIGIN_CACHE_TTL_SECONDS * 1000,
+  });
   kv
     .put(`${CACHE_KEY_PREFIX}${origin}`, allowed ? "1" : "0", {
       expirationTtl: ORIGIN_CACHE_TTL_SECONDS,
@@ -136,6 +151,10 @@ function kvPutPublishableKeyOrigin(
   origin: string,
   allowed: boolean
 ): void {
+  memoryOriginCache.set(`${PK_CACHE_KEY_PREFIX}${publishableKey}:${origin}`, {
+    allowed,
+    expiresAt: Date.now() + ORIGIN_CACHE_TTL_SECONDS * 1000,
+  });
   kv
     .put(`${PK_CACHE_KEY_PREFIX}${publishableKey}:${origin}`, allowed ? "1" : "0", {
       expirationTtl: ORIGIN_CACHE_TTL_SECONDS,
