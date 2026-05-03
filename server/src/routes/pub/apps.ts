@@ -21,6 +21,7 @@ import { getApplicationByPublishableKey } from "../../applications";
 import { createAuth } from "../../auth";
 
 const pubAppsRouter = new Hono<{ Bindings: Env }>();
+const DEFAULT_ENABLED_PROVIDERS = ["google", "github", "discord", "microsoft"] as const;
 
 // ── GET /:pk/appearance ───────────────────────────────────────────────────────
 
@@ -55,6 +56,16 @@ pubAppsRouter.get("/:pk/appearance", async (c) => {
     );
   }
 
+  const enabledProviderRows = await c.env.DB
+    .prepare("SELECT provider, enabled FROM app_oauth_provider WHERE app_id = ?")
+    .bind(app.id)
+    .all<{ provider: string; enabled: number }>()
+    .then(r => r.results)
+    .catch(() => [] as { provider: string; enabled: number }[]);
+  const enabledProviders = enabledProviderRows.length > 0
+    ? enabledProviderRows.filter(row => row.enabled).map(row => row.provider)
+    : [...DEFAULT_ENABLED_PROVIDERS];
+
   const PAID_PLANS = new Set(["starter", "pro", "enterprise"]);
   const payload = {
     displayName: app.display_name ?? app.name,
@@ -69,16 +80,9 @@ pubAppsRouter.get("/:pk/appearance", async (c) => {
     // hideBranding: only honour the flag on paid plans.
     // Free-plan apps always show the "Secured by ralph-auth" badge.
     hideBranding: PAID_PLANS.has(app.plan ?? "") && !!(app.hide_branding),
-    // Enabled OAuth providers — fetched from app_oauth_provider table.
-    // If no rows exist yet the SDK falls back to all supported providers.
-    enabledProviders: await c.env.DB
-      .prepare(
-        "SELECT provider FROM app_oauth_provider WHERE app_id = ? AND enabled = 1"
-      )
-      .bind(app.id)
-      .all<{ provider: string }>()
-      .then(r => r.results.map(row => row.provider))
-      .catch(() => [] as string[]),
+    // Enabled OAuth providers, matching the admin dashboard's no-rows default.
+    // Apple/Facebook stay off until explicitly enabled after credentials exist.
+    enabledProviders,
   };
 
   const json = JSON.stringify(payload);

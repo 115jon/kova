@@ -63,6 +63,9 @@ const ALL_OAUTH_PROVIDERS: OAuthProvider[] = [
   { id: "apple", label: "Apple" },
   { id: "facebook", label: "Facebook" },
 ];
+const DEFAULT_OAUTH_PROVIDERS = ALL_OAUTH_PROVIDERS.filter(p =>
+  ["google", "discord", "github", "microsoft"].includes(p.id)
+);
 
 // ── Server appearance payload shape ──────────────────────────────────────────
 
@@ -321,12 +324,12 @@ export function RalphAuthProvider({
   // ── OAuth providers: server list → developer override ────────────────────
   const resolvedProviders = useMemo<OAuthProvider[]>(() => {
     if (oauthProviders) return oauthProviders;
-    if (serverAppearance?.enabledProviders?.length) {
+    if (serverAppearance) {
       return ALL_OAUTH_PROVIDERS.filter(p =>
         (serverAppearance.enabledProviders).includes(p.id)
       );
     }
-    return ALL_OAUTH_PROVIDERS;
+    return DEFAULT_OAUTH_PROVIDERS;
   }, [oauthProviders, serverAppearance]);
 
   const value = useMemo<RalphAuthContextValue>(
