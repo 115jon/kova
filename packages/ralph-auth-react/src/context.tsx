@@ -153,6 +153,7 @@ export function RalphAuthProvider({
   plugins,
   appearance,
   oauthProviders,
+  sessionOptions,
   isPlatformAdmin = false,
   afterSignInUrl = "/",
   afterSignUpUrl = "/",
@@ -194,6 +195,7 @@ export function RalphAuthProvider({
       authUrl: resolvedAuthUrl,
       publishableKey,
       plugins,
+      sessionOptions,
       ...(sessionToken
         ? { fetchOptions: { headers: { Authorization: `Bearer ${sessionToken}` } } }
         : {}),

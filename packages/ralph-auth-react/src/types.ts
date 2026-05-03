@@ -227,6 +227,17 @@ export interface RalphAuthConfig {
   /** Absolute or relative URL to navigate to after sign-out. */
   afterSignOutUrl?: string;
 
+  // ── Session behaviour ──────────────────────────────────────────────────
+  /** Controls how often the SDK re-validates the session with the server. */
+  sessionOptions?: {
+    /** Seconds between automatic session re-checks. @default undefined (Better Auth default) */
+    refetchInterval?: number;
+    /** Re-check session when the browser tab regains focus. @default true */
+    refetchOnWindowFocus?: boolean;
+    /** Re-check session when the device is offline. @default true */
+    refetchWhenOffline?: boolean;
+  };
+
   // ── UI ────────────────────────────────────────────────────────────────
   /** Global appearance overrides applied to all SDK components. */
   appearance?: Appearance;
