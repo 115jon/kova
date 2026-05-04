@@ -320,7 +320,7 @@ export function useUploadLogo() {
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(`/api/admin/apps/${id}/logo`, { method: "POST", credentials: "include", body: form });
-      const data = await res.json() as { logoUrl?: string; error?: string };
+      const data = await readJsonOrError<{ logoUrl?: string; error?: string }>(res, "Upload failed");
       if (!res.ok) throw new Error(data.error ?? "Upload failed");
       return { logoUrl: data.logoUrl! };
     },
@@ -348,7 +348,7 @@ export function useUploadFavicon() {
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(`/api/admin/apps/${id}/favicon`, { method: "POST", credentials: "include", body: form });
-      const data = await res.json() as { faviconUrl?: string; error?: string };
+      const data = await readJsonOrError<{ faviconUrl?: string; error?: string }>(res, "Upload failed");
       if (!res.ok) throw new Error(data.error ?? "Upload failed");
       return { faviconUrl: data.faviconUrl! };
     },

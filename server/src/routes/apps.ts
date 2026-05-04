@@ -55,6 +55,20 @@ function invalidateAppKv(kv: KVNamespace, publishableKey: string, appId: string)
   kv.delete(`plan:${appId}`).catch(() => { });
 }
 
+const APP_LOGO_MAX_BYTES = 2 * 1024 * 1024;
+const APP_FAVICON_MAX_BYTES = 512 * 1024;
+
+async function cdnErrorMessage(res: Response): Promise<string> {
+  const text = await res.text().catch(() => "");
+  if (!text.trim()) return `HTTP ${res.status}`;
+  try {
+    const body = JSON.parse(text) as { error?: unknown; message?: unknown };
+    if (typeof body.error === "string" && body.error.trim()) return body.error;
+    if (typeof body.message === "string" && body.message.trim()) return body.message;
+  } catch { /* fall through */ }
+  return text;
+}
+
 // ── LIST ──────────────────────────────────────────────────────────────────────
 
 appsRouter.get("/", async (c) => {
@@ -322,7 +336,7 @@ appsRouter.post("/:id/logo", async (c) => {
   if (!file) return Response.json({ error: "No file uploaded" }, { status: 400 });
 
   // Validate size (max 2 MB)
-  if (file.size > 2 * 1024 * 1024) {
+  if (file.size > APP_LOGO_MAX_BYTES) {
     return Response.json({ error: "File too large (max 2 MB)" }, { status: 400 });
   }
 
@@ -332,15 +346,14 @@ appsRouter.post("/:id/logo", async (c) => {
   uploadForm.append("app", "ralph-auth");
   uploadForm.append("key", `apps/${id}/logo.webp`);
 
-  const cdnRes = await fetch(`${c.env.CDN_URL}/api/upload`, {
+  const cdnRes = await fetch(`${c.env.CDN_URL}/upload`, {
     method: "POST",
     headers: { "CDN-API-Key": c.env.CDN_API_KEY },
     body: uploadForm,
   });
 
   if (!cdnRes.ok) {
-    const err = await cdnRes.text().catch(() => "Upload failed");
-    return Response.json({ error: err }, { status: 502 });
+    return Response.json({ error: `CDN upload failed: ${await cdnErrorMessage(cdnRes)}` }, { status: 502 });
   }
 
   const { url } = await cdnRes.json<{ url: string }>();
@@ -380,7 +393,7 @@ appsRouter.post("/:id/favicon", async (c) => {
   const file = formData?.get("file") as File | null;
   if (!file) return Response.json({ error: "No file uploaded" }, { status: 400 });
 
-  if (file.size > 512 * 1024) {
+  if (file.size > APP_FAVICON_MAX_BYTES) {
     return Response.json({ error: "Favicon too large (max 512 KB)" }, { status: 400 });
   }
 
@@ -389,15 +402,14 @@ appsRouter.post("/:id/favicon", async (c) => {
   uploadForm.append("app", "ralph-auth");
   uploadForm.append("key", `apps/${id}/favicon.ico`);
 
-  const cdnRes = await fetch(`${c.env.CDN_URL}/api/upload`, {
+  const cdnRes = await fetch(`${c.env.CDN_URL}/upload`, {
     method: "POST",
     headers: { "CDN-API-Key": c.env.CDN_API_KEY },
     body: uploadForm,
   });
 
   if (!cdnRes.ok) {
-    const err = await cdnRes.text().catch(() => "Upload failed");
-    return Response.json({ error: err }, { status: 502 });
+    return Response.json({ error: `CDN upload failed: ${await cdnErrorMessage(cdnRes)}` }, { status: 502 });
   }
 
   const { url } = await cdnRes.json<{ url: string }>();

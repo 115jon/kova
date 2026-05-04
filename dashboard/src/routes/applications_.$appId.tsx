@@ -34,6 +34,11 @@ export const Route = createFileRoute("/applications_/$appId")({
 
 type Tab = "overview" | "users" | "appearance" | "providers" | "email" | "billing" | "settings";
 
+const APP_LOGO_MAX_BYTES = 2 * 1024 * 1024;
+const APP_FAVICON_MAX_BYTES = 512 * 1024;
+const APP_LOGO_MAX_LABEL = "2 MB";
+const APP_FAVICON_MAX_LABEL = "512 KB";
+
 // ── Small reusable components ─────────────────────────────────────────────────
 
 function ErrBanner({ msg }: { msg: string }) {
@@ -371,8 +376,8 @@ function AppearanceTab({ app, isPlatformAdmin = false, onFormChange }: { app: Ap
   const [err, setErr] = useState("");
   const uploadAsset = async (kind: "logo" | "favicon", file: File) => {
     setOk(""); setErr("");
-    const maxBytes = kind === "logo" ? 2 * 1024 * 1024 : 512 * 1024;
-    const maxLabel = kind === "logo" ? "2 MB" : "512 KB";
+    const maxBytes = kind === "logo" ? APP_LOGO_MAX_BYTES : APP_FAVICON_MAX_BYTES;
+    const maxLabel = kind === "logo" ? APP_LOGO_MAX_LABEL : APP_FAVICON_MAX_LABEL;
     if (file.size > maxBytes) {
       setErr(`${kind === "logo" ? "Logo" : "Favicon"} is too large. Maximum size is ${maxLabel}.`);
       return;
