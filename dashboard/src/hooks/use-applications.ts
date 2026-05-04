@@ -108,6 +108,19 @@ export type UpdateApplicationInput = Partial<Pick<Application,
 
 // ── Fetchers ───────────────────────────────────────────────────────────────────
 
+async function readJsonOrError<T>(res: Response, fallback: string): Promise<T> {
+  const text = await res.text();
+  if (!text) {
+    if (res.ok) return {} as T;
+    throw new Error(fallback);
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(res.ok ? "Unexpected response from server" : text);
+  }
+}
+
 async function fetchApplications(): Promise<Application[]> {
   const res = await fetch("/api/admin/apps", { credentials: "include" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -225,7 +238,7 @@ export function useUpdateApplication() {
         credentials: "include",
         body: JSON.stringify(patch),
       });
-      const data = await res.json() as { app?: Application; error?: string };
+      const data = await readJsonOrError<{ app?: Application; error?: string }>(res, "Failed to update");
       if (!res.ok) throw new Error(data.error ?? "Failed to update");
       return data.app!;
     },
