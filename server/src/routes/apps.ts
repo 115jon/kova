@@ -69,6 +69,25 @@ async function cdnErrorMessage(res: Response): Promise<string> {
   return text;
 }
 
+async function createCdnShareUrl(env: Env, key: string, label: string, createdBy: string): Promise<string> {
+  const shareRes = await fetch(`${env.CDN_URL}/api/shares`, {
+    method: "POST",
+    headers: {
+      "CDN-API-Key": env.CDN_API_KEY,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ key, label, createdBy }),
+  });
+
+  if (!shareRes.ok) {
+    throw new Error(await cdnErrorMessage(shareRes));
+  }
+
+  const body = await shareRes.json<{ shareUrl?: string }>();
+  if (!body.shareUrl) throw new Error("CDN share response did not include a share URL");
+  return body.shareUrl;
+}
+
 // ── LIST ──────────────────────────────────────────────────────────────────────
 
 appsRouter.get("/", async (c) => {
@@ -356,13 +375,20 @@ appsRouter.post("/:id/logo", async (c) => {
     return Response.json({ error: `CDN upload failed: ${await cdnErrorMessage(cdnRes)}` }, { status: 502 });
   }
 
-  const { url } = await cdnRes.json<{ url: string }>();
+  const { key } = await cdnRes.json<{ key: string }>();
+  let logoUrl: string;
+  try {
+    logoUrl = await createCdnShareUrl(c.env, key, `${app.name} logo`, session.user.id);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unknown error";
+    return Response.json({ error: `CDN share creation failed: ${detail}` }, { status: 502 });
+  }
 
   // Persist URL + invalidate KV appearance cache
-  await updateApplication(c.env.DB, id, { logo_url: url });
+  await updateApplication(c.env.DB, id, { logo_url: logoUrl });
   invalidateAppKv(c.env.KV, app.publishable_key, id);
 
-  return Response.json({ logoUrl: url });
+  return Response.json({ logoUrl });
 });
 
 appsRouter.delete("/:id/logo", async (c) => {
@@ -412,11 +438,19 @@ appsRouter.post("/:id/favicon", async (c) => {
     return Response.json({ error: `CDN upload failed: ${await cdnErrorMessage(cdnRes)}` }, { status: 502 });
   }
 
-  const { url } = await cdnRes.json<{ url: string }>();
-  await updateApplication(c.env.DB, id, { favicon_url: url });
+  const { key } = await cdnRes.json<{ key: string }>();
+  let faviconUrl: string;
+  try {
+    faviconUrl = await createCdnShareUrl(c.env, key, `${app.name} favicon`, session.user.id);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unknown error";
+    return Response.json({ error: `CDN share creation failed: ${detail}` }, { status: 502 });
+  }
+
+  await updateApplication(c.env.DB, id, { favicon_url: faviconUrl });
   invalidateAppKv(c.env.KV, app.publishable_key, id);
 
-  return Response.json({ faviconUrl: url });
+  return Response.json({ faviconUrl });
 });
 
 appsRouter.delete("/:id/favicon", async (c) => {
