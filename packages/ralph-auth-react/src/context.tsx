@@ -97,6 +97,8 @@ export interface RalphAuthContextValue {
   oauthProviders: OAuthProvider[];
   /** Live server-fetched branding — null until the first fetch resolves. */
   serverAppearance: ServerAppearance | null;
+  /** True once server appearance has resolved, or immediately when no publishable key is used. */
+  isAppearanceLoaded: boolean;
   afterSignInUrl: string;
   afterSignUpUrl: string;
   afterSignOutUrl: string;
@@ -310,10 +312,15 @@ export function RalphAuthProvider({
     const serverOverrides: Partial<AppearanceVariables> = serverAppearance
       ? {
         ...(serverAppearance.primaryColor ? { colorPrimary: serverAppearance.primaryColor } : {}),
+        ...(serverAppearance.primaryColor ? { colorPrimaryHover: serverAppearance.primaryColor } : {}),
         ...(serverAppearance.backgroundColor ? { colorBackground: serverAppearance.backgroundColor } : {}),
       }
       : {};
-    return { ...DEFAULT_VARS, ...serverOverrides, ...(appearance?.variables ?? {}) };
+    const merged = { ...DEFAULT_VARS, ...serverOverrides, ...(appearance?.variables ?? {}) };
+    if (!appearance?.variables?.colorPrimaryHover && merged.colorPrimary !== DEFAULT_VARS.colorPrimary) {
+      merged.colorPrimaryHover = merged.colorPrimary;
+    }
+    return merged;
   }, [serverAppearance, appearance?.variables]);
 
   const styleIdRef = useRef<string | null>(null);
@@ -339,6 +346,7 @@ export function RalphAuthProvider({
       appearance: appearance ?? {}, vars,
       oauthProviders: resolvedProviders,
       serverAppearance,
+      isAppearanceLoaded: !publishableKey || serverAppearance !== null,
       afterSignInUrl, afterSignUpUrl, afterSignOutUrl,
       mode,
       isPlatformAdmin,
@@ -350,7 +358,7 @@ export function RalphAuthProvider({
       clearSessionToken,
       hasBearerSession: sessionToken !== null,
     }),
-    [client, resolvedAuthUrl, appearance, vars, resolvedProviders,
+    [client, resolvedAuthUrl, publishableKey, appearance, vars, resolvedProviders,
       serverAppearance, afterSignInUrl, afterSignUpUrl, afterSignOutUrl,
       mode, isPlatformAdmin, sessionResult, clearSessionToken, sessionToken]
   );

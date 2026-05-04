@@ -46,6 +46,7 @@ import {
   Divider,
   FormField,
   RateLimitBanner,
+  Skeleton,
   SubmitButton,
   Tabs,
 } from "./ui";
@@ -320,7 +321,7 @@ export function SignIn({
   appearance: instanceAppearance,
   className,
 }: SignInProps) {
-  const { appearance: providerAppearance, afterSignInUrl: providerAfterSignIn, oauthProviders } =
+  const { appearance: providerAppearance, afterSignInUrl: providerAfterSignIn, oauthProviders, isAppearanceLoaded } =
     useRalphAuth();
 
   const merged = mergeAppearance(providerAppearance, instanceAppearance);
@@ -328,6 +329,26 @@ export function SignIn({
   const resolvedUrl = afterSignInUrl ?? providerAfterSignIn;
 
   const [activeTab, setActiveTab] = useState<SignInTab>(defaultTab);
+
+  if (!isAppearanceLoaded) {
+    return (
+      <Card elements={el} className={className}>
+        <CardHeader title="Sign in" subtitle="Welcome back. Choose your sign-in method." elements={el} />
+        <CardBody elements={el}>
+          <div data-ra-element="socialButtonsRoot" style={el.socialButtonsRoot}>
+            <Skeleton height={38} />
+            <Skeleton height={38} />
+            <Skeleton height={38} />
+          </div>
+          <Divider elements={el} />
+          <Skeleton height={42} style={{ marginBottom: 20 }} />
+          <Skeleton height={36} style={{ marginBottom: 14 }} />
+          <Skeleton height={36} style={{ marginBottom: 14 }} />
+          <Skeleton height={40} />
+        </CardBody>
+      </Card>
+    );
+  }
 
   return (
     <Card elements={el} className={className}>
@@ -381,4 +402,3 @@ export function SignIn({
 
 // Re-export appearance type for convenience
 export type { Appearance };
-

@@ -100,6 +100,7 @@ export type UpdateApplicationInput = Partial<Pick<Application,
   | "name" | "allowed_origins" | "redirect_uris"
   | "display_name" | "logo_url" | "favicon_url"
   | "primary_color" | "background_color" | "theme"
+  | "hide_branding"
   | "home_url" | "terms_url" | "privacy_url"
   | "from_name" | "from_email" | "support_email"
   | "smtp_host" | "smtp_port" | "smtp_user" | "smtp_secure"
@@ -487,4 +488,3 @@ export function useSetOAuthProviders() {
     },
   });
 }
-

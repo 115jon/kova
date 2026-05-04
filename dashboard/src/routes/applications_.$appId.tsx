@@ -369,6 +369,30 @@ function AppearanceTab({ app, isPlatformAdmin = false, onFormChange }: { app: Ap
   const canHideBranding = isPlatformAdmin || app.plan !== "free";
   const [ok, setOk] = useState("");
   const [err, setErr] = useState("");
+  const uploadAsset = async (kind: "logo" | "favicon", file: File) => {
+    setOk(""); setErr("");
+    const maxBytes = kind === "logo" ? 2 * 1024 * 1024 : 512 * 1024;
+    const maxLabel = kind === "logo" ? "2 MB" : "512 KB";
+    if (file.size > maxBytes) {
+      setErr(`${kind === "logo" ? "Logo" : "Favicon"} is too large. Maximum size is ${maxLabel}.`);
+      return;
+    }
+    if (!file.type.startsWith("image/") && !(kind === "favicon" && file.name.toLowerCase().endsWith(".ico"))) {
+      setErr(`${kind === "logo" ? "Logo" : "Favicon"} must be an image file.`);
+      return;
+    }
+    try {
+      if (kind === "logo") {
+        await uploadLogo.mutateAsync({ id: app.id, file });
+        setOk("Logo uploaded.");
+      } else {
+        await uploadFavicon.mutateAsync({ id: app.id, file });
+        setOk("Favicon uploaded.");
+      }
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Upload failed");
+    }
+  };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -398,7 +422,7 @@ function AppearanceTab({ app, isPlatformAdmin = false, onFormChange }: { app: Ap
               {app.logo_url && <button type="button" className="btn btn-ghost" style={{ padding: "4px 6px", color: "var(--color-red)" }} onClick={() => deleteLogo.mutate({ id: app.id })}><Trash2 size={12} /></button>}
             </div>
             <input ref={logoRef} type="file" accept="image/*" style={{ display: "none" }}
-              onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo.mutate({ id: app.id, file: f }); }} />
+              onChange={e => { const f = e.target.files?.[0]; if (f) void uploadAsset("logo", f); e.currentTarget.value = ""; }} />
           </div>
 
           {/* Favicon */}
@@ -414,7 +438,7 @@ function AppearanceTab({ app, isPlatformAdmin = false, onFormChange }: { app: Ap
               {app.favicon_url && <button type="button" className="btn btn-ghost" style={{ padding: "4px 6px", color: "var(--color-red)" }} onClick={() => deleteFavicon.mutate({ id: app.id })}><Trash2 size={12} /></button>}
             </div>
             <input ref={faviconRef} type="file" accept="image/*,.ico" style={{ display: "none" }}
-              onChange={e => { const f = e.target.files?.[0]; if (f) uploadFavicon.mutate({ id: app.id, file: f }); }} />
+              onChange={e => { const f = e.target.files?.[0]; if (f) void uploadAsset("favicon", f); e.currentTarget.value = ""; }} />
           </div>
         </div>
       </div>

@@ -331,6 +331,7 @@ export interface UpdateApplicationInput {
   primary_color?: string;
   background_color?: string;
   theme?: "dark" | "light" | "auto";
+  hide_branding?: boolean;
   home_url?: string | null;
   terms_url?: string | null;
   privacy_url?: string | null;
@@ -372,6 +373,7 @@ export async function updateApplication(
   addField("primary_color", input.primary_color);
   addField("background_color", input.background_color);
   addField("theme", input.theme);
+  addField("hide_branding", input.hide_branding);
   addField("home_url", input.home_url);
   addField("terms_url", input.terms_url);
   addField("privacy_url", input.privacy_url);

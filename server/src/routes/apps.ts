@@ -140,6 +140,7 @@ appsRouter.patch("/:id", async (c) => {
     primary_color: body.primary_color as string | undefined,
     background_color: body.background_color as string | undefined,
     theme: body.theme as "dark" | "light" | "auto" | undefined,
+    hide_branding: body.hide_branding as boolean | undefined,
     home_url: body.home_url as string | null | undefined,
     terms_url: body.terms_url as string | null | undefined,
     privacy_url: body.privacy_url as string | null | undefined,
@@ -328,11 +329,12 @@ appsRouter.post("/:id/logo", async (c) => {
   // Upload to CDN via multipart form
   const uploadForm = new FormData();
   uploadForm.append("file", file);
-  uploadForm.append("path", `ralph-auth/apps/${id}/logo.webp`);
+  uploadForm.append("app", "ralph-auth");
+  uploadForm.append("key", `apps/${id}/logo.webp`);
 
   const cdnRes = await fetch(`${c.env.CDN_URL}/api/upload`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${c.env.CDN_API_KEY}` },
+    headers: { "CDN-API-Key": c.env.CDN_API_KEY },
     body: uploadForm,
   });
 
@@ -384,16 +386,18 @@ appsRouter.post("/:id/favicon", async (c) => {
 
   const uploadForm = new FormData();
   uploadForm.append("file", file);
-  uploadForm.append("path", `ralph-auth/apps/${id}/favicon.ico`);
+  uploadForm.append("app", "ralph-auth");
+  uploadForm.append("key", `apps/${id}/favicon.ico`);
 
   const cdnRes = await fetch(`${c.env.CDN_URL}/api/upload`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${c.env.CDN_API_KEY}` },
+    headers: { "CDN-API-Key": c.env.CDN_API_KEY },
     body: uploadForm,
   });
 
   if (!cdnRes.ok) {
-    return Response.json({ error: "Upload failed" }, { status: 502 });
+    const err = await cdnRes.text().catch(() => "Upload failed");
+    return Response.json({ error: err }, { status: 502 });
   }
 
   const { url } = await cdnRes.json<{ url: string }>();

@@ -37,6 +37,7 @@ import {
   Divider,
   FormField,
   RateLimitBanner,
+  Skeleton,
   SubmitButton,
 } from "./ui";
 
@@ -125,6 +126,7 @@ export function SignUp({
     afterSignUpUrl: providerUrl,
     oauthProviders,
     authUrl,
+    isAppearanceLoaded,
   } = useRalphAuth();
   const merged = mergeAppearance(providerAppearance, instanceAppearance);
   const el = merged.elements ?? {};
@@ -152,6 +154,30 @@ export function SignUp({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const absCallbackUrl = resolveAbsoluteUrl(authUrl, resolvedUrl);
+
+  if (!isAppearanceLoaded) {
+    return (
+      <Card elements={el} className={className}>
+        <CardHeader
+          title="Create an account"
+          subtitle="Get started for free — no credit card required."
+          elements={el}
+        />
+        <CardBody elements={el}>
+          <div data-ra-element="socialButtonsRoot" style={el.socialButtonsRoot}>
+            <Skeleton height={38} />
+            <Skeleton height={38} />
+            <Skeleton height={38} />
+          </div>
+          <Divider elements={el} />
+          <Skeleton height={36} style={{ marginBottom: 14 }} />
+          <Skeleton height={36} style={{ marginBottom: 14 }} />
+          <Skeleton height={36} style={{ marginBottom: 14 }} />
+          <Skeleton height={40} />
+        </CardBody>
+      </Card>
+    );
+  }
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
