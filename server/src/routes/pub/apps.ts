@@ -66,7 +66,6 @@ pubAppsRouter.get("/:pk/appearance", async (c) => {
     ? enabledProviderRows.filter(row => row.enabled).map(row => row.provider)
     : [...DEFAULT_ENABLED_PROVIDERS];
 
-  const PAID_PLANS = new Set(["starter", "pro", "enterprise"]);
   const payload = {
     displayName: app.display_name ?? app.name,
     logoUrl: app.logo_url,
@@ -77,9 +76,9 @@ pubAppsRouter.get("/:pk/appearance", async (c) => {
     homeUrl: app.home_url,
     termsUrl: app.terms_url,
     privacyUrl: app.privacy_url,
-    // hideBranding: only honour the flag on paid plans.
-    // Free-plan apps always show the "Secured by ralph-auth" badge.
-    hideBranding: PAID_PLANS.has(app.plan ?? "") && !!(app.hide_branding),
+    // The admin dashboard enforces plan/admin policy before persisting this flag.
+    // Public consumers should reflect the saved application setting exactly.
+    hideBranding: !!(app.hide_branding),
     // Enabled OAuth providers, matching the admin dashboard's no-rows default.
     // Apple/Facebook stay off until explicitly enabled after credentials exist.
     enabledProviders,
