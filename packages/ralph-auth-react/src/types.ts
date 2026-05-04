@@ -56,6 +56,7 @@ export interface AppearanceElements {
   // ── Card shell ───────────────────────────────────────────────────────
   card?: React.CSSProperties;
   cardHeader?: React.CSSProperties;
+  appLogo?: React.CSSProperties;
   cardTitle?: React.CSSProperties;
   cardSubtitle?: React.CSSProperties;
   cardBody?: React.CSSProperties;
@@ -241,6 +242,13 @@ export interface RalphAuthConfig {
   // ── UI ────────────────────────────────────────────────────────────────
   /** Global appearance overrides applied to all SDK components. */
   appearance?: Appearance;
+
+  /**
+   * When true, the SDK updates the host document's favicon from application
+   * appearance. Defaults to false so embedded sign-in components do not
+   * override the containing site's favicon.
+   */
+  manageFavicon?: boolean;
 }
 
 // ── Session / user types ──────────────────────────────────────────────────────
@@ -419,4 +427,3 @@ export interface ProtectProps {
 
 // Required to use JSX without importing React in every file (React 17+ transform)
 import type React from "react";
-

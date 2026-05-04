@@ -93,6 +93,14 @@ ${declarations}
 [data-ra-element="cardHeader"] {
   padding: 28px 28px 0;
 }
+[data-ra-element="appLogo"] {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  border-radius: var(--ra-radius-sm);
+  display: block;
+  margin: 0 0 16px;
+}
 [data-ra-element="cardBody"] {
   padding: 24px 28px;
 }

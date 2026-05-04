@@ -7,7 +7,7 @@
  * On mount, fetches /api/pub/apps/:pk/appearance and merges:
  *  - primaryColor, backgroundColor → CSS vars
  *  - enabledProviders → filters the OAuth buttons shown (no code change needed)
- *  - faviconUrl → injected into <head>
+ *  - faviconUrl → optionally injected into <head> when manageFavicon is true
  */
 
 import {
@@ -158,6 +158,7 @@ export function RalphAuthProvider({
   plugins,
   appearance,
   oauthProviders,
+  manageFavicon = false,
   sessionOptions,
   isPlatformAdmin = false,
   afterSignInUrl = "/",
@@ -294,8 +295,10 @@ export function RalphAuthProvider({
 
   }, [resolvedAuthUrl, publishableKey]);
 
-  // Inject/update favicon from server
+  // Inject/update favicon from server only when explicitly enabled.
+  // Embedded SDK components should not overwrite the host site's favicon.
   useEffect(() => {
+    if (!manageFavicon) return;
     const url = serverAppearance?.faviconUrl;
     if (!url) return;
     let el = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
@@ -305,7 +308,7 @@ export function RalphAuthProvider({
       document.head.appendChild(el);
     }
     el.href = url;
-  }, [serverAppearance?.faviconUrl]);
+  }, [manageFavicon, serverAppearance?.faviconUrl]);
 
   // ── Merge: defaults → server colors → developer prop ─────────────────────
   const vars = useMemo<Required<AppearanceVariables>>(() => {

@@ -478,8 +478,20 @@ export function CardHeader({
   subtitle?: string;
   elements?: AppearanceElements;
 }) {
+  const { serverAppearance } = useRalphAuth();
+  const logoUrl = serverAppearance?.logoUrl;
+  const logoAlt = `${serverAppearance?.displayName ?? "Application"} logo`;
+
   return (
     <div data-ra-element="cardHeader" style={elements?.cardHeader}>
+      {logoUrl && (
+        <img
+          src={logoUrl}
+          alt={logoAlt}
+          data-ra-element="appLogo"
+          style={elements?.appLogo}
+        />
+      )}
       <h1 data-ra-element="cardTitle" style={elements?.cardTitle}>
         {title}
       </h1>
