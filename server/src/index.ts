@@ -51,6 +51,36 @@ export { hasAdminRole } from "./lib/roles";
 // Assets which serves the dashboard SPA (index.html for any unmatched path).
 const app = new Hono<{ Bindings: Env & { ASSETS: Fetcher } }>();
 
+const DASHBOARD_ROUTES = new Set([
+  "/",
+  "/api-keys",
+  "/applications",
+  "/audit-logs",
+  "/auth-error",
+  "/oauth-apps",
+  "/organizations",
+  "/sessions",
+  "/settings",
+  "/sign-in",
+  "/users",
+  "/webhooks",
+]);
+
+function hasDashboardPrefix(path: string, prefix: string) {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
+export function shouldServeDashboardAssetOrRoute(path: string) {
+  if (path.startsWith("/assets/")) return true;
+  if (path === "/favicon.svg" || path === "/_headers") return true;
+  if (DASHBOARD_ROUTES.has(path)) return true;
+  if (hasDashboardPrefix(path, "/accept-invitation")) return true;
+  if (hasDashboardPrefix(path, "/applications")) return true;
+  if (hasDashboardPrefix(path, "/organizations")) return true;
+  if (hasDashboardPrefix(path, "/users")) return true;
+  return false;
+}
+
 // ── Global middleware ────────────────────────────────────────────────────────
 // Handles OPTIONS preflight and injects CORS + security headers on all responses.
 app.use("*", corsMiddleware());
@@ -144,10 +174,17 @@ app.get("/api/avatar/*", (c) => {
 
 // ── SPA fallback ──────────────────────────────────────────────────────────────
 //
-// All unmatched paths (dashboard routes: /, /sign-in, /dashboard/*, etc.)
-// are delegated to Workers Assets which serves index.html for SPA navigation.
+// Only unmatched dashboard paths are delegated to Workers Assets. Workers Assets
+// has SPA fallback enabled, so passing scanner paths such as /wp-json/* through
+// would turn them into index.html 200s instead of real 404s.
 // Requires [assets] binding = "ASSETS" + run_worker_first = true in wrangler.toml.
-app.notFound((c) => c.env.ASSETS.fetch(c.req.raw));
+app.notFound((c) => {
+  if (shouldServeDashboardAssetOrRoute(c.req.path)) {
+    return c.env.ASSETS.fetch(c.req.raw);
+  }
+
+  return c.text("Not found", 404);
+});
 
 export default app;
 

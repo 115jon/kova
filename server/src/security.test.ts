@@ -5,6 +5,7 @@ import {
   isRedirectUriAllowed,
   type Application,
 } from "./applications";
+import { shouldServeDashboardAssetOrRoute } from "./index";
 import { encodeOAuthCtx, decodeOAuthCtx } from "./routes/oauth-bounce";
 import { verifyStripeWebhookSignature } from "./lib/stripe-webhook";
 
@@ -111,5 +112,22 @@ describe("Stripe webhook verification", () => {
     await expect(verifyStripeWebhookSignature(body, valid, secret, now)).resolves.toBe(true);
     await expect(verifyStripeWebhookSignature(body, valid.replace(/.$/, "0"), secret, now)).resolves.toBe(false);
     await expect(verifyStripeWebhookSignature(body, valid, secret, now + 10 * 60 * 1000)).resolves.toBe(false);
+  });
+});
+
+describe("dashboard fallback routing", () => {
+  it("serves known dashboard paths and assets through Workers Assets", () => {
+    expect(shouldServeDashboardAssetOrRoute("/")).toBe(true);
+    expect(shouldServeDashboardAssetOrRoute("/sign-in")).toBe(true);
+    expect(shouldServeDashboardAssetOrRoute("/applications/app_1/users/user_1")).toBe(true);
+    expect(shouldServeDashboardAssetOrRoute("/assets/index.js")).toBe(true);
+    expect(shouldServeDashboardAssetOrRoute("/favicon.svg")).toBe(true);
+  });
+
+  it("rejects scanner paths before the SPA fallback can return index.html", () => {
+    expect(shouldServeDashboardAssetOrRoute("/wp-json/gravitysmtp/v1/tests/mock-data")).toBe(false);
+    expect(shouldServeDashboardAssetOrRoute("/wp-includes/wlwmanifest.xml")).toBe(false);
+    expect(shouldServeDashboardAssetOrRoute("/xmlrpc.php")).toBe(false);
+    expect(shouldServeDashboardAssetOrRoute("/%22/assets/index.js%22")).toBe(false);
   });
 });
