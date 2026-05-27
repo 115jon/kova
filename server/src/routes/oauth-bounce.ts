@@ -154,7 +154,7 @@ export async function handleOAuthBounce(
   // cookie IS available — no cross-domain cookie restriction.
   //
   // We create a 30s single-use transfer code and redirect to the consumer app
-  // with ?ralph_auth_code=xxx.  The SDK reads this on mount and exchanges it
+  // with ?kova_auth_code=xxx.  The SDK reads this on mount and exchanges it
   // for the raw session token via POST /api/pub/apps/:pk/exchange-code.
   const mode = c.req.query("mode");
   if (mode === "sdk") {
@@ -295,7 +295,7 @@ async function handleSdkBounce(
 
   // ── Build redirect URL ────────────────────────────────────────────────────
   const dest = new URL(redirectUri);
-  dest.searchParams.set("ralph_auth_code", code);
+  dest.searchParams.set("kova_auth_code", code);
 
   // ── Restore previous platform session (Bug 2 mitigation) ─────────────────
   //

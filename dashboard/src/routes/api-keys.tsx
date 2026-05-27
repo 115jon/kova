@@ -189,7 +189,7 @@ function CreateKeyForm({
           <input
             ref={nameRef}
             className="input"
-            placeholder="e.g. ralph-meet backend"
+            placeholder="e.g. kova-meet backend"
             value={name}
             onChange={e => setName(e.target.value)}
             onKeyDown={e => e.key === "Enter" && handleCreate()}

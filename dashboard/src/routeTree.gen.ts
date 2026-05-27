@@ -25,6 +25,7 @@ import { Route as UsersUserIdRouteImport } from './routes/users_.$userId'
 import { Route as OrganizationsOrgIdRouteImport } from './routes/organizations_.$orgId'
 import { Route as ApplicationsAppIdRouteImport } from './routes/applications_.$appId'
 import { Route as AcceptInvitationInvitationIdRouteImport } from './routes/accept-invitation.$invitationId'
+import { Route as ApplicationsAppIdUsersUserIdRouteImport } from './routes/applications_.$appId_.users_.$userId'
 
 const WebhooksRoute = WebhooksRouteImport.update({
   id: '/webhooks',
@@ -107,6 +108,12 @@ const AcceptInvitationInvitationIdRoute =
     path: '/accept-invitation/$invitationId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApplicationsAppIdUsersUserIdRoute =
+  ApplicationsAppIdUsersUserIdRouteImport.update({
+    id: '/applications_/$appId_/users_/$userId',
+    path: '/applications/$appId/users/$userId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -125,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/applications/$appId': typeof ApplicationsAppIdRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
   '/users/$userId': typeof UsersUserIdRoute
+  '/applications/$appId/users/$userId': typeof ApplicationsAppIdUsersUserIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -143,6 +151,7 @@ export interface FileRoutesByTo {
   '/applications/$appId': typeof ApplicationsAppIdRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
   '/users/$userId': typeof UsersUserIdRoute
+  '/applications/$appId/users/$userId': typeof ApplicationsAppIdUsersUserIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -162,6 +171,7 @@ export interface FileRoutesById {
   '/applications_/$appId': typeof ApplicationsAppIdRoute
   '/organizations_/$orgId': typeof OrganizationsOrgIdRoute
   '/users_/$userId': typeof UsersUserIdRoute
+  '/applications_/$appId_/users_/$userId': typeof ApplicationsAppIdUsersUserIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -182,6 +192,7 @@ export interface FileRouteTypes {
     | '/applications/$appId'
     | '/organizations/$orgId'
     | '/users/$userId'
+    | '/applications/$appId/users/$userId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -200,6 +211,7 @@ export interface FileRouteTypes {
     | '/applications/$appId'
     | '/organizations/$orgId'
     | '/users/$userId'
+    | '/applications/$appId/users/$userId'
   id:
     | '__root__'
     | '/'
@@ -218,6 +230,7 @@ export interface FileRouteTypes {
     | '/applications_/$appId'
     | '/organizations_/$orgId'
     | '/users_/$userId'
+    | '/applications_/$appId_/users_/$userId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -237,6 +250,7 @@ export interface RootRouteChildren {
   ApplicationsAppIdRoute: typeof ApplicationsAppIdRoute
   OrganizationsOrgIdRoute: typeof OrganizationsOrgIdRoute
   UsersUserIdRoute: typeof UsersUserIdRoute
+  ApplicationsAppIdUsersUserIdRoute: typeof ApplicationsAppIdUsersUserIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -353,6 +367,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcceptInvitationInvitationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/applications_/$appId_/users_/$userId': {
+      id: '/applications_/$appId_/users_/$userId'
+      path: '/applications/$appId/users/$userId'
+      fullPath: '/applications/$appId/users/$userId'
+      preLoaderRoute: typeof ApplicationsAppIdUsersUserIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -373,6 +394,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApplicationsAppIdRoute: ApplicationsAppIdRoute,
   OrganizationsOrgIdRoute: OrganizationsOrgIdRoute,
   UsersUserIdRoute: UsersUserIdRoute,
+  ApplicationsAppIdUsersUserIdRoute: ApplicationsAppIdUsersUserIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

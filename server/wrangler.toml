@@ -18,7 +18,7 @@
 #   pnpm cf-typegen       →  regenerate Cloudflare worker types
 # ─────────────────────────────────────────────────────────────────────────────
 
-name = "ralph-auth-server"
+name = "kova-auth-server"
 main = "src/index.ts"
 compatibility_date = "2026-04-12"
 compatibility_flags = ["nodejs_compat"]

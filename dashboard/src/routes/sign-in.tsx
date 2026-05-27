@@ -1,4 +1,5 @@
 import { ProviderIcon } from "@/components/BrandIcons";
+import { KovaLogo } from "@/components/KovaLogo";
 import { authClient, getSession, signIn, twoFactor } from "@/lib/auth-client";
 import { CONFIGURED_PROVIDERS } from "@/lib/providers";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
@@ -30,7 +31,7 @@ export const Route = createFileRoute("/sign-in")({
    * Cross-app post-auth redirects must go through the Applications construct
    * (publishable key + allowed redirect_uris enforced server-side), not via
    * an arbitrary client-supplied URL which would constitute an open redirect.
-   * External services (e.g. the CDN) should use the @ralph-auth/react SDK
+   * External services (e.g. the CDN) should use the @kova/react SDK
    * with a registered Application's callbackURL instead.
    */
   beforeLoad: async () => {
@@ -421,19 +422,9 @@ function SignInPage() {
 
       <div className="card animate-in" style={{ width: "100%", maxWidth: 380, padding: 36 }}>
         {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 6,
-            background: "var(--color-accent)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            margin: "0 auto 10px",
-          }}>
-            <Shield size={16} color="#fff" strokeWidth={2.5} />
-          </div>
-          <h1 style={{ fontFamily: "var(--font-mono)", fontSize: "1.1rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.03em" }}>
-            ralph<span style={{ color: "var(--color-accent)" }}>auth</span>
-          </h1>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-secondary)", marginTop: 3 }}>Admin Dashboard</p>
+        <div style={{ textAlign: "center", marginBottom: 28, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <KovaLogo size={36} variant="full" />
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-secondary)", marginTop: 8 }}>Admin Dashboard</p>
         </div>
 
         {error && (

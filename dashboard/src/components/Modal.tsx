@@ -1,5 +1,5 @@
 /**
- * Modal.tsx — shared portal-based modal shell for ralph-auth dashboard.
+ * Modal.tsx — shared portal-based modal shell for kova-auth dashboard.
  *
  * Renders children into document.body via React portal so the overlay is
  * never clipped by an ancestor's overflow:hidden or transform context.

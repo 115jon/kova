@@ -13,15 +13,15 @@
  * ```
  */
 
-import { useRalphAuth } from "../context";
+import { useKovaAuth } from "../context";
 import type {
-  RalphMembership,
-  RalphOrganization,
+  KovaMembership,
+  KovaOrganization,
   UseOrganizationReturn,
 } from "../types";
 
 export function useOrganization(): UseOrganizationReturn {
-  const { client } = useRalphAuth();
+  const { client } = useKovaAuth();
 
   // useActiveOrganization is provided by organizationClient plugin
   const orgResult = (client as unknown as {
@@ -53,7 +53,7 @@ export function useOrganization(): UseOrganizationReturn {
   const isLoaded = !orgResult.isPending;
   const raw = orgResult.data;
 
-  const organization: RalphOrganization | null = raw
+  const organization: KovaOrganization | null = raw
     ? {
       id: raw.id,
       name: raw.name,
@@ -64,7 +64,7 @@ export function useOrganization(): UseOrganizationReturn {
     }
     : null;
 
-  const membership: RalphMembership | null = raw?.membership
+  const membership: KovaMembership | null = raw?.membership
     ? {
       id: raw.membership.id,
       userId: raw.membership.userId,

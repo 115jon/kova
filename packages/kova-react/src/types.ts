@@ -1,5 +1,5 @@
 /**
- * @ralph-auth/react — shared TypeScript types
+ * @kova/react — shared TypeScript types
  *
  * All public-facing interfaces live here so they can be imported
  * without pulling in any React dependencies.
@@ -131,7 +131,7 @@ export interface OAuthProvider {
   icon?: string;
 }
 
-/** Per-plugin enable/configure flags for `createRalphAuthClient`. */
+/** Per-plugin enable/configure flags for `createKovaAuthClient`. */
 export interface PluginConfig {
   /**
    * Admin client plugin — required for `user.role`, `banned`,
@@ -196,9 +196,9 @@ export interface PluginConfig {
 
 // ── Provider config ───────────────────────────────────────────────────────────
 
-export interface RalphAuthConfig {
+export interface KovaAuthConfig {
   /**
-   * Publishable key from your ralph-auth dashboard.
+   * Publishable key from your kova-auth dashboard.
    * Format: `pk_live_<base64>` or `pk_test_<base64>`.
    * Encodes the auth server URL — no need to pass `authUrl` separately.
    */
@@ -239,6 +239,19 @@ export interface RalphAuthConfig {
     refetchWhenOffline?: boolean;
   };
 
+  /**
+   * Optional raw session token supplied by a host shell.
+   * Native containers can persist the app-scoped bearer token outside browser
+   * storage and seed the SDK with it at startup.
+   */
+  initialSessionToken?: string | null;
+
+  /**
+   * Called whenever the SDK stores or clears the current app-scoped bearer
+   * token. Host apps can mirror the token into their own API fetch layer.
+   */
+  onSessionTokenChange?: (token: string | null) => void;
+
   // ── UI ────────────────────────────────────────────────────────────────
   /** Global appearance overrides applied to all SDK components. */
   appearance?: Appearance;
@@ -273,21 +286,26 @@ export interface LinkedAccount {
   scopes?: string[];
 }
 
-export interface RalphUser {
+export interface KovaUser {
   id: string;
   name: string;
+  fullName: string | null;
   email: string;
   emailVerified: boolean;
   image: string | null;
+  imageUrl?: string;
   role: string | null;
   banned: boolean;
   createdAt: Date;
   updatedAt: Date;
   username: string | null;
   twoFactorEnabled: boolean;
+  primaryEmailAddress: { emailAddress: string } | null;
+  unsafeMetadata: Record<string, unknown>;
+  reload?: () => Promise<void> | void;
 }
 
-export interface RalphSession {
+export interface KovaSession {
   id: string;
   token: string;
   userId: string;
@@ -297,7 +315,7 @@ export interface RalphSession {
   activeOrganizationId: string | null;
 }
 
-export interface RalphOrganization {
+export interface KovaOrganization {
   id: string;
   name: string;
   slug: string;
@@ -306,7 +324,7 @@ export interface RalphOrganization {
   createdAt: Date;
 }
 
-export interface RalphMembership {
+export interface KovaMembership {
   id: string;
   userId: string;
   organizationId: string;
@@ -317,14 +335,14 @@ export interface RalphMembership {
 // ── Hook return shapes ────────────────────────────────────────────────────────
 
 export interface UseSessionReturn {
-  session: { user: RalphUser; session: RalphSession } | null;
+  session: { user: KovaUser; session: KovaSession } | null;
   isLoaded: boolean;
   isSignedIn: boolean;
   refetch: () => void;
 }
 
 export interface UseUserReturn {
-  user: RalphUser | null;
+  user: KovaUser | null;
   isLoaded: boolean;
   isSignedIn: boolean;
   /** Update mutable user fields (name, username, image). */
@@ -354,8 +372,8 @@ export interface UseLinkedAccountsReturn {
 }
 
 export interface UseOrganizationReturn {
-  organization: RalphOrganization | null;
-  membership: RalphMembership | null;
+  organization: KovaOrganization | null;
+  membership: KovaMembership | null;
   isLoaded: boolean;
 }
 

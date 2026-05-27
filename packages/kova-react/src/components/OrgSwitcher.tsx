@@ -19,9 +19,9 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { mergeAppearance, useRalphAuth } from "../context";
+import { mergeAppearance, useKovaAuth } from "../context";
 import { useOrganization } from "../hooks/use-organization";
-import type { OrgSwitcherProps, RalphOrganization } from "../types";
+import type { OrgSwitcherProps, KovaOrganization } from "../types";
 import { BuildingIcon, CheckIcon, ChevronDownIcon, UserIcon } from "./icons";
 import { Spinner } from "./ui";
 
@@ -90,7 +90,7 @@ export function OrgSwitcher({
   appearance: instanceAppearance,
   className,
 }: OrgSwitcherProps) {
-  const { client, appearance: providerAppearance } = useRalphAuth();
+  const { client, appearance: providerAppearance } = useKovaAuth();
   const merged = mergeAppearance(providerAppearance, instanceAppearance);
   const el = merged.elements ?? {};
 
@@ -99,7 +99,7 @@ export function OrgSwitcher({
   const [switching, setSwitching] = useState<string | null>(null);
 
   // Load all orgs the user belongs to
-  const [orgs, setOrgs] = useState<RalphOrganization[] | null>(null);
+  const [orgs, setOrgs] = useState<KovaOrganization[] | null>(null);
   useEffect(() => {
     const orgClient = client as unknown as {
       organization?: {

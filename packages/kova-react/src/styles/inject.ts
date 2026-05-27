@@ -64,7 +64,7 @@ export function injectAppearanceVars(
 ${declarations}
 }
 
-/* ── @ralph-auth/react base styles ─────────────────────────────────── */
+/* ── @kova/react base styles ─────────────────────────────────── */
 [data-ra-root] {
   font-family: var(--ra-font);
   font-size: var(--ra-font-size);

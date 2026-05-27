@@ -21,7 +21,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { mergeAppearance, useRalphAuth } from "../context";
+import { mergeAppearance, useKovaAuth } from "../context";
 import { useAuth } from "../hooks/use-auth";
 import { useUser } from "../hooks/use-user";
 import type { UserButtonProps } from "../types";
@@ -54,7 +54,7 @@ function MultiSessionSection({
   currentUserId: string;
   onClose: () => void;
 }) {
-  const { client } = useRalphAuth();
+  const { client } = useKovaAuth();
   const [sessions, setSessions] = useState<DeviceSession[]>([]);
   const [switching, setSwitching] = useState<string | null>(null);
 
@@ -173,7 +173,7 @@ export function UserButton({
   className,
 }: UserButtonProps) {
   const { appearance: providerAppearance, afterSignOutUrl: providerUrl } =
-    useRalphAuth();
+    useKovaAuth();
   const merged = mergeAppearance(providerAppearance, instanceAppearance);
   const el = merged.elements ?? {};
 

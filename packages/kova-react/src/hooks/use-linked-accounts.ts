@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { useRalphAuth } from "../context";
+import { useKovaAuth } from "../context";
 import type { LinkedAccount, UseLinkedAccountsReturn } from "../types";
 
 // ── Shape returned by Better Auth's listAccounts() ────────────────────────────
@@ -35,7 +35,7 @@ type RawAccount = {
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useLinkedAccounts(): UseLinkedAccountsReturn {
-  const { client } = useRalphAuth();
+  const { client } = useKovaAuth();
 
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);

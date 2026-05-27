@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { KovaLogo } from "@/components/KovaLogo";
 import { AlertCircle, ArrowLeft, Shield } from "lucide-react";
 
 export const Route = createFileRoute("/auth-error")({
@@ -62,32 +63,8 @@ function AuthErrorPage() {
         style={{ width: "100%", maxWidth: 380, padding: 36 }}
       >
         {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 6,
-              background: "var(--color-accent)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 10px",
-            }}
-          >
-            <Shield size={16} color="#fff" strokeWidth={2.5} />
-          </div>
-          <h1
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "1.1rem",
-              fontWeight: 700,
-              color: "var(--color-text-primary)",
-              letterSpacing: "-0.03em",
-            }}
-          >
-            ralph<span style={{ color: "var(--color-accent)" }}>auth</span>
-          </h1>
+        <div style={{ textAlign: "center", marginBottom: 28, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <KovaLogo size={36} variant="full" />
         </div>
 
         {/* Error card */}

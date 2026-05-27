@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useState } from "react";
-import { useRalphAuth } from "../context";
+import { useKovaAuth } from "../context";
 import { useLinkedAccounts } from "../hooks/use-linked-accounts";
 import type { AppearanceElements } from "../types";
 import { CheckIcon, KeyIcon, ProviderIcon, providerLabel } from "./icons";
@@ -76,7 +76,7 @@ export function ConnectedAccounts({
   elements,
   layout = "compact",
 }: ConnectedAccountsProps) {
-  const { oauthProviders } = useRalphAuth();
+  const { oauthProviders } = useKovaAuth();
 
   const { accounts, isLoaded, isUpdating, error, linkAccount } =
     useLinkedAccounts();
@@ -97,7 +97,7 @@ export function ConnectedAccounts({
   );
 
   // Filter providers: always include credential; for OAuth ones, only show if
-  // configured in the <RalphAuthProvider oauthProviders> list.
+  // configured in the <KovaAuthProvider oauthProviders> list.
   const activeOAuthIds = new Set(oauthProviders.map((p) => p.id));
   const visibleProviders = providers.filter(
     (p) => p === "credential" || activeOAuthIds.has(p)

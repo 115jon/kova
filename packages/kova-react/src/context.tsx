@@ -1,5 +1,5 @@
 /**
- * RalphAuthProvider + useRalphAuth context
+ * KovaAuthProvider + useKovaAuth context
  *
  * Appearance priority (highest wins):
  *   component-level prop > provider-level prop > server-fetched > SDK defaults
@@ -21,8 +21,8 @@ import {
   type ReactNode,
 } from "react";
 import {
-  createRalphAuthClient,
-  type RalphAuthClient,
+  createKovaAuthClient,
+  type KovaAuthClient,
 } from "./client";
 import { resolveAuthUrl } from "./key";
 import { injectAppearanceVars } from "./styles/inject";
@@ -30,7 +30,7 @@ import type {
   Appearance,
   AppearanceVariables,
   OAuthProvider,
-  RalphAuthConfig,
+  KovaAuthConfig,
 } from "./types";
 
 // ── Default appearance variables ─────────────────────────────────────────────
@@ -79,7 +79,7 @@ export interface ServerAppearance {
   homeUrl: string | null;
   termsUrl: string | null;
   privacyUrl: string | null;
-  /** Whether the app has paid to suppress the ralph-auth badge. */
+  /** Whether the app has paid to suppress the kova-auth badge. */
   hideBranding: boolean;
   /** Provider IDs enabled in the dashboard, e.g. ["google","github"] */
   enabledProviders: string[];
@@ -87,8 +87,8 @@ export interface ServerAppearance {
 
 // ── Context value ────────────────────────────────────────────────────────────
 
-export interface RalphAuthContextValue {
-  client: RalphAuthClient;
+export interface KovaAuthContextValue {
+  client: KovaAuthClient;
   authUrl: string;
   /** The publishable key used to initialise this Provider instance. */
   publishableKey?: string;
@@ -105,7 +105,7 @@ export interface RalphAuthContextValue {
   mode: "live" | "test";
   isPlatformAdmin: boolean;
   /** Shared session subscription — sourced once from client.useSession(). */
-  sessionResult: ReturnType<RalphAuthClient["useSession"]>;
+  sessionResult: ReturnType<KovaAuthClient["useSession"]>;
   /** Raw Better Auth session token suitable for Authorization: Bearer. */
   sessionToken: string | null;
   /**
@@ -124,11 +124,11 @@ export interface RalphAuthContextValue {
   hasBearerSession: boolean;
 }
 
-const RalphAuthContext = createContext<RalphAuthContextValue | null>(null);
-RalphAuthContext.displayName = "RalphAuthContext";
+const KovaAuthContext = createContext<KovaAuthContextValue | null>(null);
+KovaAuthContext.displayName = "KovaAuthContext";
 
 function sessionStorageKey(publishableKey?: string) {
-  return publishableKey ? `ralph-auth:${publishableKey}:session-token` : null;
+  return publishableKey ? `kova-auth:${publishableKey}:session-token` : null;
 }
 
 function readStoredSessionToken(publishableKey?: string) {
@@ -147,11 +147,11 @@ function writeStoredSessionToken(publishableKey: string | undefined, token: stri
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
-export interface RalphAuthProviderProps extends RalphAuthConfig {
+export interface KovaAuthProviderProps extends KovaAuthConfig {
   children: ReactNode;
 }
 
-export function RalphAuthProvider({
+export function KovaAuthProvider({
   children,
   publishableKey,
   authUrl,
@@ -160,12 +160,14 @@ export function RalphAuthProvider({
   oauthProviders,
   manageFavicon = false,
   sessionOptions,
+  initialSessionToken,
+  onSessionTokenChange,
   isPlatformAdmin = false,
   afterSignInUrl = "/",
   afterSignUpUrl = "/",
   afterSignOutUrl = "/sign-in",
   ...rest
-}: RalphAuthProviderProps & { isPlatformAdmin?: boolean }) {
+}: KovaAuthProviderProps & { isPlatformAdmin?: boolean }) {
   void rest;
 
   // Derive mode from the publishable key prefix:
@@ -188,16 +190,24 @@ export function RalphAuthProvider({
   // When null (normal same-origin flow), the client is created without a Bearer
   // header. When set (after exchange-code on cross-origin OAuth return), the
   // client is recreated exactly once with the Authorization header injected.
-  const [sessionToken, setSessionToken] = useState<string | null>(() => readStoredSessionToken(publishableKey));
+  const [sessionToken, setSessionToken] = useState<string | null>(
+    () => initialSessionToken ?? readStoredSessionToken(publishableKey)
+  );
   const setPersistentSessionToken = useCallback((token: string | null) => {
     writeStoredSessionToken(publishableKey, token);
     setSessionToken(token);
-  }, [publishableKey]);
+    onSessionTokenChange?.(token);
+  }, [publishableKey, onSessionTokenChange]);
   const clearSessionToken = useCallback(() => setPersistentSessionToken(null), [setPersistentSessionToken]);
+
+  useEffect(() => {
+    if (initialSessionToken === undefined) return;
+    setPersistentSessionToken(initialSessionToken);
+  }, [initialSessionToken, setPersistentSessionToken]);
 
   // ── Auth client — recreated only when Bearer token changes ────────────────
   const client = useMemo(
-    () => createRalphAuthClient({
+    () => createKovaAuthClient({
       authUrl: resolvedAuthUrl,
       publishableKey,
       plugins,
@@ -236,16 +246,16 @@ export function RalphAuthProvider({
 
   // ── Detect OAuth transfer code on mount ──────────────────────────────────
   // After the cross-origin OAuth flow lands at the consumer app with
-  // ?ralph_auth_code=xfr_..., we clean the URL immediately (prevents Referer
+  // ?kova_auth_code=xfr_..., we clean the URL immediately (prevents Referer
   // leakage) then exchange the 30s single-use code for the raw session token.
   useEffect(() => {
     if (typeof window === "undefined" || !publishableKey) return;
     const params = new URLSearchParams(window.location.search);
-    const code = params.get("ralph_auth_code");
+    const code = params.get("kova_auth_code");
     if (!code) return;
 
     const cleanUrl = new URL(window.location.href);
-    cleanUrl.searchParams.delete("ralph_auth_code");
+    cleanUrl.searchParams.delete("kova_auth_code");
     window.history.replaceState({}, "", cleanUrl.toString());
 
     void fetch(`${resolvedAuthUrl}/api/pub/apps/${publishableKey}/exchange-code`, {
@@ -342,7 +352,7 @@ export function RalphAuthProvider({
     return DEFAULT_OAUTH_PROVIDERS;
   }, [oauthProviders, serverAppearance]);
 
-  const value = useMemo<RalphAuthContextValue>(
+  const value = useMemo<KovaAuthContextValue>(
     () => ({
       client, authUrl: resolvedAuthUrl,
       publishableKey,
@@ -367,20 +377,20 @@ export function RalphAuthProvider({
   );
 
   return (
-    <RalphAuthContext.Provider value={value}>
+    <KovaAuthContext.Provider value={value}>
       {children}
-    </RalphAuthContext.Provider>
+    </KovaAuthContext.Provider>
   );
 }
 
-// ── useRalphAuth ─────────────────────────────────────────────────────────────
+// ── useKovaAuth ─────────────────────────────────────────────────────────────
 
-export function useRalphAuth(): RalphAuthContextValue {
-  const ctx = useContext(RalphAuthContext);
+export function useKovaAuth(): KovaAuthContextValue {
+  const ctx = useContext(KovaAuthContext);
   if (!ctx) {
     throw new Error(
-      "[RalphAuth] `useRalphAuth` was called outside of <RalphAuthProvider>. " +
-      "Make sure your component is a descendant of <RalphAuthProvider>."
+      "[KovaAuth] `useKovaAuth` was called outside of <KovaAuthProvider>. " +
+      "Make sure your component is a descendant of <KovaAuthProvider>."
     );
   }
   return ctx;

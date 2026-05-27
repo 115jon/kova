@@ -5,7 +5,7 @@
  */
 
 import React, { type CSSProperties, type ReactNode } from "react";
-import { useRalphAuth } from "../context";
+import { useKovaAuth } from "../context";
 import type { AppearanceElements } from "../types";
 
 // ── Spinner ────────────────────────────────────────────────────────────────────
@@ -374,8 +374,8 @@ export function Avatar({
 // ── Branding badge ────────────────────────────────────────────────────────────
 // Shown in card footer unless the app has a paid plan with hide_branding = true.
 
-function RalphAuthBranding() {
-  const { serverAppearance } = useRalphAuth();
+function KovaAuthBranding() {
+  const { serverAppearance } = useKovaAuth();
   if (serverAppearance?.hideBranding) return null;
   return (
     <a
@@ -402,7 +402,7 @@ function RalphAuthBranding() {
         <circle cx="12" cy="12" r="10" fill="var(--ra-color-primary)" opacity="0.9" />
         <path d="M8 16V8h5a3 3 0 0 1 0 6H8" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
       </svg>
-      Secured by ralph-auth
+      Secured by kova-auth
     </a>
   );
 }
@@ -411,7 +411,7 @@ function RalphAuthBranding() {
 // Shown at the bottom of every sign-in/sign-up card for pk_dev_/pk_test_ apps.
 
 function DevModeBadge() {
-  const { mode } = useRalphAuth();
+  const { mode } = useKovaAuth();
   if (mode !== "test") return null;
   return (
     <div
@@ -478,7 +478,7 @@ export function CardHeader({
   subtitle?: string;
   elements?: AppearanceElements;
 }) {
-  const { serverAppearance } = useRalphAuth();
+  const { serverAppearance } = useKovaAuth();
   const logoUrl = serverAppearance?.logoUrl;
   const logoAlt = `${serverAppearance?.displayName ?? "Application"} logo`;
 
@@ -530,7 +530,7 @@ export function CardFooter({
       {children}
       {/* Branding + dev badge injected at the bottom of every footer */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-        <RalphAuthBranding />
+        <KovaAuthBranding />
         <DevModeBadge />
       </div>
     </div>

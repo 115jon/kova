@@ -71,7 +71,7 @@ type HostedPageMode = "sign-in" | "sign-up";
 /**
  * Generates the branded hosted auth page HTML shell.
  *
- * The page relies on `window.__RALPH_AUTH_HOSTED__` being consumed by the
+ * The page relies on `window.__KOVA_AUTH_HOSTED__` being consumed by the
  * JS bundle served from Workers Assets. Phase 1 uses the shared bundle;
  * a standalone hosted-auth build target is deferred to Tier 3 (see TASKS.md).
  */
@@ -155,7 +155,7 @@ async function buildHostedPage(opts: {
 </head>
 <body>
   <div id="root"><div class="ra-skeleton">Loading&hellip;</div></div>
-  <script>window.__RALPH_AUTH_HOSTED__ = ${bootstrap};</script>
+  <script>window.__KOVA_AUTH_HOSTED__ = ${bootstrap};</script>
   <script type="module" src="/assets/hosted-auth.js" onerror="
     document.getElementById('root').innerHTML =
       '<div class=ra-skeleton style=color:rgba(248,113,113,0.8)>Failed to load. Please try again.</div>';
@@ -432,7 +432,7 @@ hostedAuthRouter.notFound((c) => {
 
   const bg = app?.background_color ?? "#0a0a0a";
   const primary = app?.primary_color ?? "#3b82f6";
-  const name = app ? esc(app.display_name ?? app.name) : "ralph-auth";
+  const name = app ? esc(app.display_name ?? app.name) : "kova-auth";
 
   return c.html(
     `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
@@ -442,7 +442,7 @@ hostedAuthRouter.notFound((c) => {
     <body><div style="text-align:center">
     <p style="font-size:2rem;color:${esc(primary)};margin:0">404</p>
     <p style="margin:10px 0 0">Page not found.</p>
-    <p style="margin:16px 0 0;font-size:0.72rem;color:#606060">Secured by <strong style="color:#a0a0a0">ralph-auth</strong></p>
+    <p style="margin:16px 0 0;font-size:0.72rem;color:#606060">Secured by <strong style="color:#a0a0a0">kova-auth</strong></p>
     </div></body></html>`,
     404
   );

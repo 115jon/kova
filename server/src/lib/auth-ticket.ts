@@ -215,7 +215,7 @@ export async function exchangeAuthTicket(
  *
  * Called by /api/hosted/oauth-complete?mode=sdk after a successful OAuth sign-in
  * on the main auth domain. The code is returned to the consumer app in the URL
- * query string (?ralph_auth_code=xxx) so the SDK can exchange it for a Bearer token.
+ * query string (?kova_auth_code=xxx) so the SDK can exchange it for a Bearer token.
  *
  * @param kv             KV namespace binding
  * @param sessionToken   Raw Better Auth session token (= the value in the session cookie)
@@ -250,7 +250,7 @@ export async function createSessionTransferCode(
  * The code is **deleted from KV on first call** (single-use).
  *
  * @param kv             KV namespace binding
- * @param code           The transfer code from the consumer app's URL (`?ralph_auth_code=xxx`)
+ * @param code           The transfer code from the consumer app's URL (`?kova_auth_code=xxx`)
  * @param publishableKey The requesting app's pk — must match what was stored
  * @returns The session token, or null if the code is invalid/expired/mismatched
  */

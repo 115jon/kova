@@ -340,7 +340,7 @@ function CreateEndpointModal({ onClose, onCreated }: {
           <div className="form-group">
             <label className="form-label">Endpoint URL</label>
             <input ref={urlRef} className="input"
-              placeholder="https://your-app.com/webhooks/ralph-auth"
+              placeholder="https://your-app.com/webhooks/kova-auth"
               value={url} onChange={e => setUrl(e.target.value)}
               onKeyDown={e => e.key === "Enter" && void createEndpoint()} />
             <p className="form-hint">Must be HTTPS (HTTP is allowed for localhost).</p>
@@ -596,7 +596,7 @@ function DeliveryLogModal({ endpoint, onClose }: {
                 ["X-Webhook-Signature", "sha256=<hmac-hex>"],
                 ["X-Webhook-Event", "<event-name>"],
                 ["X-Webhook-Delivery", "<delivery-id>"],
-                ["User-Agent", "ralph-auth-webhooks/1.0"],
+                ["User-Agent", "kova-auth-webhooks/1.0"],
               ].map(([k, v]) => (
                 <div key={k} style={{ display: "flex", gap: 16 }}>
                   <span style={{ color: "var(--color-text-tertiary)", minWidth: 190 }}>{k}</span>

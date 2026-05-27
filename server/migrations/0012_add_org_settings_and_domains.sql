@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS organization_domain (
   enrollment_mode TEXT NOT NULL DEFAULT 'automatic_invitation',
 
   -- DNS TXT verification token + status
-  -- Token is a random hex string placed in a TXT record at _ralph-auth.<domain>
+  -- Token is a random hex string placed in a TXT record at _kova-auth.<domain>
   verification_token   TEXT,
   verified             INTEGER NOT NULL DEFAULT 0,  -- 0 = pending, 1 = verified
   verified_at          INTEGER,                      -- Unix ms

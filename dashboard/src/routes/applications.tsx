@@ -382,7 +382,7 @@ function IntegrationGuide() {
             {[
               ["1", "Create an application — use development for local SDKs, production for deployed apps."],
               ["2", "Add your app's origin to allowed origins so CORS is permitted for SDK requests."],
-              ["3", `Pass the publishable key to your provider: <RalphAuthProvider publishableKey="pk_dev_..." />`],
+              ["3", `Pass the publishable key to your provider: <KovaAuthProvider publishableKey="pk_dev_..." />`],
               ["4", "The SDK forwards it as X-Publishable-Key — the server validates it on every request."],
               ["5", "The secret key (sk_*) is for server-side use only — webhook signing, token issuance, etc."],
             ].map(([n, text]) => (

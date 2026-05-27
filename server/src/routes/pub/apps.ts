@@ -17,7 +17,7 @@
  */
 
 import { Hono } from "hono";
-import { getApplicationByPublishableKey } from "../../applications";
+import { getApplicationByPublishableKey, isRedirectUriAllowed } from "../../applications";
 import { createAuth } from "../../auth";
 
 const pubAppsRouter = new Hono<{ Bindings: Env }>();
@@ -125,6 +125,68 @@ pubAppsRouter.get("/:pk/plan", async (c) => {
   });
 });
 
+pubAppsRouter.get("/:pk/oauth/start", async (c) => {
+  const pk = c.req.param("pk");
+  const provider = c.req.query("provider") ?? "";
+  const redirectUri = c.req.query("redirect_uri") ?? "";
+  const errorCallbackURL = c.req.query("error_callback_url") ?? redirectUri;
+
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+  if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+  if (!provider) return Response.json({ error: "provider is required" }, { status: 400 });
+  if (!redirectUri || !isRedirectUriAllowed(app, redirectUri)) {
+    return Response.json({ error: "redirect_uri_not_allowed" }, { status: 400 });
+  }
+
+  const authOrigin = new URL(c.req.url).origin;
+  const bounceUrl = new URL(`${authOrigin}/api/hosted/oauth-complete`);
+  bounceUrl.searchParams.set("mode", "sdk");
+  bounceUrl.searchParams.set("pk", pk);
+  bounceUrl.searchParams.set("redirect_uri", redirectUri);
+
+  const body = JSON.stringify({
+    provider,
+    callbackURL: bounceUrl.toString(),
+  });
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Redirecting...</title>
+</head>
+<body>
+  <script>
+    (async () => {
+      try {
+        const response = await fetch("/api/auth/sign-in/social", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "content-type": "application/json",
+            "x-publishable-key": ${JSON.stringify(pk)},
+            "x-kova-auth-sdk": "kova-react"
+          },
+          body: ${JSON.stringify(body)}
+        });
+        const data = await response.json();
+        if (!response.ok || !data?.url) throw new Error(data?.message || data?.error || "OAuth start failed");
+        window.location.replace(data.url);
+      } catch (error) {
+        const target = new URL(${JSON.stringify(errorCallbackURL)});
+        target.searchParams.set("error", "oauth_start_failed");
+        window.location.replace(target.toString());
+      }
+    })();
+  </script>
+</body>
+</html>`;
+
+  return c.html(html);
+});
+
 // ── POST /:pk/me — register existing session into app_user ───────────────────
 //
 // Called by the SDK on mount when a session already exists.  If a user was
@@ -163,7 +225,7 @@ pubAppsRouter.post("/:pk/me", async (c) => {
       .catch(() => null)
     : null;
 
-  if (sessionRow?.app_id !== app.id) {
+  if (sessionRow?.app_id && sessionRow.app_id !== app.id) {
     return Response.json({ ok: false, reason: "wrong_app_session" });
   }
 
@@ -229,24 +291,56 @@ pubAppsRouter.post("/:pk/session-token", async (c) => {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const sessionId = (sessionData.session as unknown as Record<string, unknown>)["id"];
-  const row = typeof sessionId === "string"
+  const existingSessionId = (sessionData.session as unknown as Record<string, unknown>)["id"];
+  const row = typeof existingSessionId === "string"
     ? await c.env.DB
       .prepare("SELECT app_id FROM session WHERE id = ? LIMIT 1")
-      .bind(sessionId)
+      .bind(existingSessionId)
       .first<{ app_id: string | null }>()
       .catch(() => null)
     : null;
 
-  if (row?.app_id !== app.id) {
+  if (row?.app_id && row.app_id !== app.id) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const rawTokenField = (sessionData.session as unknown as Record<string, unknown>)["token"];
-  const sessionToken = typeof rawTokenField === "string" ? rawTokenField : null;
-  if (!sessionToken) {
-    return Response.json({ error: "Session token unavailable" }, { status: 500 });
+  if (row?.app_id === null && typeof existingSessionId === "string") {
+    await c.env.DB
+      .prepare("UPDATE session SET app_id = ? WHERE id = ? AND app_id IS NULL")
+      .bind(app.id, existingSessionId)
+      .run()
+      .catch(() => { /* best-effort */ });
   }
+
+  const { generateId } = await import("better-auth");
+  await c.env.DB
+    .prepare("INSERT OR IGNORE INTO app_user (id, app_id, user_id, role) VALUES (?, ?, ?, 'member')")
+    .bind(`apu_${generateId(12)}`, app.id, sessionData.user.id)
+    .run()
+    .catch(() => { /* best-effort */ });
+
+  const now = Date.now();
+  const sessionToken = generateId(32);
+  const sessionId = generateId();
+  const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
+
+  await c.env.DB
+    .prepare(
+      `INSERT INTO session (id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, app_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .bind(
+      sessionId,
+      sessionData.user.id,
+      sessionToken,
+      new Date(expiresAt).toISOString(),
+      new Date(now).toISOString(),
+      new Date(now).toISOString(),
+      c.req.header("CF-Connecting-IP") ?? null,
+      c.req.header("User-Agent") ?? null,
+      app.id,
+    )
+    .run();
 
   return Response.json({ sessionToken });
 });
@@ -305,7 +399,7 @@ pubAppsRouter.post("/:pk/revoke-session", async (c) => {
 // ── POST /:pk/exchange-code — transfer code → session token ───────────────────
 //
 // Called by the SDK immediately after landing back at the consumer app from the
-// oauth-complete bounce (mode=sdk).  The SDK passes the `ralph_auth_code` that
+// oauth-complete bounce (mode=sdk).  The SDK passes the `kova_auth_code` that
 // was appended to the redirect URI.  The server:
 //   1. Verifies the code exists in KV, was created for this pk, and is < 30s old.
 //   2. Deletes the code (single-use).

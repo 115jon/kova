@@ -104,9 +104,9 @@ importers:
 
   examples/sdk-demo:
     dependencies:
-      '@ralph-auth/react':
+      '@kova/react':
         specifier: workspace:*
-        version: link:../../packages/ralph-auth-react
+        version: link:../../packages/kova-react
       react:
         specifier: ^19.0.0
         version: 19.2.3
@@ -136,7 +136,7 @@ importers:
         specifier: ^4.81.1
         version: 4.81.1(@cloudflare/workers-types@4.20260413.1)
 
-  packages/ralph-auth-react:
+  packages/kova-react:
     dependencies:
       '@better-auth/api-key':
         specifier: ^1.6.2

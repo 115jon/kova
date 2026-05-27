@@ -1,16 +1,16 @@
 /**
- * @ralph-auth/react
+ * @kova/react
  *
- * Drop-in React SDK for ralph-auth — the self-hosted Clerk alternative.
+ * Drop-in React SDK for kova-auth — the self-hosted Clerk alternative.
  *
  * Quick start:
  * ```tsx
- * import { RalphAuthProvider, SignIn, useUser } from "@ralph-auth/react";
+ * import { KovaAuthProvider, SignIn, useUser } from "@kova/react";
  *
  * // Wrap your app:
- * <RalphAuthProvider publishableKey="pk_live_..." afterSignInUrl="/dashboard">
+ * <KovaAuthProvider publishableKey="pk_live_..." afterSignInUrl="/dashboard">
  *   <App />
- * </RalphAuthProvider>
+ * </KovaAuthProvider>
  *
  * // Drop-in sign-in card:
  * <SignIn afterSignInUrl="/dashboard" />
@@ -21,8 +21,8 @@
  */
 
 // ── Provider ─────────────────────────────────────────────────────────────────
-export { RalphAuthProvider } from "./context";
-export type { RalphAuthProviderProps } from "./context";
+export { KovaAuthProvider } from "./context";
+export type { KovaAuthProviderProps } from "./context";
 
 // ── Components ───────────────────────────────────────────────────────────────
 // UI building-blocks that can also be embedded in custom profile pages.
@@ -59,11 +59,11 @@ export type { UseRateLimitReturn } from "./hooks/use-rate-limit";
 /**
  * Low-level context access — prefer the purpose-built hooks above.
  */
-export { useRalphAuth } from "./context";
+export { useKovaAuth } from "./context";
 
 // ── Client factory ────────────────────────────────────────────────────────────
-export { createRalphAuthClient } from "./client";
-export type { ClientOptions, RalphAuthClient } from "./client";
+export { createKovaAuthClient } from "./client";
+export type { ClientOptions, KovaAuthClient } from "./client";
 
 // ── Key utilities ─────────────────────────────────────────────────────────────
 export { decodePublishableKey, encodePublishableKey } from "./key";
@@ -85,10 +85,10 @@ export type {
   PluginConfig,
   ProtectProps,
   // Config
-  RalphAuthConfig, RalphMembership,
-  RalphOrganization,
-  RalphSession,
-  RalphUser,
+  KovaAuthConfig, KovaMembership,
+  KovaOrganization,
+  KovaSession,
+  KovaUser,
   // Component props
   SignInProps,
   SignInTab,

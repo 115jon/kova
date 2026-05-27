@@ -14,7 +14,7 @@
  */
 
 import { useCallback } from "react";
-import { useRalphAuth } from "../context";
+import { useKovaAuth } from "../context";
 
 export interface UseAuthReturn {
   /** `false` until the initial session check completes (prevents flash of wrong UI). */
@@ -27,12 +27,14 @@ export interface UseAuthReturn {
   sessionId: string | null;
   orgId: string | null;
   orgRole: string | null;
+  /** Return the current raw session token for bearer-authenticated app APIs. */
+  getToken: () => Promise<string | null>;
   /** Imperatively sign out. */
   signOut: (callbackURL?: string) => Promise<void>;
 }
 
 export function useAuth(): UseAuthReturn {
-  const { client, authUrl, publishableKey, afterSignOutUrl, sessionResult, clearSessionToken, hasBearerSession, sessionToken } = useRalphAuth();
+  const { client, authUrl, publishableKey, afterSignOutUrl, sessionResult, clearSessionToken, hasBearerSession, sessionToken } = useKovaAuth();
   // Shared session subscription — avoids a duplicate get-session request.
   const result = sessionResult;
 
@@ -90,6 +92,8 @@ export function useAuth(): UseAuthReturn {
       sessionToken ?? (rawSession as { token?: string | null } | null)?.token ?? null,
     orgId: activeOrgId,
     orgRole: null,
+    getToken: async () =>
+      sessionToken ?? (rawSession as { token?: string | null } | null)?.token ?? null,
     signOut,
   };
 }

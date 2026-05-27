@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useState } from "react";
-import { useRalphAuth } from "../context";
+import { useKovaAuth } from "../context";
 import { extractRetryAfter } from "./use-rate-limit";
 
 interface SignUpEmailOpts {
@@ -72,7 +72,7 @@ function is429(err: unknown): boolean {
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useSignUp(): UseSignUpReturn {
-  const { client, afterSignUpUrl } = useRalphAuth();
+  const { client, afterSignUpUrl } = useKovaAuth();
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verificationPending, setVerificationPending] = useState(false);

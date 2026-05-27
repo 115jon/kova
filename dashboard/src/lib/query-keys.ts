@@ -118,6 +118,14 @@ export const appKeys = {
   detail: (id: string) => [...appKeys.all, "detail", id] as const,
 } as const;
 
+// ── Application Members ────────────────────────────────────────────────────────
+
+export const appMemberKeys = {
+  all: (appId: string) => ["app-members", appId] as const,
+  lists: (appId: string) => [...appMemberKeys.all(appId), "list"] as const,
+  detail: (appId: string, userId: string) => [...appMemberKeys.all(appId), "detail", userId] as const,
+} as const;
+
 // ── Re-export all keys in a single namespace for convenience ──────────────────
 
 export const queryKeys = {
@@ -130,5 +138,6 @@ export const queryKeys = {
   overview: overviewKeys,
   profile: profileKeys,
   apps: appKeys,
+  appMembers: appMemberKeys,
 } as const;
 

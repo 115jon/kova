@@ -12,7 +12,7 @@
 # └─────────────────────────────────────────────────────────────────────────┘
 # ══════════════════════════════════════════════════════════════════════════════
 
-name = "ralph-auth-server"
+name = "kova-auth-server"
 main = "../server/src/index.ts"
 compatibility_date = "2026-04-12"
 compatibility_flags = ["nodejs_compat"]
@@ -38,7 +38,7 @@ CDN_URL = "https://cdn.115jon.site"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "ralph-auth-db"
+database_name = "kova-auth-db"
 database_id = "aefbb49d-1582-4052-bd4e-77e5d559a3c6"
 migrations_dir = "../server/migrations"
 
@@ -48,7 +48,7 @@ id = "aecb44a2caff4a65a65a6f5c8e5c375e"
 
 [[queues.producers]]
 binding = "APP_EVENTS"
-queue = "ralph-auth-app-events"
+queue = "kova-auth-app-events"
 
 [[durable_objects.bindings]]
 name = "APP_COUNTER"

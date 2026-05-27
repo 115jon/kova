@@ -50,7 +50,7 @@ function AcceptInvitationPage() {
           <span style={{ fontFamily: "var(--font-mono)", fontWeight: 800, color: "#fff", fontSize: "0.65rem" }}>R</span>
         </div>
         <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.88rem", letterSpacing: "-0.02em" }}>
-          ralphauth
+          kovaauth
         </span>
       </div>
 

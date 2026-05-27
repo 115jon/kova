@@ -15,21 +15,21 @@
  */
 
 import { useCallback } from "react";
-import { useRalphAuth } from "../context";
-import type { RalphUser, UseUserReturn } from "../types";
+import { useKovaAuth } from "../context";
+import type { KovaUser, UseUserReturn } from "../types";
 
 export function useUser(): UseUserReturn {
-  const { client, sessionResult } = useRalphAuth();
+  const { client, sessionResult } = useKovaAuth();
   // Shared session subscription — avoids a duplicate get-session request.
   const result = sessionResult;
 
   const isLoaded = !result.isPending;
   const rawUser = result.data?.user ?? null;
 
-  // Coerce Better Auth's user shape to our typed RalphUser.
+  // Coerce Better Auth's user shape to our typed KovaUser.
   // BA's inferred user type doesn't include plugin-added fields, so we cast
   // through a plain Record to avoid DTS type-overlap errors.
-  const user: RalphUser | null = rawUser
+  const user: KovaUser | null = rawUser
     ? (() => {
       const u = rawUser as unknown as Record<string, unknown>;
       const toDate = (v: unknown) =>
@@ -37,15 +37,22 @@ export function useUser(): UseUserReturn {
       return {
         id: rawUser.id,
         name: rawUser.name,
+        fullName: rawUser.name ?? null,
         email: rawUser.email,
         emailVerified: !!(u["emailVerified"] as boolean | undefined),
         image: (u["image"] as string | null | undefined) ?? null,
+        imageUrl: (u["image"] as string | null | undefined) ?? undefined,
         role: (u["role"] as string | null | undefined) ?? null,
         banned: !!(u["banned"] as boolean | undefined),
         createdAt: toDate(u["createdAt"]),
         updatedAt: toDate(u["updatedAt"]),
         username: (u["username"] as string | null | undefined) ?? null,
         twoFactorEnabled: !!(u["twoFactorEnabled"] as boolean | undefined),
+        primaryEmailAddress: rawUser.email ? { emailAddress: rawUser.email } : null,
+        unsafeMetadata: (u["unsafeMetadata"] as Record<string, unknown> | undefined) ?? {},
+        reload: async () => {
+          await result.refetch();
+        },
       };
     })()
     : null;

@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Caddyfile — ralph-auth local development reverse proxy
+# Caddyfile — kova-auth local development reverse proxy
 #
 # Uses lvh.me — a free public DNS service where *.lvh.me resolves to 127.0.0.1.
 # Because it's a real resolvable domain (not .localhost), Google OAuth accepts

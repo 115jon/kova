@@ -1,8 +1,8 @@
 {
-  "name": "@ralph-auth/react",
+  "name": "@kova/react",
   "version": "0.1.0",
-  "description": "Drop-in React SDK for ralph-auth — embeddable sign-in/up forms, user button, org switcher, and route protection.",
-  "author": "ralph-auth",
+  "description": "Drop-in React SDK for kova-auth — embeddable sign-in/up forms, user button, org switcher, and route protection.",
+  "author": "kova-auth",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,

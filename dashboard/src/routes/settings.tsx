@@ -871,9 +871,9 @@ function SettingsPage() {
 
         {/* Cloudflare resources */}
         <SectionCard icon={<Settings size={14} />} color="var(--color-amber)" title="Cloudflare Resources">
-          <InfoRow label="Database" value="D1 — ralph-auth-db" />
-          <InfoRow label="Session / Rate-limit Cache" value="KV — ralph-auth-kv" />
-          <InfoRow label="File Storage" value="R2 — ralph-auth-avatars" />
+          <InfoRow label="Database" value="D1 — kova-auth-db" />
+          <InfoRow label="Session / Rate-limit Cache" value="KV — kova-auth-kv" />
+          <InfoRow label="File Storage" value="R2 — kova-auth-avatars" />
           <div style={{ padding: "12px 20px" }} />
         </SectionCard>
 

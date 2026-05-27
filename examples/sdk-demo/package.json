@@ -1,8 +1,8 @@
 {
-  "name": "@ralph-auth/sdk-demo",
+  "name": "@kova/sdk-demo",
   "private": true,
   "version": "0.0.1",
-  "description": "Interactive demo app for @ralph-auth/react SDK",
+  "description": "Interactive demo app for @kova/react SDK",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,7 @@
     "deploy": "pnpm build && wrangler deploy"
   },
   "dependencies": {
-    "@ralph-auth/react": "workspace:*",
+    "@kova/react": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

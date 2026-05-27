@@ -1,5 +1,5 @@
 /**
- * Audit Log — thin write helper for the ralph-auth platform.
+ * Audit Log — thin write helper for the kova-auth platform.
  *
  * Design decisions:
  * - IDs are generated as `${Date.now()}_${crypto.randomUUID()}` so rows
@@ -49,7 +49,11 @@ export type AuditAction =
   | "admin.userUnbanned"
   | "admin.userDeleted"
   | "admin.roleChanged"
-  | "admin.passwordReset";      // admin forced password reset email
+  | "admin.passwordReset"       // admin forced password reset email
+  | "admin.userImpersonated"    // admin initiated impersonation session
+  | "admin.userLocked"          // admin locked user (soft-lock, no sign-in)
+  | "admin.userUnlocked"        // admin unlocked user
+  | "admin.userAvatarUpdated";  // admin updated an app member's avatar
 
 export interface AuditPayload {
   /** Subject — the user the event is *about* (may differ from actor on admin actions). */

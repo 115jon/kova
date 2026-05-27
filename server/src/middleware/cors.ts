@@ -1,5 +1,5 @@
 /**
- * cors.ts — CORS + security header middleware for the ralph-auth worker.
+ * cors.ts — CORS + security header middleware for the kova-auth worker.
  *
  * ## Origin resolution — three-tier waterfall
  *
@@ -78,14 +78,14 @@ export const STATIC_ORIGINS = new Set<string>([
   "http://localhost:5173",
   "http://localhost:5175",
   "http://localhost:5180", // SDK demo app
-  "http://localhost:8888", // ralph-meet dev port
+  "http://localhost:8888", // kova-meet dev port
   // Dev — Caddy reverse proxy (auth.lvh.me → 127.0.0.1, Google OAuth-compatible)
   "https://auth.lvh.me",
   // Dev — Caddy reverse proxy (auth.localhost fallback for non-OAuth testing)
   "https://auth.localhost",
   // Production — combined auth+dashboard worker
   "https://auth.115jon.site",
-  "https://ralph-auth-server.jontitor.workers.dev",
+  "https://kova-auth-server.jontitor.workers.dev",
 ]);
 
 // ── Security headers (non-CORS) ───────────────────────────────────────────────
@@ -265,7 +265,7 @@ export async function buildCorsHeaders(
     "Access-Control-Allow-Origin": origin || "null",
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers":
-      "Content-Type, Authorization, X-Publishable-Key, X-Ralph-Auth-SDK",
+      "Content-Type, Authorization, X-Publishable-Key, X-Kova-Auth-SDK",
     "Access-Control-Allow-Credentials": origin ? "true" : "false",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",

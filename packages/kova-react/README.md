@@ -1,6 +1,6 @@
-# @ralph-auth/react
+# @kova/react
 
-> Drop-in React SDK for **ralph-auth** — the self-hosted [Clerk](https://clerk.com) alternative built on Cloudflare Workers + Better Auth.
+> Drop-in React SDK for **kova-auth** — the self-hosted [Clerk](https://clerk.com) alternative built on Cloudflare Workers + Better Auth.
 
 ## Features
 
@@ -19,9 +19,9 @@
 ## Installation
 
 ```bash
-pnpm add @ralph-auth/react better-auth
+pnpm add @kova/react better-auth
 # or
-npm install @ralph-auth/react better-auth
+npm install @kova/react better-auth
 ```
 
 ---
@@ -32,35 +32,35 @@ npm install @ralph-auth/react better-auth
 
 ```tsx
 // src/main.tsx
-import { RalphAuthProvider } from "@ralph-auth/react";
+import { KovaAuthProvider } from "@kova/react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 
 createRoot(document.getElementById("root")!).render(
-  <RalphAuthProvider
-    publishableKey="pk_live_eyJ2Ij..."  // from your ralph-auth dashboard
+  <KovaAuthProvider
+    publishableKey="pk_live_eyJ2Ij..."  // from your kova-auth dashboard
     afterSignInUrl="/dashboard"
     afterSignUpUrl="/onboarding"
     afterSignOutUrl="/sign-in"
   >
     <App />
-  </RalphAuthProvider>
+  </KovaAuthProvider>
 );
 ```
 
 Or, if you don't have a publishable key yet, pass `authUrl` directly:
 
 ```tsx
-<RalphAuthProvider authUrl="https://auth.example.com">
+<KovaAuthProvider authUrl="https://auth.example.com">
   <App />
-</RalphAuthProvider>
+</KovaAuthProvider>
 ```
 
 ### 2. Drop in auth components
 
 ```tsx
 // src/pages/sign-in.tsx
-import { SignIn } from "@ralph-auth/react";
+import { SignIn } from "@kova/react";
 
 export function SignInPage() {
   return (
@@ -73,7 +73,7 @@ export function SignInPage() {
 
 ```tsx
 // src/pages/sign-up.tsx
-import { SignUp } from "@ralph-auth/react";
+import { SignUp } from "@kova/react";
 
 export function SignUpPage() {
   return <SignUp afterSignUpUrl="/onboarding" signInUrl="/sign-in" />;
@@ -83,7 +83,7 @@ export function SignUpPage() {
 ### 3. Add a user button to your nav
 
 ```tsx
-import { UserButton } from "@ralph-auth/react";
+import { UserButton } from "@kova/react";
 
 function Navbar() {
   return (
@@ -98,7 +98,7 @@ function Navbar() {
 ### 4. Protect routes
 
 ```tsx
-import { Protect } from "@ralph-auth/react";
+import { Protect } from "@kova/react";
 import { Navigate } from "react-router-dom";
 
 // Require sign-in
@@ -131,7 +131,7 @@ import { Navigate } from "react-router-dom";
 | `useSignUp()` | Imperative `signUp.email`, `verificationPending` |
 
 ```tsx
-import { useUser } from "@ralph-auth/react";
+import { useUser } from "@kova/react";
 
 function Profile() {
   const { user, isLoaded, isSignedIn } = useUser();
@@ -148,7 +148,7 @@ function Profile() {
 Customize every token globally (on the provider) or per-component:
 
 ```tsx
-<RalphAuthProvider
+<KovaAuthProvider
   publishableKey="pk_live_..."
   appearance={{
     variables: {
@@ -160,7 +160,7 @@ Customize every token globally (on the provider) or per-component:
   }}
 >
   <App />
-</RalphAuthProvider>
+</KovaAuthProvider>
 ```
 
 Override individual elements (merged on top of provider appearance):
@@ -191,7 +191,7 @@ All elements are also addressable via the `data-ra-element` attribute in plain C
 Generate a key for your auth server URL:
 
 ```ts
-import { encodePublishableKey, decodePublishableKey } from "@ralph-auth/react";
+import { encodePublishableKey, decodePublishableKey } from "@kova/react";
 
 // Encode
 const key = encodePublishableKey("https://auth.example.com", { mode: "live" });
@@ -208,9 +208,9 @@ const { authUrl, mode } = decodePublishableKey(key);
 For use outside React (e.g., loaders, middleware):
 
 ```ts
-import { createRalphAuthClient } from "@ralph-auth/react";
+import { createKovaAuthClient } from "@kova/react";
 
-export const authClient = createRalphAuthClient({
+export const authClient = createKovaAuthClient({
   authUrl: "https://auth.example.com",
   plugins: {
     organization: { teams: true },
@@ -226,10 +226,10 @@ const { data: session } = await authClient.getSession();
 
 ## Plugin Configuration
 
-All plugins from the ralph-auth server are enabled by default. Opt out selectively:
+All plugins from the kova-auth server are enabled by default. Opt out selectively:
 
 ```tsx
-<RalphAuthProvider
+<KovaAuthProvider
   publishableKey="pk_live_..."
   plugins={{
     admin: false,      // disable admin client
@@ -244,13 +244,13 @@ All plugins from the ralph-auth server are enabled by default. Opt out selective
 ## Architecture
 
 ```
-@ralph-auth/react
-├── RalphAuthProvider   — context, CSS injection, client creation
+@kova/react
+├── KovaAuthProvider   — context, CSS injection, client creation
 ├── Components          — SignIn / SignUp / UserButton / OrgSwitcher / Protect
 │   ├── ui.tsx          — shared primitives (Card, FormField, Alert, Avatar, Spinner…)
 │   └── icons.tsx       — inline SVG icons (no external icon lib)
 ├── Hooks               — useAuth / useUser / useSession / useOrganization / useSignIn / useSignUp
-├── client.ts           — createRalphAuthClient (wraps better-auth/react)
+├── client.ts           — createKovaAuthClient (wraps better-auth/react)
 ├── key.ts              — publishable key encode/decode
 └── styles/inject.ts    — CSS custom-property injection
 ```

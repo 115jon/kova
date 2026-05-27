@@ -23,7 +23,7 @@
  */
 
 import { type FormEvent, useState } from "react";
-import { mergeAppearance, useRalphAuth } from "../context";
+import { mergeAppearance, useKovaAuth } from "../context";
 import { useRateLimit } from "../hooks/use-rate-limit";
 import { useSignUp } from "../hooks/use-sign-up";
 import type { SignUpProps } from "../types";
@@ -127,7 +127,7 @@ export function SignUp({
     oauthProviders,
     authUrl,
     isAppearanceLoaded,
-  } = useRalphAuth();
+  } = useKovaAuth();
   const merged = mergeAppearance(providerAppearance, instanceAppearance);
   const el = merged.elements ?? {};
   const resolvedUrl = afterSignUpUrl ?? providerUrl;

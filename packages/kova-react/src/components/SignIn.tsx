@@ -1,7 +1,7 @@
 /**
  * <SignIn /> — drop-in, fully themeable sign-in card.
  *
- * Supports every auth method enabled on your ralph-auth server:
+ * Supports every auth method enabled on your kova-auth server:
  *  - Email + Password (with optional "remember me")
  *  - Magic Link (passwordless)
  *  - OAuth social providers (Google, Discord, etc.)
@@ -30,7 +30,7 @@
 import { type FormEvent, useState } from "react";
 import {
   mergeAppearance,
-  useRalphAuth,
+  useKovaAuth,
 } from "../context";
 import { useRateLimit } from "../hooks/use-rate-limit";
 import { useSignIn } from "../hooks/use-sign-in";
@@ -60,7 +60,7 @@ function PasskeyButton({
   elements?: AppearanceElements;
   callbackURL?: string;
 }) {
-  const { client, authUrl } = useRalphAuth();
+  const { client, authUrl } = useKovaAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,7 +105,7 @@ function EmailPasswordForm({
   elements?: AppearanceElements;
 }) {
   const { signIn, isLoading, error, twoFactorRequired, retryAfterSeconds } = useSignIn();
-  const { authUrl } = useRalphAuth();
+  const { authUrl } = useKovaAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
@@ -232,7 +232,7 @@ function MagicLinkForm({
   elements?: AppearanceElements;
 }) {
   const { signIn, isLoading, error, retryAfterSeconds } = useSignIn();
-  const { authUrl } = useRalphAuth();
+  const { authUrl } = useKovaAuth();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -322,7 +322,7 @@ export function SignIn({
   className,
 }: SignInProps) {
   const { appearance: providerAppearance, afterSignInUrl: providerAfterSignIn, oauthProviders, isAppearanceLoaded } =
-    useRalphAuth();
+    useKovaAuth();
 
   const merged = mergeAppearance(providerAppearance, instanceAppearance);
   const el = merged.elements ?? {};

@@ -6,7 +6,7 @@
  */
 
 const RESEND_API = "https://api.resend.com/emails";
-const FROM = "ralph-auth <noreply@115jon.site>";
+const FROM = "kova-auth <noreply@115jon.site>";
 
 // ── Design tokens (inlined — email clients strip <style> tags) ────────────────
 const T = {
@@ -52,7 +52,7 @@ function emailShell(body: string): string {
                 <span style="font-family:${T.mono};font-weight:800;font-size:13px;color:#ffffff;line-height:24px">R</span>
               </td>
               <td style="padding-left:9px;font-family:${T.mono};font-weight:700;font-size:15px;color:${T.textPrimary};letter-spacing:-0.02em">
-                ralphauth
+                kovaauth
               </td>
             </tr>
           </table>
@@ -65,7 +65,7 @@ function emailShell(body: string): string {
 
         <!-- Footer -->
         <tr><td style="padding-top:20px;text-align:center;font-family:${T.mono};font-size:11px;color:${T.textTertiary};line-height:1.6">
-          Sent by ralph-auth &bull; You're receiving this because an action was taken on your account.<br>
+          Sent by kova-auth &bull; You're receiving this because an action was taken on your account.<br>
           If you didn't initiate this, you can safely ignore it.
         </td></tr>
 
@@ -141,7 +141,7 @@ export async function sendEmail({ to, subject, html, apiKey }: SendEmailOptions)
 
 export function verificationEmail(url: string) {
   return {
-    subject: "Verify your email — ralph-auth",
+    subject: "Verify your email — kova-auth",
     html: emailShell(cardPadding(`
       ${heading("Verify your email")}
       ${subtext("Click the button below to verify your email address and activate your account. This link expires in <strong style=\"color:${T.textPrimary}\">24 hours</strong>.")}
@@ -153,7 +153,7 @@ export function verificationEmail(url: string) {
 
 export function resetPasswordEmail(url: string) {
   return {
-    subject: "Reset your password — ralph-auth",
+    subject: "Reset your password — kova-auth",
     html: emailShell(cardPadding(`
       ${heading("Reset your password")}
       ${subtext("We received a request to reset the password for this account. Click below to choose a new one. This link expires in <strong style=\"color:${T.textPrimary}\">1 hour</strong>.")}
@@ -165,7 +165,7 @@ export function resetPasswordEmail(url: string) {
 
 export function twoFactorOtpEmail(otp: string) {
   return {
-    subject: `${otp} — your ralph-auth sign-in code`,
+    subject: `${otp} — your kova-auth sign-in code`,
     html: emailShell(cardPadding(`
       ${heading("Your sign-in code")}
       ${subtext("Use the code below to complete your sign-in. It expires in <strong style=\"color:${T.textPrimary}\">10 minutes</strong> and can only be used once.")}
@@ -191,7 +191,7 @@ export function invitationEmail({
   role: string;
 }) {
   return {
-    subject: `You've been invited to join ${orgName} on ralph-auth`,
+    subject: `You've been invited to join ${orgName} on kova-auth`,
     html: emailShell(`
       <!-- Org banner -->
       <div style="padding:20px 28px;border-bottom:1px solid ${T.border};display:flex;align-items:center;gap:12px">
@@ -218,9 +218,9 @@ export function invitationEmail({
 
 export function magicLinkEmail(url: string) {
   return {
-    subject: "Your sign-in link — ralph-auth",
+    subject: "Your sign-in link — kova-auth",
     html: emailShell(cardPadding(`
-      ${heading("Sign in to ralph-auth")}
+      ${heading("Sign in to kova-auth")}
       ${subtext("Click the button below to sign in. This link expires in <strong style=\"color:${T.textPrimary}\">10 minutes</strong> and can only be used once.")}
       ${ctaButton(url, "Sign in →")}
       ${footerNote("If you didn't request this link, you can safely ignore this email. Your account is not at risk.")}

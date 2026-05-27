@@ -362,7 +362,7 @@ appsRouter.post("/:id/logo", async (c) => {
   // Upload to CDN via multipart form
   const uploadForm = new FormData();
   uploadForm.append("file", file);
-  uploadForm.append("app", "ralph-auth");
+  uploadForm.append("app", "kova-auth");
   uploadForm.append("key", `apps/${id}/logo.webp`);
 
   const cdnRes = await fetch(`${c.env.CDN_URL}/upload`, {
@@ -425,7 +425,7 @@ appsRouter.post("/:id/favicon", async (c) => {
 
   const uploadForm = new FormData();
   uploadForm.append("file", file);
-  uploadForm.append("app", "ralph-auth");
+  uploadForm.append("app", "kova-auth");
   uploadForm.append("key", `apps/${id}/favicon.ico`);
 
   const cdnRes = await fetch(`${c.env.CDN_URL}/upload`, {

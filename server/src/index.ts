@@ -1,5 +1,5 @@
 ﻿﻿// ============================================================================
-// Ralph Auth — Cloudflare Worker Entry
+// Kova Auth — Cloudflare Worker Entry
 //
 // Routes:
 //   /api/auth/*                 → Better Auth (per-app pk enforcement)
@@ -101,7 +101,7 @@ app.use("*", async (c, next) => {
   // wrangler.toml), fall through to normal routing rather than crashing the worker.
   // Fix: ensure dashboard/.dev.vars exists and contains AUTH_URL=https://auth.lvh.me
   if (!c.env.AUTH_URL) {
-    console.error("[ralph-auth] AUTH_URL is not set. Check that .dev.vars is in the dashboard/ directory.");
+    console.error("[kova-auth] AUTH_URL is not set. Check that .dev.vars is in the dashboard/ directory.");
     return next();
   }
 
@@ -109,7 +109,7 @@ app.use("*", async (c, next) => {
   try {
     baseHost = new URL(c.env.AUTH_URL).hostname; // e.g. "auth.115jon.site" or "auth.lvh.me"
   } catch {
-    console.error(`[ralph-auth] AUTH_URL is not a valid URL: "${c.env.AUTH_URL}"`);
+    console.error(`[kova-auth] AUTH_URL is not a valid URL: "${c.env.AUTH_URL}"`);
     return next();
   }
 
@@ -123,12 +123,12 @@ app.use("*", async (c, next) => {
   if (!ctx) {
     // Unknown slug/domain — return a branded, minimal 404 HTML page
     return c.html(
-      `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>ralph-auth — Not Found</title>
+      `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>kova-auth — Not Found</title>
       <style>body{font-family:monospace;display:flex;align-items:center;justify-content:center;min-height:100svh;margin:0;background:#0a0a0a;color:#a0a0a0;}</style></head>
       <body><div style="text-align:center"><p style="font-size:2rem;color:#f5f5f5;margin:0">404</p>
       <p style="margin:12px 0 0">Application not found.</p>
       <p style="margin:4px 0 0;font-size:0.8rem">Check the subdomain or contact the app owner.</p>
-      <p style="margin:18px 0 0;font-size:0.72rem;color:#606060">Secured by <strong style="color:#a0a0a0">ralph-auth</strong></p>
+      <p style="margin:18px 0 0;font-size:0.72rem;color:#606060">Secured by <strong style="color:#a0a0a0">kova-auth</strong></p>
       </div></body></html>`,
       404
     );
@@ -169,7 +169,7 @@ app.get("/api/hosted/oauth-complete", handleOAuthBounce);
 // Old DB rows stored relative /api/avatar/... paths; new uploads use absolute URLs.
 app.get("/api/avatar/*", (c) => {
   const suffix = c.req.path.replace(/^\/api\/avatar\//, "");
-  return Response.redirect(`${c.env.CDN_URL}/ralph-auth/${suffix}`, 301);
+  return Response.redirect(`${c.env.CDN_URL}/kova-auth/${suffix}`, 301);
 });
 
 // ── SPA fallback ──────────────────────────────────────────────────────────────

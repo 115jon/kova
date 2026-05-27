@@ -73,7 +73,7 @@ orgRouter.post("/avatar/:orgId", async (c) => {
 
   const cdnForm = new FormData();
   cdnForm.append("file", new File([await file.arrayBuffer()], "logo.webp", { type: file.type }));
-  cdnForm.append("app", "ralph-auth");
+  cdnForm.append("app", "kova-auth");
   cdnForm.append("key", cdnKey);
   cdnForm.append("uploader", session.user.id);
   cdnForm.append("tags", "org-logo");
@@ -91,7 +91,7 @@ orgRouter.post("/avatar/:orgId", async (c) => {
   const { url: logoUrl } = (await cdnRes.json()) as { url: string };
 
   // ── NSFW scan ──────────────────────────────────────────────────────────────
-  const isSafe = await scanUpload(env.CDN_URL, env.CDN_API_KEY, `ralph-auth/${cdnKey}`);
+  const isSafe = await scanUpload(env.CDN_URL, env.CDN_API_KEY, `kova-auth/${cdnKey}`);
   if (!isSafe) {
     fetch(`${env.CDN_URL}/files/${cdnKey}`, {
       method: "DELETE",

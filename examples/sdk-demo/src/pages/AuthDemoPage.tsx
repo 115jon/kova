@@ -15,7 +15,7 @@ import {
   useAuth,
   useSignIn,
   useSignUp,
-} from "@ralph-auth/react";
+} from "@kova/react";
 import { useState } from "react";
 import { Log, useLog } from "../components/Log";
 

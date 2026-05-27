@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# wrangler.toml — THE single Cloudflare Worker config for ralph-auth.
+# wrangler.toml — THE single Cloudflare Worker config for kova-auth.
 #
 # Lives at the REPO ROOT so every command works without cd-ing into a subdir:
 #
@@ -46,7 +46,7 @@ CDN_URL = "https://cdn.115jon.site"
 # ── D1 Database ──────────────────────────────────────────────────────────────
 [[d1_databases]]
 binding = "DB"
-database_name = "ralph-auth-db"
+database_name = "kova-auth-db"
 database_id = "aefbb49d-1582-4052-bd4e-77e5d559a3c6"
 migrations_dir = "server/migrations"
 
@@ -58,7 +58,7 @@ id = "aecb44a2caff4a65a65a6f5c8e5c375e"
 # ── App Events Queue ──────────────────────────────────────────────────────────
 [[queues.producers]]
 binding = "APP_EVENTS"
-queue = "ralph-auth-app-events"
+queue = "kova-auth-app-events"
 
 # ── AppCounter Durable Object ─────────────────────────────────────────────────
 [[durable_objects.bindings]]

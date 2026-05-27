@@ -267,7 +267,11 @@ function UsersTab({ app }: { app: Application }) {
                   onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-hover)")}
                   onMouseLeave={e => (e.currentTarget.style.background = "")}>
                   <td style={{ padding: "10px 14px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                    <Link
+                      to="/applications/$appId/users/$userId"
+                      params={{ appId: app.id, userId: m.userId }}
+                      style={{ display: "flex", alignItems: "center", gap: 9, textDecoration: "none" }}
+                    >
                       <UserAvatar src={m.image} name={m.name ?? m.email ?? "?"} size={28} style={{ flexShrink: 0 }} />
                       <div>
                         <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.82rem", fontWeight: 500, color: "var(--color-text-primary)" }}>
@@ -276,7 +280,7 @@ function UsersTab({ app }: { app: Application }) {
                         </p>
                         <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>{m.email}</p>
                       </div>
-                    </div>
+                    </Link>
                   </td>
                   <td style={{ padding: "10px 14px" }}>
                     <select className="input" style={{ fontSize: "0.73rem", padding: "3px 7px", appearance: "none", cursor: "pointer" }}
@@ -507,7 +511,7 @@ function AppearanceTab({ app, isPlatformAdmin = false, onFormChange }: { app: Ap
           )}
         </div>
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)", margin: 0 }}>
-          When enabled, a "Powered by ralph-auth" badge appears in the sign-in footer. Disable it on paid plans.
+          When enabled, a "Powered by kova-auth" badge appears in the sign-in footer. Disable it on paid plans.
         </p>
         <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: canHideBranding ? "pointer" : "not-allowed", opacity: canHideBranding ? 1 : 0.45, userSelect: "none" }}>
           <div
@@ -526,7 +530,7 @@ function AppearanceTab({ app, isPlatformAdmin = false, onFormChange }: { app: Ap
             }} />
           </div>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)" }}>
-            {form.hide_branding ? "Branding hidden" : 'Show "Powered by ralph-auth"'}
+            {form.hide_branding ? "Branding hidden" : 'Show "Powered by kova-auth"'}
           </span>
         </label>
       </div>
@@ -882,7 +886,7 @@ function LoginPreview({ app, primaryColor, backgroundColor, logoUrl, displayName
                   <circle cx="12" cy="12" r="10" fill={primary} opacity="0.9" />
                   <path d="M8 16V8h5a3 3 0 0 1 0 6H8" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
                 </svg>
-                <span style={{ fontFamily: mono, fontSize: "0.64rem", color: textT }}>Secured by ralph-auth</span>
+                <span style={{ fontFamily: mono, fontSize: "0.64rem", color: textT }}>Secured by kova-auth</span>
               </div>
             )}
             {/* Dev instance badge */}

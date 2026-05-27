@@ -5,19 +5,19 @@
  *
  * Shape reference:
  *   useAuth()    → { isLoaded, isSignedIn, userId, sessionId, orgId, orgRole, signOut }
- *   useUser()    → { isLoaded, isSignedIn, user: RalphUser | null, updateUser }
- *   useSession() → { isLoaded, isSignedIn, session: { user, session: RalphSession } | null }
- *                          ↑ the inner .session is RalphSession with .id / .userId / .expiresAt
+ *   useUser()    → { isLoaded, isSignedIn, user: KovaUser | null, updateUser }
+ *   useSession() → { isLoaded, isSignedIn, session: { user, session: KovaSession } | null }
+ *                          ↑ the inner .session is KovaSession with .id / .userId / .expiresAt
  */
 
-import { useAuth, useSession, useUser } from "@ralph-auth/react";
+import { useAuth, useSession, useUser } from "@kova/react";
 
 export function HooksPage() {
   const auth = useAuth();
   const user = useUser();
   const ses = useSession();
 
-  // The raw RalphSession lives at ses.session?.session
+  // The raw KovaSession lives at ses.session?.session
   const rawSession = ses.session?.session ?? null;
 
   return (
@@ -82,7 +82,7 @@ export function HooksPage() {
             <div className="card-icon">🗝️</div>
             <div>
               <div className="card-title">useSession()</div>
-              <div className="card-subtitle">Raw RalphSession object</div>
+              <div className="card-subtitle">Raw KovaSession object</div>
             </div>
           </div>
           <div className="card-body">

@@ -1,10 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="8" fill="url(#grad)"/>
-  <path d="M16 6L9 9.5V15.5C9 19.65 12.05 23.53 16 24.5C19.95 23.53 23 19.65 23 15.5V9.5L16 6Z" fill="white" fill-opacity="0.95"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
   <defs>
-    <linearGradient id="grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#6366f1"/>
-      <stop offset="1" stop-color="#7c3aed"/>
+    <linearGradient id="kova-brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#06b6d4" />
     </linearGradient>
   </defs>
+  
+  <!-- Outer Squircle Container -->
+  <rect x="8" y="8" width="84" height="84" rx="20" fill="#09090b" stroke="rgba(255,255,255,0.06)" stroke-width="1.5" />
+  <rect x="8" y="8" width="84" height="84" rx="20" stroke="url(#kova-brand-grad)" stroke-width="1.5" stroke-opacity="0.8" fill="none" />
+  <rect x="10" y="10" width="80" height="80" rx="18" stroke="rgba(255,255,255,0.03)" stroke-width="1" fill="none" />
+  
+  <!-- Centered K-Gateway -->
+  <rect x="31" y="27" width="10" height="46" rx="5" fill="url(#kova-brand-grad)" />
+  <path d="M66,29 L49,46 C46.5,48.5 46.5,51.5 49,54 L66,71" stroke="url(#kova-brand-grad)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none" />
 </svg>

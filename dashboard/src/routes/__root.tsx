@@ -1,4 +1,5 @@
 import { UserAvatar } from "@/components/UserAvatar";
+import { KovaLogo } from "@/components/KovaLogo";
 import { multiSession, organization, signOut, useActiveOrganization, useListOrganizations, useSession } from "@/lib/auth-client";
 import { createRootRoute, Link, Outlet, useLocation, useNavigate, useRouter } from "@tanstack/react-router";
 import {
@@ -745,23 +746,8 @@ function Sidebar() {
       gap: 2,
     }}>
       {/* Logo — maple-style square icon + wordmark */}
-      <div style={{ padding: "4px 10px 18px", display: "flex", alignItems: "center", gap: 9 }}>
-        <div style={{
-          width: 26, height: 26, borderRadius: 5,
-          background: "var(--color-accent)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0,
-        }}>
-          <Shield size={13} color="#fff" strokeWidth={2.5} />
-        </div>
-        <span style={{
-          fontFamily: "var(--font-mono)",
-          fontWeight: 700, fontSize: "0.88rem",
-          color: "var(--color-text-primary)",
-          letterSpacing: "-0.03em",
-        }}>
-          ralph<span style={{ color: "var(--color-accent)" }}>auth</span>
-        </span>
+      <div style={{ padding: "4px 10px 18px", display: "flex", alignItems: "center" }}>
+        <KovaLogo size={22} variant="full" />
       </div>
 
       {/* Org Switcher */}
@@ -942,7 +928,8 @@ function RootComponent() {
   const { data: session } = useSession();
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const isPublic = ["/sign-in", "/auth-error"].some(p => location.pathname === p)
-    || location.pathname.startsWith("/accept-invitation");
+    || location.pathname.startsWith("/accept-invitation")
+    || (location.pathname === "/" && !session);
 
   React.useEffect(() => {
     if (isPublic) return;

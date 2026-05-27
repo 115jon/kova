@@ -1,8 +1,8 @@
-name = "ralph-auth-sdk-demo"
+name = "kova-auth-sdk-demo"
 compatibility_date = "2026-04-12"
 
 # Pure static-asset worker — no custom domain, uses the stock
-# https://ralph-auth-sdk-demo.<account>.workers.dev URL.
+# https://kova-auth-sdk-demo.<account>.workers.dev URL.
 
 [assets]
 directory = "./dist"

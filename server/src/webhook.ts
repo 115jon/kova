@@ -1,5 +1,5 @@
 /**
- * Webhook Delivery Engine — ralph-auth platform (Feature 4)
+ * Webhook Delivery Engine — kova-auth platform (Feature 4)
  *
  * Design decisions
  * ────────────────
@@ -134,7 +134,7 @@ async function deliverToEndpoint(
           "X-Webhook-Signature": signature,
           "X-Webhook-Event": JSON.parse(payloadBody).event as string,
           "X-Webhook-Delivery": JSON.parse(payloadBody).id as string,
-          "User-Agent": "ralph-auth-webhooks/1.0",
+          "User-Agent": "kova-auth-webhooks/1.0",
         },
         body: payloadBody,
         // Cloudflare Workers: set a reasonable timeout via AbortSignal
@@ -399,7 +399,7 @@ export async function sendTestPing(
     event: "test.ping",
     timestamp: Date.now(),
     data: {
-      message: "This is a test webhook ping from ralph-auth.",
+      message: "This is a test webhook ping from kova-auth.",
       endpointId: id,
     },
   });
@@ -412,7 +412,7 @@ export async function sendTestPing(
         "Content-Type": "application/json",
         "X-Webhook-Signature": signature,
         "X-Webhook-Event": "test.ping",
-        "User-Agent": "ralph-auth-webhooks/1.0",
+        "User-Agent": "kova-auth-webhooks/1.0",
       },
       body: pingBody,
       signal: AbortSignal.timeout(15_000),

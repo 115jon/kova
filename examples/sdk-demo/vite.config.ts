@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
       port: 5180,
       // The SDK demo makes API calls to VITE_AUTH_URL (https://auth.lvh.me in dev,
       // https://auth.115jon.site in prod). No proxy needed — the full auth URL is
-      // passed explicitly. CORS is handled by the ralph-auth server's corsMiddleware.
+      // passed explicitly. CORS is handled by the kova-auth server's corsMiddleware.
       //
       // If you need to test without Caddy, set VITE_AUTH_URL=http://localhost:5174
       // and un-comment the proxy block below.

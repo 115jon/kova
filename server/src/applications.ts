@@ -475,10 +475,14 @@ export async function validateSecretKey(
 function isLocalhostUrl(value: string): boolean {
   try {
     const u = new URL(value);
-    return u.hostname === "localhost" || u.hostname === "127.0.0.1";
+    return u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "tauri.localhost";
   } catch {
     return false;
   }
+}
+
+function isCustomSchemeRedirectUri(u: URL): boolean {
+  return /^[a-z][a-z0-9+.-]*:$/.test(u.protocol) && !["http:", "https:"].includes(u.protocol);
 }
 
 export function isApplicationSuspended(app: Pick<Application, "suspended_at">): boolean {
@@ -500,6 +504,7 @@ export function isValidRedirectUri(value: string, environment: Application["envi
   try {
     const u = new URL(value);
     if (environment === "development" && isLocalhostUrl(value)) return true;
+    if (isCustomSchemeRedirectUri(u)) return !!u.hostname;
     return u.protocol === "https:";
   } catch {
     return false;
@@ -544,7 +549,16 @@ export function isRedirectUriAllowed(app: Application, uri: string): boolean {
     } catch {
       return false;
     }
+    if (isCustomSchemeRedirectUri(registered) || isCustomSchemeRedirectUri(requested)) {
+      if (!isCustomSchemeRedirectUri(registered) || !isCustomSchemeRedirectUri(requested)) return false;
+      if (registered.protocol !== requested.protocol) return false;
+      if (registered.hostname !== requested.hostname) return false;
+      if (registered.pathname !== requested.pathname) return false;
+      if (registered.search && registered.search !== requested.search) return false;
+      return true;
+    }
     if (registered.origin !== requested.origin) return false;
+    if (registered.pathname === "/" && !registered.search) return true;
     if (registered.pathname !== requested.pathname) return false;
     if (registered.search && registered.search !== requested.search) return false;
     return true;

@@ -10,12 +10,12 @@
  *
  * Payload: `{ v: 1, authUrl: string, appId?: string }`
  *
- * ⚠️  IMPORTANT: The ralph-auth server does NOT validate, register, or enforce
+ * ⚠️  IMPORTANT: The kova-auth server does NOT validate, register, or enforce
  *    publishable keys. There is no key-generation API or key-lookup endpoint.
  *    The key is simply a way to encode the server URL into a single opaque string.
  *    It contains NO secrets and is safe to embed in client-side code.
  *
- * If you prefer simplicity, pass `authUrl` directly to `<RalphAuthProvider>`.
+ * If you prefer simplicity, pass `authUrl` directly to `<KovaAuthProvider>`.
  */
 
 const PREFIX_LIVE = "pk_live_";
@@ -24,7 +24,7 @@ const PREFIX_TEST = "pk_test_";
 interface KeyPayload {
   /** Payload schema version. */
   v: 1;
-  /** Absolute base URL of the ralph-auth auth server. */
+  /** Absolute base URL of the kova-auth auth server. */
   authUrl: string;
   /** Optional human-readable app name (for debugging). */
   appId?: string;
@@ -76,7 +76,7 @@ export function decodePublishableKey(key: string): DecodedKey {
     encoded = key.slice(PREFIX_TEST.length);
   } else {
     throw new Error(
-      `[RalphAuth] Invalid publishable key: expected "pk_live_..." or "pk_test_...". ` +
+      `[KovaAuth] Invalid publishable key: expected "pk_live_..." or "pk_test_...". ` +
       `Got: "${key.slice(0, 20)}..."`
     );
   }
@@ -86,7 +86,7 @@ export function decodePublishableKey(key: string): DecodedKey {
     payload = JSON.parse(atob(encoded));
   } catch {
     throw new Error(
-      "[RalphAuth] Failed to decode publishable key — base64 decode or JSON parse error."
+      "[KovaAuth] Failed to decode publishable key — base64 decode or JSON parse error."
     );
   }
 
@@ -97,7 +97,7 @@ export function decodePublishableKey(key: string): DecodedKey {
     typeof (payload as KeyPayload).authUrl !== "string"
   ) {
     throw new Error(
-      "[RalphAuth] Publishable key payload is invalid. " +
+      "[KovaAuth] Publishable key payload is invalid. " +
       "Please re-generate your key from the dashboard."
     );
   }
@@ -128,6 +128,6 @@ export function resolveAuthUrl(opts: {
     return decodePublishableKey(opts.publishableKey).authUrl;
   }
   throw new Error(
-    "[RalphAuth] You must provide either `publishableKey` or `authUrl` to <RalphAuthProvider>."
+    "[KovaAuth] You must provide either `publishableKey` or `authUrl` to <KovaAuthProvider>."
   );
 }

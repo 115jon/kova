@@ -2,7 +2,7 @@
  * useSession — current auth session state.
  *
  * Returns the raw session + user objects along with derived booleans.
- * Equivalent to Clerk's `useAuth()` but typed against ralph-auth's user model.
+ * Equivalent to Clerk's `useAuth()` but typed against kova-auth's user model.
  *
  * @example
  * ```tsx
@@ -13,13 +13,13 @@
  * ```
  */
 
-import { useRalphAuth } from "../context";
-import type { RalphSession, RalphUser, UseSessionReturn } from "../types";
+import { useKovaAuth } from "../context";
+import type { KovaSession, KovaUser, UseSessionReturn } from "../types";
 
 export function useSession(): UseSessionReturn {
-  const { sessionResult, client } = useRalphAuth();
+  const { sessionResult, client } = useKovaAuth();
 
-  // Read from the shared subscription set up once in RalphAuthProvider.
+  // Read from the shared subscription set up once in KovaAuthProvider.
   // Do NOT call client.useSession() here — each independent call creates its
   // own Better Auth subscription that fires a separate get-session request.
   const result = sessionResult;
@@ -29,8 +29,8 @@ export function useSession(): UseSessionReturn {
 
   const session = result.data
     ? ({
-      user: result.data.user as unknown as RalphUser,
-      session: result.data.session as unknown as RalphSession,
+      user: result.data.user as unknown as KovaUser,
+      session: result.data.session as unknown as KovaSession,
     })
     : null;
 

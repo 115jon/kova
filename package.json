@@ -1,5 +1,5 @@
 {
-  "name": "ralph-auth",
+  "name": "kova-auth",
   "private": true,
   "pnpm": {
     "overrides": {
@@ -8,14 +8,14 @@
   },
   "scripts": {
     "dev": "pnpm --filter dashboard run dev",
-    "build": "pnpm --filter dashboard run build && pnpm --filter @ralph-auth/react run build",
-    "typecheck": "pnpm --filter server run typecheck && pnpm --filter @ralph-auth/react run typecheck",
+    "build": "pnpm --filter dashboard run build && pnpm --filter @kova/react run build",
+    "typecheck": "pnpm --filter server run typecheck && pnpm --filter @kova/react run typecheck",
     "test": "pnpm --filter server run test",
     "deploy": "pnpm --filter dashboard run deploy",
     "migrate:dev": "pnpm --filter dashboard run migrate:dev",
     "migrate:prod": "pnpm --filter dashboard run migrate:prod",
     "cf-typegen": "pnpm --filter dashboard run cf-typegen",
-    "build:sdk": "pnpm --filter @ralph-auth/react run build",
-    "deploy:sdk-demo": "pnpm --filter @ralph-auth/sdk-demo run deploy"
+    "build:sdk": "pnpm --filter @kova/react run build",
+    "deploy:sdk-demo": "pnpm --filter @kova/sdk-demo run deploy"
   }
 }

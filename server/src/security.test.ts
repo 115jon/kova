@@ -69,6 +69,13 @@ describe("application policy helpers", () => {
     expect(isRedirectUriAllowed(subject, "https://app.example.com.evil.test/callback")).toBe(false);
   });
 
+  it("allows origin-only redirect entries for same-origin app paths", () => {
+    const subject = app({ redirect_uris: ["https://app.example.com"] });
+    expect(isRedirectUriAllowed(subject, "https://app.example.com/chat")).toBe(true);
+    expect(isRedirectUriAllowed(subject, "https://app.example.com/sign-in?error=oauth")).toBe(true);
+    expect(isRedirectUriAllowed(subject, "https://app.example.com.evil.test/chat")).toBe(false);
+  });
+
   it("fails closed for empty production allowlists but keeps localhost for development", () => {
     expect(isOriginAllowed(app({ allowed_origins: [] }), "https://anything.test")).toBe(false);
     expect(isRedirectUriAllowed(app({ redirect_uris: [] }), "https://anything.test/cb")).toBe(false);
@@ -76,6 +83,15 @@ describe("application policy helpers", () => {
     const dev = app({ environment: "development", allowed_origins: [], redirect_uris: [] });
     expect(isOriginAllowed(dev, "http://localhost:5173")).toBe(true);
     expect(isRedirectUriAllowed(dev, "http://127.0.0.1:5173/callback")).toBe(true);
+    expect(isOriginAllowed(dev, "http://tauri.localhost")).toBe(true);
+    expect(isRedirectUriAllowed(dev, "http://tauri.localhost/callback")).toBe(true);
+  });
+
+  it("allows exact custom-scheme redirect URIs without treating all opaque origins as equal", () => {
+    const subject = app({ redirect_uris: ["kovameet://auth"] });
+    expect(isRedirectUriAllowed(subject, "kovameet://auth")).toBe(true);
+    expect(isRedirectUriAllowed(subject, "otherapp://auth")).toBe(false);
+    expect(isRedirectUriAllowed(subject, "kovameet://callback")).toBe(false);
   });
 
   it("generates URL-safe high-entropy keys without modulo alphabet mapping", () => {

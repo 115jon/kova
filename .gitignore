@@ -14,3 +14,9 @@ server/dist/
 **/.prod.vars
 .vscode/
 .dry-out
+.agents/
+*.log
+*.json-tail
+oauth-body.json
+skills-lock.json
+SECURITY_REVIEW.md

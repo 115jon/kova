@@ -1,13 +1,13 @@
 /**
- * App.tsx — Root of the @ralph-auth/react SDK demo.
+ * App.tsx — Root of the @kova/react SDK demo.
  *
- * Wraps the app in <RalphAuthProvider> and routes between
+ * Wraps the app in <KovaAuthProvider> and routes between
  * the demo pages.  No router library needed — just a simple
  * useState-based page switcher so the demo stays zero-dep outside
  * of the SDK itself.
  */
 
-import { RalphAuthProvider, UserButton } from "@ralph-auth/react";
+import { KovaAuthProvider, UserButton } from "@kova/react";
 import { useState } from "react";
 import { AuthDemoPage } from "./pages/AuthDemoPage";
 import { ConnectedAccountsPage } from "./pages/ConnectedAccountsPage";
@@ -17,7 +17,7 @@ import { OrgPage } from "./pages/OrgPage";
 // ── SDK configuration ─────────────────────────────────────────────────────────
 //
 // Values are injected at build time via Vite env variables:
-//   VITE_AUTH_URL         — the ralph-auth server origin
+//   VITE_AUTH_URL         — the kova-auth server origin
 //   VITE_PUBLISHABLE_KEY  — the per-app publishable key from the Admin Dashboard
 //
 // Dev:  set in examples/sdk-demo/.env          (VITE_AUTH_URL=https://auth.lvh.me)
@@ -48,7 +48,7 @@ export default function App() {
   const [page, setPage] = useState<Page>("auth");
 
   return (
-    <RalphAuthProvider
+    <KovaAuthProvider
       authUrl={AUTH_URL}
       publishableKey={PUBLISHABLE_KEY}
       afterSignInUrl="/"
@@ -66,7 +66,7 @@ export default function App() {
         <nav className="navbar">
           <div className="navbar-brand">
             <span className="dot" />
-            ralph-auth SDK demo
+            kova-auth SDK demo
           </div>
 
           {/* Tabs */}
@@ -102,6 +102,6 @@ export default function App() {
           {page === "linked" && <ConnectedAccountsPage />}
         </main>
       </div>
-    </RalphAuthProvider>
+    </KovaAuthProvider>
   );
 }

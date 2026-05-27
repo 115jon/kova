@@ -3,10 +3,33 @@ import { useOverviewStats } from "@/hooks/use-overview";
 import { relativeTime } from "@/lib/utils";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Activity, Globe, Shield, TrendingUp, Users } from "lucide-react";
+import { useSession } from "@/lib/auth-client";
+import { LandingPage } from "@/components/LandingPage";
 
 export const Route = createFileRoute("/")({
-  component: OverviewPage,
+  component: IndexRouteComponent,
 });
+
+function IndexRouteComponent() {
+  const { data: session, isPending } = useSession();
+
+  if (isPending) {
+    return (
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#050505" }}>
+        <div className="loading" style={{
+          fontFamily: "var(--font-mono)",
+          color: "var(--color-text-tertiary)", fontSize: "0.8rem",
+        }}>Loading…</div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LandingPage />;
+  }
+
+  return <OverviewPage />;
+}
 
 function StatCard({ label, value, icon: Icon, color }: {
   label: string; value: number | string; icon: React.ElementType; color: string;

@@ -27,17 +27,25 @@ authRouter.all("/*", async (c) => {
 
   const pk = req.header("X-Publishable-Key");
   const app = pk ? await getApplicationByPublishableKey(db, pk).catch(() => null) : null;
+  const isAuthServerOrigin = (origin: string) => {
+    if (!origin) return false;
+    try {
+      return origin === new URL(c.req.url).origin;
+    } catch {
+      return false;
+    }
+  };
 
   if (req.method === "GET" && req.path.endsWith("/get-session")) {
     const bearerToken = req.header("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
     if (bearerToken && pk && app && !isApplicationSuspended(app)) {
       const origin = req.header("Origin") ?? "";
-      if (origin && !isOriginAllowed(app, origin)) {
+      if (origin && !isAuthServerOrigin(origin) && !isOriginAllowed(app, origin)) {
         return withHeaders(
           Response.json(
             {
               error: "origin_not_allowed",
-              message: `Origin '${origin}' is not in the allowed origins list for application '${app.name}'. Update the application's allowed origins in the ralph-auth dashboard.`,
+              message: `Origin '${origin}' is not in the allowed origins list for application '${app.name}'. Update the application's allowed origins in the kova-auth dashboard.`,
             },
             { status: 403 }
           ),
@@ -103,12 +111,12 @@ authRouter.all("/*", async (c) => {
       }
 
       const origin = req.header("Origin") ?? "";
-      if (origin && !isOriginAllowed(app, origin)) {
+      if (origin && !isAuthServerOrigin(origin) && !isOriginAllowed(app, origin)) {
         return withHeaders(
           Response.json(
             {
               error: "origin_not_allowed",
-              message: `Origin '${origin}' is not in the allowed origins list for application '${app.name}'. Update the application's allowed origins in the ralph-auth dashboard.`,
+              message: `Origin '${origin}' is not in the allowed origins list for application '${app.name}'. Update the application's allowed origins in the kova-auth dashboard.`,
             },
             { status: 403 }
           ),
@@ -140,12 +148,12 @@ authRouter.all("/*", async (c) => {
 
       // -- 1. Origin check --
       const origin = req.header("Origin") ?? "";
-      if (origin && !isOriginAllowed(app, origin)) {
+      if (origin && !isAuthServerOrigin(origin) && !isOriginAllowed(app, origin)) {
         return withHeaders(
           Response.json(
             {
               error: "origin_not_allowed",
-              message: `Origin '${origin}' is not in the allowed origins list for application '${app.name}'. Update the application's allowed origins in the ralph-auth dashboard.`,
+              message: `Origin '${origin}' is not in the allowed origins list for application '${app.name}'. Update the application's allowed origins in the kova-auth dashboard.`,
             },
             { status: 403 }
           ),
@@ -178,7 +186,7 @@ authRouter.all("/*", async (c) => {
               Response.json(
                 {
                   error: "redirect_uri_not_allowed",
-                  message: `callbackURL '${callbackURL}' is not in the allowed redirect URIs for application '${app.name}'. Update the application's redirect URIs in the ralph-auth dashboard.`,
+                  message: `callbackURL '${callbackURL}' is not in the allowed redirect URIs for application '${app.name}'. Update the application's redirect URIs in the kova-auth dashboard.`,
                 },
                 { status: 403 }
               ),

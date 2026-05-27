@@ -98,7 +98,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
           // CHIPS keys the cookie by (top-level-site × cookie-domain), so a
           // session cookie issued when the user was at auth.115jon.site would
           // have partition key auth.115jon.site.  When the SDK demo at
-          // ralph-auth-sdk-demo.jontitor.workers.dev later fetches
+          // kova-auth-sdk-demo.jontitor.workers.dev later fetches
           // auth.115jon.site/api/auth/get-session, the browser uses the NEW
           // partition key workers.dev — which has no stored cookie — so the
           // session is never sent.  CHIPS is designed for tracker isolation,
@@ -278,7 +278,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
                   if (org && env.RESEND_API_KEY) {
                     const inviteLink = `${env.DASHBOARD_URL}/accept-invitation/domain-join?orgId=${domainRecord.orgId}&userId=${user.id}`;
                     const { subject, html } = invitationEmail({
-                      inviterName: "ralph-auth",
+                      inviterName: "kova-auth",
                       inviterEmail: "noreply@auto-join",
                       orgName: org.name,
                       inviteLink,
@@ -504,7 +504,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
 
           // TOTP + email OTP 2FA
           twoFactor({
-            issuer: "ralph-auth",
+            issuer: "kova-auth",
             otpOptions: {
               sendOTP: async ({ user, otp }: { user: { email: string }; otp: string }) => {
                 const { subject, html } = twoFactorOtpEmail(otp);
@@ -587,7 +587,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
           //   authenticator data and the server must match it exactly.
           // Passkey (WebAuthn) — biometric / hardware key sign-in.
           passkey({
-            rpName: "ralph-auth",
+            rpName: "kova-auth",
             rpID: (() => {
               try {
                 return new URL(env.AUTH_URL).hostname;

@@ -1,20 +1,20 @@
 /**
- * createRalphAuthClient
+ * createKovaAuthClient
  *
  * A typed, opinionated wrapper around `better-auth/react`'s `createAuthClient`
- * that pre-configures every ralph-auth plugin. Consumers never need to know
+ * that pre-configures every kova-auth plugin. Consumers never need to know
  * that Better Auth exists under the hood.
  *
  * Usage (imperative, outside React):
  * ```ts
- * export const authClient = createRalphAuthClient({
+ * export const authClient = createKovaAuthClient({
  *   authUrl: "https://auth.example.com",
  * });
  * await authClient.signIn.email({ email, password });
  * ```
  *
  * Or inside the provider (automatic):
- * The <RalphAuthProvider> calls this internally — you only need it when you
+ * The <KovaAuthProvider> calls this internally — you only need it when you
  * want an imperative handle at module level.
  */
 
@@ -71,20 +71,20 @@ export interface ClientOptions {
  * Builds the underlying Better Auth client.
  * Call once at module level and share the result via context.
  */
-export function createRalphAuthClient(opts: ClientOptions) {
+export function createKovaAuthClient(opts: ClientOptions) {
   const { authUrl, publishableKey, plugins = {}, fetchOptions = {}, sessionOptions } = opts;
 
   // Merge in the X-Publishable-Key header when a key is provided.
   // This is how the server identifies which registered application is making
   // the request and enforces its per-app CORS + redirect URI allowlists.
   //
-  // X-Ralph-Auth-SDK signals that the request originates from official SDK
+  // X-Kova-Auth-SDK signals that the request originates from official SDK
   // components. The server uses this to enforce the branding requirement on
   // free-plan apps: if the header is absent on a sign-in/sign-up call, the
   // server rejects it, making it impractical to build a custom login UI
-  // without showing the "Secured by ralph-auth" badge (same model as Clerk).
+  // without showing the "Secured by kova-auth" badge (same model as Clerk).
   const sdkHeaders: Record<string, string> = {
-    "X-Ralph-Auth-SDK": "ralph-auth-react",
+    "X-Kova-Auth-SDK": "kova-react",
     ...(publishableKey ? { "X-Publishable-Key": publishableKey } : {}),
   };
 
@@ -193,5 +193,5 @@ function buildPluginList(cfg: PluginConfig) {
 
 // ── Inferred client type ──────────────────────────────────────────────────────
 
-/** The resolved type of the auth client returned by `createRalphAuthClient`. */
-export type RalphAuthClient = ReturnType<typeof createRalphAuthClient>;
+/** The resolved type of the auth client returned by `createKovaAuthClient`. */
+export type KovaAuthClient = ReturnType<typeof createKovaAuthClient>;
