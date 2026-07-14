@@ -27,12 +27,13 @@ npm install @kova/react better-auth
 To install the package directly from the Kova GitHub monorepo with pnpm:
 
 ```bash
-pnpm add "github:115jon/kova.git#path:/packages/kova-react"
+pnpm add "github:115jon/kova.git#v1.20.0&path:/packages/kova-react"
 ```
 
-Pin a tag or commit for reproducible application builds. npm Git dependencies
-resolve the repository root, so npm consumers should use a standalone package
-repository or the npm registry rather than this monorepo subdirectory URL.
+Replace `v1.20.0` with a newer release tag or commit for reproducible
+application builds. npm Git dependencies resolve the repository root, so npm
+consumers should use a standalone package repository or the npm registry rather
+than this monorepo subdirectory URL.
 
 ---
 
