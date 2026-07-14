@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   generateKey,
+  isValidOrigin,
+  isValidRedirectUri,
   isOriginAllowed,
   isRedirectUriAllowed,
   type Application,
@@ -92,6 +94,38 @@ describe("application policy helpers", () => {
     expect(isRedirectUriAllowed(subject, "kovameet://auth")).toBe(true);
     expect(isRedirectUriAllowed(subject, "otherapp://auth")).toBe(false);
     expect(isRedirectUriAllowed(subject, "kovameet://callback")).toBe(false);
+  });
+
+  it("allows development HTTP origins on a private Tailscale IP", () => {
+    expect(isValidOrigin("http://100.117.132.115", "development")).toBe(true);
+    expect(isValidRedirectUri("http://100.117.132.115/auth/callback", "development")).toBe(true);
+  });
+
+  it("allows development HTTP origins on a Tailscale hostname", () => {
+    expect(isValidOrigin("http://joi.tail91a4f4.ts.net", "development")).toBe(true);
+    expect(isValidRedirectUri("http://joi.tail91a4f4.ts.net/auth/callback", "development")).toBe(true);
+  });
+
+  it("honors explicit development allowlists for private hosts", () => {
+    const subject = app({
+      environment: "development",
+      allowed_origins: ["http://100.117.132.115"],
+      redirect_uris: ["http://100.117.132.115/auth/callback"],
+    });
+    expect(isOriginAllowed(subject, "http://100.117.132.115")).toBe(true);
+    expect(isOriginAllowed(subject, "http://100.117.132.116")).toBe(false);
+    expect(isRedirectUriAllowed(subject, "http://100.117.132.115/auth/callback")).toBe(true);
+    expect(isRedirectUriAllowed(subject, "http://100.117.132.116/auth/callback")).toBe(false);
+  });
+
+  it("keeps HTTP private-network URLs out of production", () => {
+    expect(isValidOrigin("http://100.117.132.115", "production")).toBe(false);
+    expect(isValidRedirectUri("http://joi.tail91a4f4.ts.net/auth/callback", "production")).toBe(false);
+  });
+
+  it("does not treat a localhost hostname as permission for non-HTTP URLs", () => {
+    expect(isValidOrigin("javascript://localhost", "development")).toBe(false);
+    expect(isValidRedirectUri("javascript://localhost/callback", "development")).toBe(false);
   });
 
   it("generates URL-safe high-entropy keys without modulo alphabet mapping", () => {

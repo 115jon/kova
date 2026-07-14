@@ -472,17 +472,35 @@ export async function validateSecretKey(
 
 // ── Origin / redirect validation ───────────────────────────────────────────────
 
-function isLocalhostUrl(value: string): boolean {
+function isDevelopmentHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  if (host === "localhost" || host === "127.0.0.1" || host === "tauri.localhost") return true;
+  if (host.endsWith(".ts.net")) return true;
+
+  const octets = host.split(".");
+  if (octets.length !== 4 || octets.some(octet => !/^\d{1,3}$/.test(octet))) return false;
+  const first = Number(octets[0]);
+  const second = Number(octets[1]);
+  if (octets.some(octet => !Number.isInteger(Number(octet)) || Number(octet) > 255)) return false;
+
+  return first === 10
+    || (first === 172 && second >= 16 && second <= 31)
+    || (first === 192 && second === 168)
+    || (first === 100 && second >= 64 && second <= 127);
+}
+
+function isDevelopmentHttpUrl(value: string): boolean {
   try {
     const u = new URL(value);
-    return u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "tauri.localhost";
+    return u.protocol === "http:" && isDevelopmentHost(u.hostname);
   } catch {
     return false;
   }
 }
 
 function isCustomSchemeRedirectUri(u: URL): boolean {
-  return /^[a-z][a-z0-9+.-]*:$/.test(u.protocol) && !["http:", "https:"].includes(u.protocol);
+  return /^[a-z][a-z0-9+.-]*:$/.test(u.protocol)
+    && !["http:", "https:", "javascript:", "data:", "vbscript:", "file:", "about:", "blob:"].includes(u.protocol);
 }
 
 export function isApplicationSuspended(app: Pick<Application, "suspended_at">): boolean {
@@ -493,8 +511,7 @@ export function isValidOrigin(value: string, environment: Application["environme
   try {
     const u = new URL(value);
     if (u.origin !== value) return false;
-    if (environment === "development" && isLocalhostUrl(value)) return true;
-    return u.protocol === "https:";
+    return u.protocol === "https:" || (environment === "development" && isDevelopmentHttpUrl(value));
   } catch {
     return false;
   }
@@ -503,9 +520,8 @@ export function isValidOrigin(value: string, environment: Application["environme
 export function isValidRedirectUri(value: string, environment: Application["environment"]): boolean {
   try {
     const u = new URL(value);
-    if (environment === "development" && isLocalhostUrl(value)) return true;
     if (isCustomSchemeRedirectUri(u)) return !!u.hostname;
-    return u.protocol === "https:";
+    return u.protocol === "https:" || (environment === "development" && isDevelopmentHttpUrl(value));
   } catch {
     return false;
   }
@@ -532,14 +548,16 @@ export function validateApplicationPolicy(input: {
 
 export function isRedirectUriAllowed(app: Application, uri: string): boolean {
   if (isApplicationSuspended(app)) return false;
-  if (app.environment === "development" && isLocalhostUrl(uri)) return true;
-  if (app.redirect_uris.length === 0) return app.environment === "development";
 
   let requested: URL;
   try {
     requested = new URL(uri);
   } catch {
     return false;
+  }
+  if (!isValidRedirectUri(uri, app.environment)) return false;
+  if (app.redirect_uris.length === 0) {
+    return app.environment === "development" && isDevelopmentHttpUrl(uri);
   }
 
   return app.redirect_uris.some((allowed) => {
@@ -567,7 +585,8 @@ export function isRedirectUriAllowed(app: Application, uri: string): boolean {
 
 export function isOriginAllowed(app: Application, origin: string): boolean {
   if (isApplicationSuspended(app)) return false;
-  if (app.environment === "development" && isLocalhostUrl(origin)) return true;
-  if (app.allowed_origins.length === 0) return app.environment === "development";
+  if (app.allowed_origins.length === 0) {
+    return app.environment === "development" && isDevelopmentHttpUrl(origin);
+  }
   return app.allowed_origins.some(o => o === origin);
 }
