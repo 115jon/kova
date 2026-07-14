@@ -86,19 +86,18 @@ exampleapp://auth                       # native application
 
 ## React Web Integration
 
-Install the SDK from the maintained package source:
+Install the maintained GitHub monorepo package subdirectory directly with pnpm:
 
 ```bash
-pnpm add @kova/react better-auth
+pnpm add "github:115jon/kova.git#kova-react-v0.1.0&path:/packages/kova-react"
 ```
 
-For the maintained GitHub monorepo package, install the package subdirectory directly with pnpm:
-
-```bash
-pnpm add "github:115jon/kova.git#v1.20.0&path:/packages/kova-react"
-```
-
-Replace `v1.20.0` with a newer release tag or commit in application lockfiles. npm Git dependencies resolve the repository root; this monorepo subdirectory form is supported by pnpm, not by npm. npm consumers need a standalone package repository or the npm registry.
+Use the latest `kova-react-vX.Y.Z` release tag for upgrades. The SDK version is
+managed independently from the Kova server and dashboard; integrators should
+not edit or synchronize package versions themselves. `better-auth` is installed
+as an SDK dependency. npm Git dependencies resolve the repository root; this
+monorepo subdirectory form is supported by pnpm, not by npm. npm consumers need
+a standalone package repository or the npm registry.
 
 Wrap the application once near the root:
 
