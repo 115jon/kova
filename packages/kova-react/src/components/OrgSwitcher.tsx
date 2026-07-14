@@ -13,12 +13,7 @@
  * ```
  */
 
-import React, {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { mergeAppearance, useKovaAuth } from "../context";
 import { useOrganization } from "../hooks/use-organization";
 import type { OrgSwitcherProps, KovaOrganization } from "../types";
@@ -58,7 +53,12 @@ function OrgAvatar({
           alt={name}
           width={size}
           height={size}
-          style={{ width: size, height: size, objectFit: "cover", borderRadius: 4 }}
+          style={{
+            width: size,
+            height: size,
+            objectFit: "cover",
+            borderRadius: 4,
+          }}
           onError={() => setImgError(true)}
           referrerPolicy="no-referrer"
         />
@@ -73,7 +73,7 @@ function OrgAvatar({
         background: "var(--ra-color-primary)",
         fontFamily: "var(--ra-font-mono)",
         fontWeight: 700,
-        fontSize: size * 0.44,
+        fontSize: Math.max(12, size * 0.44),
         color: "#fff",
       }}
     >
@@ -97,6 +97,7 @@ export function OrgSwitcher({
   const { organization: activeOrg, isLoaded } = useOrganization();
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState<string | null>(null);
+  const menuId = useId();
 
   // Load all orgs the user belongs to
   const [orgs, setOrgs] = useState<KovaOrganization[] | null>(null);
@@ -111,7 +112,7 @@ export function OrgSwitcher({
             logo?: string | null;
             metadata?: unknown;
             createdAt?: number | string;
-          }> | null
+          }> | null;
         }>;
       };
     };
@@ -127,7 +128,7 @@ export function OrgSwitcher({
             logo: o.logo ?? null,
             metadata: (o.metadata as Record<string, unknown> | null) ?? null,
             createdAt: new Date(o.createdAt ?? Date.now()),
-          }))
+          })),
         );
       })
       .catch(() => setOrgs([]));
@@ -139,7 +140,8 @@ export function OrgSwitcher({
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -152,7 +154,9 @@ export function OrgSwitcher({
       try {
         const orgClient = client as unknown as {
           organization?: {
-            setActive: (o: { organizationId: string | null }) => Promise<unknown>;
+            setActive: (o: {
+              organizationId: string | null;
+            }) => Promise<unknown>;
           };
         };
         await orgClient.organization?.setActive({ organizationId: orgId });
@@ -163,7 +167,7 @@ export function OrgSwitcher({
         setOpen(false);
       }
     },
-    [client, activeOrg?.id, switching]
+    [client, activeOrg?.id, switching],
   );
 
   // Loading state
@@ -173,7 +177,11 @@ export function OrgSwitcher({
       <div
         data-ra-root
         data-ra-element="skeleton"
-        style={{ height: 38, borderRadius: "var(--ra-radius-sm)", width: "100%" }}
+        style={{
+          height: 38,
+          borderRadius: "var(--ra-radius-sm)",
+          width: "100%",
+        }}
       />
     );
   }
@@ -191,7 +199,8 @@ export function OrgSwitcher({
       {/* Trigger button */}
       <button
         type="button"
-        aria-haspopup="listbox"
+        aria-controls={menuId}
+        aria-haspopup="true"
         aria-expanded={open}
         data-ra-element="orgSwitcherTrigger"
         style={{
@@ -226,7 +235,10 @@ export function OrgSwitcher({
               justifyContent: "center",
             }}
           >
-            <BuildingIcon size={12} style={{ color: "var(--ra-color-text-tertiary)" }} />
+            <BuildingIcon
+              size={12}
+              style={{ color: "var(--ra-color-text-tertiary)" }}
+            />
           </span>
         )}
 
@@ -250,7 +262,7 @@ export function OrgSwitcher({
             <p
               style={{
                 fontFamily: "var(--ra-font-mono)",
-                fontSize: "0.64rem",
+                fontSize: "0.75rem",
                 color: "var(--ra-color-text-tertiary)",
                 margin: 0,
               }}
@@ -274,7 +286,8 @@ export function OrgSwitcher({
       {/* Dropdown */}
       {open && (
         <div
-          role="listbox"
+          id={menuId}
+          aria-label="Switch organization"
           data-ra-element="orgSwitcherMenu"
           style={{
             ...el.orgSwitcherMenu,
@@ -293,7 +306,7 @@ export function OrgSwitcher({
           <p
             style={{
               fontFamily: "var(--ra-font-mono)",
-              fontSize: "0.58rem",
+              fontSize: "0.75rem",
               color: "var(--ra-color-text-tertiary)",
               fontWeight: 600,
               letterSpacing: "0.1em",
@@ -311,7 +324,12 @@ export function OrgSwitcher({
             sublabel="No organization"
             isActive={activeOrg === null}
             isSwitching={switching === "__personal__"}
-            icon={<UserIcon size={13} style={{ color: "var(--ra-color-text-tertiary)" }} />}
+            icon={
+              <UserIcon
+                size={13}
+                style={{ color: "var(--ra-color-text-tertiary)" }}
+              />
+            }
             onSelect={() => void handleSetActive(null)}
             el={el}
           />
@@ -378,8 +396,7 @@ function OrgOption({
   return (
     <button
       type="button"
-      role="option"
-      aria-selected={isActive}
+      aria-current={isActive ? "true" : undefined}
       disabled={isSwitching}
       onClick={onSelect}
       data-ra-element="orgSwitcherOrgItem"
@@ -408,7 +425,9 @@ function OrgOption({
             fontFamily: "var(--ra-font-mono)",
             fontSize: "0.78rem",
             fontWeight: 600,
-            color: isActive ? "var(--ra-color-primary)" : "var(--ra-color-text)",
+            color: isActive
+              ? "var(--ra-color-primary)"
+              : "var(--ra-color-text)",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -422,7 +441,7 @@ function OrgOption({
           <p
             style={{
               fontFamily: "var(--ra-font-mono)",
-              fontSize: "0.64rem",
+              fontSize: "0.75rem",
               color: "var(--ra-color-text-tertiary)",
               overflow: "hidden",
               textOverflow: "ellipsis",
@@ -435,7 +454,10 @@ function OrgOption({
         )}
       </div>
       {isActive && (
-        <CheckIcon size={11} style={{ color: "var(--ra-color-primary)", flexShrink: 0 }} />
+        <CheckIcon
+          size={11}
+          style={{ color: "var(--ra-color-primary)", flexShrink: 0 }}
+        />
       )}
     </button>
   );

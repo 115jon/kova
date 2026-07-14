@@ -1,16 +1,23 @@
 {
   "name": "@kova/react",
-  "version": "0.1.0",
+  "version": "1.20.0",
   "description": "Drop-in React SDK for kova-auth — embeddable sign-in/up forms, user button, org switcher, and route protection.",
   "author": "kova-auth",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/115jon/kova.git",
+    "directory": "packages/kova-react"
+  },
+  "homepage": "https://github.com/115jon/kova#readme",
   "type": "module",
   "sideEffects": false,
   "scripts": {
     "build": "tsup",
     "build:watch": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "pnpm build"
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
   },
   "exports": {
     ".": {

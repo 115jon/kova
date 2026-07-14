@@ -14,6 +14,7 @@
  */
 
 import { useCallback } from "react";
+import { createKovaAuthClient } from "../client";
 import { useKovaAuth } from "../context";
 
 export interface UseAuthReturn {
@@ -34,7 +35,16 @@ export interface UseAuthReturn {
 }
 
 export function useAuth(): UseAuthReturn {
-  const { client, authUrl, publishableKey, afterSignOutUrl, sessionResult, clearSessionToken, hasBearerSession, sessionToken } = useKovaAuth();
+  const {
+    client,
+    authUrl,
+    publishableKey,
+    afterSignOutUrl,
+    sessionResult,
+    clearSessionToken,
+    hasBearerSession,
+    sessionToken,
+  } = useKovaAuth();
   // Shared session subscription — avoids a duplicate get-session request.
   const result = sessionResult;
 
@@ -42,34 +52,48 @@ export function useAuth(): UseAuthReturn {
   const session = result.data;
   const user = session?.user ?? null;
   const rawSession = session?.session ?? null;
+  const rawSessionToken =
+    (rawSession as { token?: string | null } | null)?.token ?? null;
 
   const signOut = useCallback(
     async (callbackURL?: string) => {
       const dest = callbackURL ?? afterSignOutUrl;
       if (hasBearerSession) {
         // Cross-origin Bearer flow: revoke this app-scoped session token, then
-        // clear it locally. The platform session on auth.115jon.site stays intact.
+        // clear it locally. Then sign out the auth-domain cookie session so the
+        // app cannot mint a fresh bearer token on the next load.
         if (sessionToken && publishableKey) {
           try {
-            await fetch(`${authUrl}/api/pub/apps/${publishableKey}/revoke-session`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${sessionToken}` },
-            });
-          } catch { }
+            await fetch(
+              `${authUrl}/api/pub/apps/${publishableKey}/revoke-session`,
+              {
+                method: "POST",
+                headers: { Authorization: `Bearer ${sessionToken}` },
+              },
+            );
+          } catch {}
         }
         clearSessionToken();
+        try {
+          await createKovaAuthClient({
+            authUrl,
+            publishableKey,
+          }).signOut();
+        } catch {}
         if (typeof window !== "undefined") {
           window.location.href = dest;
         }
       } else {
         // Same-origin cookie flow: call the server to invalidate ONLY this specific session.
         // Using `client.signOut()` with multi-session enabled deletes ALL sessions on the device.
-        if (rawSession?.token && (client as any).multiSession) {
-          await (client as any).multiSession.revokeDeviceSession({ sessionToken: rawSession.token });
+        if (rawSessionToken && (client as any).multiSession) {
+          await (client as any).multiSession.revokeDeviceSession({
+            sessionToken: rawSessionToken,
+          });
         } else {
           try {
             await client.signOut();
-          } catch { }
+          } catch {}
         }
 
         if (typeof window !== "undefined") {
@@ -77,7 +101,16 @@ export function useAuth(): UseAuthReturn {
         }
       }
     },
-    [client, authUrl, publishableKey, afterSignOutUrl, clearSessionToken, hasBearerSession, sessionToken]
+    [
+      afterSignOutUrl,
+      authUrl,
+      clearSessionToken,
+      client,
+      hasBearerSession,
+      publishableKey,
+      rawSessionToken,
+      sessionToken,
+    ],
   );
 
   const activeOrgId =
@@ -88,12 +121,10 @@ export function useAuth(): UseAuthReturn {
     isLoaded,
     isSignedIn: !!user,
     userId: user?.id ?? null,
-    sessionId:
-      sessionToken ?? (rawSession as { token?: string | null } | null)?.token ?? null,
+    sessionId: sessionToken ?? rawSessionToken ?? null,
     orgId: activeOrgId,
     orgRole: null,
-    getToken: async () =>
-      sessionToken ?? (rawSession as { token?: string | null } | null)?.token ?? null,
+    getToken: async () => sessionToken ?? rawSessionToken ?? null,
     signOut,
   };
 }

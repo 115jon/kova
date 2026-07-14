@@ -22,7 +22,7 @@
  * ```
  */
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { mergeAppearance, useKovaAuth } from "../context";
 import { useRateLimit } from "../hooks/use-rate-limit";
 import { useSignUp } from "../hooks/use-sign-up";
@@ -55,6 +55,7 @@ function PasswordStrength({ password }: { password: string }) {
   const passed = PASSWORD_RULES.filter((r) => r.test(password)).length;
   const colors = ["#f87171", "#f97316", "#facc15", "#4ade80"];
   const color = colors[Math.max(0, passed - 1)] ?? "#f87171";
+  const progress = passed / PASSWORD_RULES.length;
 
   return (
     <div
@@ -77,10 +78,12 @@ function PasswordStrength({ password }: { password: string }) {
       >
         <div
           style={{
-            width: `${(passed / PASSWORD_RULES.length) * 100}%`,
+            width: "100%",
             height: "100%",
             background: color,
-            transition: "width 0.25s, background 0.25s",
+            transform: `scaleX(${progress})`,
+            transformOrigin: "left center",
+            transition: "transform 0.25s, background 0.25s",
             borderRadius: 2,
           }}
         />
@@ -98,7 +101,7 @@ function PasswordStrength({ password }: { password: string }) {
             key={r.label}
             style={{
               fontFamily: "var(--ra-font-mono)",
-              fontSize: "0.68rem",
+              fontSize: "0.75rem",
               color: r.test(password)
                 ? "var(--ra-color-success)"
                 : "var(--ra-color-text-tertiary)",
@@ -111,6 +114,27 @@ function PasswordStrength({ password }: { password: string }) {
       </div>
     </div>
   );
+}
+
+function useSeedRateLimitCountdown(
+  retryAfterSeconds: number | null,
+  recordRateLimit: (retryAfterSeconds: number) => void,
+) {
+  const prevRetryAfterRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (retryAfterSeconds === null) {
+      prevRetryAfterRef.current = null;
+      return;
+    }
+
+    if (retryAfterSeconds === prevRetryAfterRef.current) {
+      return;
+    }
+
+    prevRetryAfterRef.current = retryAfterSeconds;
+    recordRateLimit(retryAfterSeconds);
+  }, [recordRateLimit, retryAfterSeconds]);
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -132,21 +156,12 @@ export function SignUp({
   const el = merged.elements ?? {};
   const resolvedUrl = afterSignUpUrl ?? providerUrl;
 
-  const { signUp, isLoading, error, verificationPending, retryAfterSeconds } = useSignUp();
+  const { signUp, isLoading, error, verificationPending, retryAfterSeconds } =
+    useSignUp();
 
   // Rate-limit countdown — seeded by retryAfterSeconds from the hook
-  const {
-    isRateLimited,
-    secondsRemaining,
-    recordRateLimit,
-  } = useRateLimit();
-
-  // Seed countdown when retryAfterSeconds becomes non-null
-  const [prevRetryAfter, setPrevRetryAfter] = useState<number | null>(null);
-  if (retryAfterSeconds !== null && retryAfterSeconds !== prevRetryAfter) {
-    setPrevRetryAfter(retryAfterSeconds);
-    recordRateLimit(retryAfterSeconds);
-  }
+  const { isRateLimited, secondsRemaining, recordRateLimit } = useRateLimit();
+  useSeedRateLimitCountdown(retryAfterSeconds, recordRateLimit);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -197,7 +212,9 @@ export function SignUp({
     e.preventDefault();
     if (isRateLimited) return; // hard guard — button is also disabled
     if (!validate()) return;
-    await signUp.email({ name, email, password, callbackURL: absCallbackUrl }).catch(() => null);
+    await signUp
+      .email({ name, email, password, callbackURL: absCallbackUrl })
+      .catch(() => null);
   };
 
   if (verificationPending) {
@@ -213,7 +230,14 @@ export function SignUp({
             Didn&apos;t get it? Check your spam folder, or{" "}
             <button
               type="button"
-              onClick={() => void signUp.email({ name, email, password, callbackURL: absCallbackUrl })}
+              onClick={() =>
+                void signUp.email({
+                  name,
+                  email,
+                  password,
+                  callbackURL: absCallbackUrl,
+                })
+              }
               style={{
                 background: "none",
                 border: "none",
@@ -306,7 +330,11 @@ export function SignUp({
           />
           <PasswordStrength password={password} />
 
-          <SubmitButton isLoading={isLoading} disabled={isRateLimited} elements={el}>
+          <SubmitButton
+            isLoading={isLoading}
+            disabled={isRateLimited}
+            elements={el}
+          >
             Create account
           </SubmitButton>
         </form>

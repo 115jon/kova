@@ -18,6 +18,7 @@ import {
   type CSSProperties,
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -64,9 +65,12 @@ function MultiSessionSection({
         listDeviceSessions: () => Promise<{ data?: DeviceSession[] | null }>;
       };
     };
-    ms.multiSession?.listDeviceSessions().then((res) => {
-      setSessions(res.data ?? []);
-    }).catch(() => setSessions([]));
+    ms.multiSession
+      ?.listDeviceSessions()
+      .then((res) => {
+        setSessions(res.data ?? []);
+      })
+      .catch(() => setSessions([]));
   }, [client]);
 
   const others = sessions.filter((s) => s.user.id !== currentUserId);
@@ -101,7 +105,7 @@ function MultiSessionSection({
       <p
         style={{
           fontFamily: "var(--ra-font-mono)",
-          fontSize: "0.6rem",
+          fontSize: "0.75rem",
           color: "var(--ra-color-text-tertiary)",
           fontWeight: 600,
           letterSpacing: "0.1em",
@@ -147,7 +151,7 @@ function MultiSessionSection({
               style={{
                 display: "block",
                 fontFamily: "var(--ra-font-mono)",
-                fontSize: "0.64rem",
+                fontSize: "0.75rem",
                 color: "var(--ra-color-text-tertiary)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -183,6 +187,7 @@ export function UserButton({
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [showLinkedAccounts, setShowLinkedAccounts] = useState(false);
+  const linkedAccountsId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -240,10 +245,7 @@ export function UserButton({
   };
 
   return (
-    <div
-      data-ra-root
-      style={{ position: "relative", display: "inline-flex" }}
-    >
+    <div data-ra-root style={{ position: "relative", display: "inline-flex" }}>
       {/* Trigger */}
       <button
         ref={triggerRef}
@@ -320,7 +322,7 @@ export function UserButton({
               <p
                 style={{
                   fontFamily: "var(--ra-font-mono)",
-                  fontSize: "0.68rem",
+                  fontSize: "0.75rem",
                   color: "var(--ra-color-text-secondary)",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -366,6 +368,7 @@ export function UserButton({
               type="button"
               role="menuitem"
               data-ra-element="userButtonMenuItem"
+              aria-controls={linkedAccountsId}
               aria-expanded={showLinkedAccounts}
               style={el.userButtonMenuItem}
               onClick={() => setShowLinkedAccounts((v) => !v)}
@@ -384,6 +387,7 @@ export function UserButton({
             </button>
             {showLinkedAccounts && (
               <div
+                id={linkedAccountsId}
                 style={{
                   padding: "0 12px 4px",
                   borderBottom: "1px solid var(--ra-color-border)",

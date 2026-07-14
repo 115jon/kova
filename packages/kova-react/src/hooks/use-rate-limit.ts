@@ -63,9 +63,7 @@ const TICK_INTERVAL_MS = 200; // 5 Hz — smooth enough, not wasteful
 export function useRateLimit(): UseRateLimitReturn {
   // Unix-ms timestamp when the rate limit expires (null = not limited)
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
-
-  // Derived display value from expiresAt (recomputed every tick)
-  const [secondsRemaining, setSecondsRemaining] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
 
   // Stable ref to the setInterval ID so we can clear across re-renders
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -82,15 +80,13 @@ export function useRateLimit(): UseRateLimitReturn {
   useEffect(() => {
     if (expiresAt === null) {
       stopTimer();
-      setSecondsRemaining(0);
       return;
     }
 
     // Immediately compute on mount / expiresAt change
     const tick = () => {
       const remaining = Math.max(0, expiresAt - Date.now());
-      const secs = Math.ceil(remaining / 1000);
-      setSecondsRemaining(secs);
+      setNow(Date.now());
       if (remaining <= 0) {
         setExpiresAt(null); // triggers cleanup via next effect run
       }
@@ -105,6 +101,9 @@ export function useRateLimit(): UseRateLimitReturn {
       stopTimer();
     };
   }, [expiresAt, stopTimer]);
+
+  const secondsRemaining =
+    expiresAt === null ? 0 : Math.max(0, Math.ceil((expiresAt - now) / 1000));
 
   // ── public API ────────────────────────────────────────────────────────────
 
@@ -218,6 +217,7 @@ function parseRetryAfterHeaders(headers: Headers): number | null {
  */
 export function rateLimitMessage(secondsRemaining: number): string {
   if (secondsRemaining <= 0) return "You can try again now.";
-  if (secondsRemaining === 1) return "Too many attempts. Try again in 1 second.";
+  if (secondsRemaining === 1)
+    return "Too many attempts. Try again in 1 second.";
   return `Too many attempts. Try again in ${secondsRemaining}s.`;
 }

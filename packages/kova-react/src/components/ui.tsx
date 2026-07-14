@@ -8,15 +8,33 @@ import React, { type CSSProperties, type ReactNode } from "react";
 import { useKovaAuth } from "../context";
 import type { AppearanceElements } from "../types";
 
+const visuallyHiddenStyle: CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
+
 // ── Spinner ────────────────────────────────────────────────────────────────────
 
-export function Spinner({ size = 14, style }: { size?: number; style?: CSSProperties }) {
+export function Spinner({
+  size = 14,
+  style,
+}: {
+  size?: number;
+  style?: CSSProperties;
+}) {
   return (
-    <span
+    <output
       data-ra-element="spinner"
       style={{ width: size, height: size, borderWidth: size / 7, ...style }}
       aria-label="Loading"
-      role="status"
+      aria-live="polite"
     />
   );
 }
@@ -103,8 +121,10 @@ export function RateLimitBanner({
       aria-atomic="true"
       style={{
         borderRadius: "var(--ra-border-radius-sm)",
-        border: "1px solid color-mix(in srgb, var(--ra-color-error) 40%, transparent)",
-        background: "color-mix(in srgb, var(--ra-color-error) 10%, var(--ra-color-surface))",
+        border:
+          "1px solid color-mix(in srgb, var(--ra-color-error) 40%, transparent)",
+        background:
+          "color-mix(in srgb, var(--ra-color-error) 10%, var(--ra-color-surface))",
         padding: "10px 12px",
         display: "flex",
         flexDirection: "column",
@@ -153,26 +173,31 @@ export function RateLimitBanner({
 
       {/* Progress bar */}
       <div
-        role="progressbar"
-        aria-valuenow={secondsRemaining}
-        aria-valuemin={0}
-        aria-valuemax={safeTotal}
-        aria-label={`Rate limit countdown: ${secondsRemaining} seconds remaining`}
+        aria-hidden="true"
         style={{
           height: 3,
           borderRadius: 2,
-          background: "color-mix(in srgb, var(--ra-color-error) 20%, var(--ra-color-border))",
+          background:
+            "color-mix(in srgb, var(--ra-color-error) 20%, var(--ra-color-border))",
           overflow: "hidden",
         }}
       >
         <div
           style={{
             height: "100%",
-            width: `${progress * 100}%`,
+            width: "100%",
             background: "var(--ra-color-error)",
             borderRadius: 2,
-            transition: "width 0.2s linear",
+            transform: `scaleX(${progress})`,
+            transformOrigin: "left center",
+            transition: "transform 0.2s linear",
           }}
+        />
+        <progress
+          value={secondsRemaining}
+          max={safeTotal}
+          aria-label={`Rate limit countdown: ${secondsRemaining} seconds remaining`}
+          style={visuallyHiddenStyle}
         />
       </div>
     </div>
@@ -319,12 +344,12 @@ export function Avatar({
 
   const initials = name
     ? name
-      .trim()
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0]?.toUpperCase() ?? "")
-      .join("")
+        .trim()
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w) => w[0]?.toUpperCase() ?? "")
+        .join("")
     : "?";
 
   const base: CSSProperties = {
@@ -350,7 +375,12 @@ export function Avatar({
           alt={name ?? "Avatar"}
           width={size}
           height={size}
-          style={{ width: size, height: size, objectFit: "cover", borderRadius: "50%" }}
+          style={{
+            width: size,
+            height: size,
+            objectFit: "cover",
+            borderRadius: "50%",
+          }}
           onError={() => setImgError(true)}
           referrerPolicy="no-referrer"
         />
@@ -388,19 +418,40 @@ function KovaAuthBranding() {
         alignItems: "center",
         gap: 5,
         fontFamily: "var(--ra-font-mono)",
-        fontSize: "0.68rem",
+        fontSize: "0.75rem",
         color: "var(--ra-color-text-tertiary)",
         textDecoration: "none",
         opacity: 0.75,
         transition: "opacity 0.15s",
         marginTop: 8,
       }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = "0.75"; }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.opacity = "1";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.opacity = "0.75";
+      }}
     >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="12" cy="12" r="10" fill="var(--ra-color-primary)" opacity="0.9" />
-        <path d="M8 16V8h5a3 3 0 0 1 0 6H8" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <circle
+          cx="12"
+          cy="12"
+          r="10"
+          fill="var(--ra-color-primary)"
+          opacity="0.9"
+        />
+        <path
+          d="M8 16V8h5a3 3 0 0 1 0 6H8"
+          stroke="#fff"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
       </svg>
       Secured by kova-auth
     </a>
@@ -422,24 +473,33 @@ function DevModeBadge() {
         justifyContent: "center",
         gap: 6,
         padding: "6px 0 0",
-        borderTop: "1px dashed color-mix(in srgb, var(--ra-color-border-strong) 60%, transparent)",
+        borderTop:
+          "1px dashed color-mix(in srgb, var(--ra-color-border-strong) 60%, transparent)",
         marginTop: 10,
         width: "100%",
       }}
     >
-      <span style={{
-        width: 6, height: 6, borderRadius: "50%",
-        background: "#f59e0b",
-        flexShrink: 0,
-        boxShadow: "0 0 5px #f59e0b88",
-      }} />
-      <span style={{
-        fontFamily: "var(--ra-font-mono)",
-        fontSize: "0.65rem",
-        color: "#f59e0b",
-        letterSpacing: "0.04em",
-        fontWeight: 600,
-      }}>DEVELOPMENT INSTANCE</span>
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: "#f59e0b",
+          flexShrink: 0,
+          boxShadow: "0 0 5px #f59e0b88",
+        }}
+      />
+      <span
+        style={{
+          fontFamily: "var(--ra-font-mono)",
+          fontSize: "0.75rem",
+          color: "#f59e0b",
+          letterSpacing: "0.04em",
+          fontWeight: 600,
+        }}
+      >
+        DEVELOPMENT INSTANCE
+      </span>
     </div>
   );
 }
@@ -529,7 +589,13 @@ export function CardFooter({
     <div data-ra-element="cardFooter" style={elements?.cardFooter}>
       {children}
       {/* Branding + dev badge injected at the bottom of every footer */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
         <KovaAuthBranding />
         <DevModeBadge />
       </div>
@@ -551,11 +617,7 @@ export function Tabs({
   elements?: AppearanceElements;
 }) {
   return (
-    <div
-      role="tablist"
-      data-ra-element="tabsRoot"
-      style={elements?.tabsRoot}
-    >
+    <div role="tablist" data-ra-element="tabsRoot" style={elements?.tabsRoot}>
       {tabs.map((tab) => (
         <button
           key={tab.id}

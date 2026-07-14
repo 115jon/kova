@@ -27,14 +27,16 @@
  * ```
  */
 
-import { type FormEvent, useState } from "react";
-import {
-  mergeAppearance,
-  useKovaAuth,
-} from "../context";
+import { type FormEvent, useEffect, useRef, useState } from "react";
+import { mergeAppearance, useKovaAuth } from "../context";
 import { useRateLimit } from "../hooks/use-rate-limit";
 import { useSignIn } from "../hooks/use-sign-in";
-import type { Appearance, AppearanceElements, SignInProps, SignInTab } from "../types";
+import type {
+  Appearance,
+  AppearanceElements,
+  SignInProps,
+  SignInTab,
+} from "../types";
 import { FingerprintIcon, MailIcon } from "./icons";
 import { resolveAbsoluteUrl, SocialButtons } from "./social-buttons";
 import {
@@ -68,9 +70,13 @@ function PasskeyButton({
     setLoading(true);
     setError(null);
     try {
-      await (client as unknown as {
-        signIn: { passkey: (o: { callbackURL: string }) => Promise<unknown> };
-      }).signIn.passkey({ callbackURL: resolveAbsoluteUrl(authUrl, callbackURL) });
+      await (
+        client as unknown as {
+          signIn: { passkey: (o: { callbackURL: string }) => Promise<unknown> };
+        }
+      ).signIn.passkey({
+        callbackURL: resolveAbsoluteUrl(authUrl, callbackURL),
+      });
     } catch (err) {
       // Ignore user-cancel (DOMException name = "NotAllowedError")
       if (err instanceof DOMException && err.name === "NotAllowedError") return;
@@ -97,6 +103,27 @@ function PasskeyButton({
   );
 }
 
+function useSeedRateLimitCountdown(
+  retryAfterSeconds: number | null,
+  recordRateLimit: (retryAfterSeconds: number) => void,
+) {
+  const prevRetryAfterRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (retryAfterSeconds === null) {
+      prevRetryAfterRef.current = null;
+      return;
+    }
+
+    if (retryAfterSeconds === prevRetryAfterRef.current) {
+      return;
+    }
+
+    prevRetryAfterRef.current = retryAfterSeconds;
+    recordRateLimit(retryAfterSeconds);
+  }, [recordRateLimit, retryAfterSeconds]);
+}
+
 function EmailPasswordForm({
   afterSignInUrl,
   elements,
@@ -104,7 +131,8 @@ function EmailPasswordForm({
   afterSignInUrl: string;
   elements?: AppearanceElements;
 }) {
-  const { signIn, isLoading, error, twoFactorRequired, retryAfterSeconds } = useSignIn();
+  const { signIn, isLoading, error, twoFactorRequired, retryAfterSeconds } =
+    useSignIn();
   const { authUrl } = useKovaAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -112,20 +140,8 @@ function EmailPasswordForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Rate-limit countdown — seeded by retryAfterSeconds from the hook
-  const {
-    isRateLimited,
-    secondsRemaining,
-    recordRateLimit,
-  } = useRateLimit();
-
-  // When retryAfterSeconds changes (new 429), seed the countdown
-  // We use a local ref-like effect: track the previous value and only call
-  // recordRateLimit when it becomes a non-null number.
-  const [prevRetryAfter, setPrevRetryAfter] = useState<number | null>(null);
-  if (retryAfterSeconds !== null && retryAfterSeconds !== prevRetryAfter) {
-    setPrevRetryAfter(retryAfterSeconds);
-    recordRateLimit(retryAfterSeconds);
-  }
+  const { isRateLimited, secondsRemaining, recordRateLimit } = useRateLimit();
+  useSeedRateLimitCountdown(retryAfterSeconds, recordRateLimit);
 
   const absCallbackUrl = resolveAbsoluteUrl(authUrl, afterSignInUrl);
 
@@ -147,7 +163,9 @@ function EmailPasswordForm({
       return;
     }
     if (!validate()) return;
-    await signIn.email({ email, password, callbackURL: absCallbackUrl }).catch(() => null);
+    await signIn
+      .email({ email, password, callbackURL: absCallbackUrl })
+      .catch(() => null);
   };
 
   if (twoFactorRequired) {
@@ -175,7 +193,11 @@ function EmailPasswordForm({
           disabled={isRateLimited}
           elements={elements}
         />
-        <SubmitButton isLoading={isLoading} disabled={isRateLimited} elements={elements}>
+        <SubmitButton
+          isLoading={isLoading}
+          disabled={isRateLimited}
+          elements={elements}
+        >
           Verify Code
         </SubmitButton>
       </form>
@@ -217,7 +239,11 @@ function EmailPasswordForm({
         error={fieldErrors["password"]}
         elements={elements}
       />
-      <SubmitButton isLoading={isLoading} disabled={isRateLimited} elements={elements}>
+      <SubmitButton
+        isLoading={isLoading}
+        disabled={isRateLimited}
+        elements={elements}
+      >
         Continue
       </SubmitButton>
     </form>
@@ -238,17 +264,8 @@ function MagicLinkForm({
   const [fieldError, setFieldError] = useState<string | null>(null);
 
   // Rate-limit countdown
-  const {
-    isRateLimited,
-    secondsRemaining,
-    recordRateLimit,
-  } = useRateLimit();
-
-  const [prevRetryAfter, setPrevRetryAfter] = useState<number | null>(null);
-  if (retryAfterSeconds !== null && retryAfterSeconds !== prevRetryAfter) {
-    setPrevRetryAfter(retryAfterSeconds);
-    recordRateLimit(retryAfterSeconds);
-  }
+  const { isRateLimited, secondsRemaining, recordRateLimit } = useRateLimit();
+  useSeedRateLimitCountdown(retryAfterSeconds, recordRateLimit);
 
   const absCallbackUrl = resolveAbsoluteUrl(authUrl, afterSignInUrl);
 
@@ -298,7 +315,11 @@ function MagicLinkForm({
         error={fieldError}
         elements={elements}
       />
-      <SubmitButton isLoading={isLoading} disabled={isRateLimited} elements={elements}>
+      <SubmitButton
+        isLoading={isLoading}
+        disabled={isRateLimited}
+        elements={elements}
+      >
         <MailIcon size={15} />
         Send sign-in link
       </SubmitButton>
@@ -321,8 +342,12 @@ export function SignIn({
   appearance: instanceAppearance,
   className,
 }: SignInProps) {
-  const { appearance: providerAppearance, afterSignInUrl: providerAfterSignIn, oauthProviders, isAppearanceLoaded } =
-    useKovaAuth();
+  const {
+    appearance: providerAppearance,
+    afterSignInUrl: providerAfterSignIn,
+    oauthProviders,
+    isAppearanceLoaded,
+  } = useKovaAuth();
 
   const merged = mergeAppearance(providerAppearance, instanceAppearance);
   const el = merged.elements ?? {};
@@ -333,7 +358,11 @@ export function SignIn({
   if (!isAppearanceLoaded) {
     return (
       <Card elements={el} className={className}>
-        <CardHeader title="Sign in" subtitle="Welcome back. Choose your sign-in method." elements={el} />
+        <CardHeader
+          title="Sign in"
+          subtitle="Welcome back. Choose your sign-in method."
+          elements={el}
+        />
         <CardBody elements={el}>
           <div data-ra-element="socialButtonsRoot" style={el.socialButtonsRoot}>
             <Skeleton height={38} />

@@ -17,7 +17,7 @@ import { useKovaAuth } from "../context";
 import type { KovaSession, KovaUser, UseSessionReturn } from "../types";
 
 export function useSession(): UseSessionReturn {
-  const { sessionResult, client } = useKovaAuth();
+  const { sessionResult, client: _client } = useKovaAuth();
 
   // Read from the shared subscription set up once in KovaAuthProvider.
   // Do NOT call client.useSession() here — each independent call creates its
@@ -28,10 +28,10 @@ export function useSession(): UseSessionReturn {
   const isSignedIn = !!result.data?.user && !result.error;
 
   const session = result.data
-    ? ({
-      user: result.data.user as unknown as KovaUser,
-      session: result.data.session as unknown as KovaSession,
-    })
+    ? {
+        user: result.data.user as unknown as KovaUser,
+        session: result.data.session as unknown as KovaSession,
+      }
     : null;
 
   return {
