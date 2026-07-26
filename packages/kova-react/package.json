@@ -1,6 +1,6 @@
 {
   "name": "@115jon/kova-react",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Drop-in React SDK for kova-auth — embeddable sign-in/up forms, user button, org switcher, and route protection.",
   "author": "kova-auth",
   "license": "MIT",
