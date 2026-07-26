@@ -36,8 +36,6 @@ jobs:
         uses: actions/setup-node@v4.4.0
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
           registry-url: https://npm.pkg.github.com
 
       - name: Install Kova React dependencies
