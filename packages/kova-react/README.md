@@ -1,4 +1,4 @@
-# @kova/react
+# @115jon/kova-react
 
 > Drop-in React SDK for **kova-auth** — the self-hosted [Clerk](https://clerk.com) alternative built on Cloudflare Workers + Better Auth.
 
@@ -19,7 +19,8 @@
 ## Installation
 
 ```bash
-pnpm add "github:115jon/kova.git#kova-react-v0.1.0&path:/packages/kova-react"
+pnpm config set "@115jon:registry" https://npm.pkg.github.com
+pnpm add @115jon/kova-react
 ```
 
 The SDK is versioned independently from the Kova server and dashboard. Use the
@@ -36,7 +37,7 @@ than this monorepo subdirectory URL.
 
 ```tsx
 // src/main.tsx
-import { KovaAuthProvider } from "@kova/react";
+import { KovaAuthProvider } from "@115jon/kova-react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 
@@ -64,7 +65,7 @@ Or, if you don't have a publishable key yet, pass `authUrl` directly:
 
 ```tsx
 // src/pages/sign-in.tsx
-import { SignIn } from "@kova/react";
+import { SignIn } from "@115jon/kova-react";
 
 export function SignInPage() {
   return (
@@ -77,7 +78,7 @@ export function SignInPage() {
 
 ```tsx
 // src/pages/sign-up.tsx
-import { SignUp } from "@kova/react";
+import { SignUp } from "@115jon/kova-react";
 
 export function SignUpPage() {
   return <SignUp afterSignUpUrl="/onboarding" signInUrl="/sign-in" />;
@@ -87,7 +88,7 @@ export function SignUpPage() {
 ### 3. Add a user button to your nav
 
 ```tsx
-import { UserButton } from "@kova/react";
+import { UserButton } from "@115jon/kova-react";
 
 function Navbar() {
   return (
@@ -102,7 +103,7 @@ function Navbar() {
 ### 4. Protect routes
 
 ```tsx
-import { Protect } from "@kova/react";
+import { Protect } from "@115jon/kova-react";
 import { Navigate } from "react-router-dom";
 
 // Require sign-in
@@ -135,7 +136,7 @@ import { Navigate } from "react-router-dom";
 | `useSignUp()` | Imperative `signUp.email`, `verificationPending` |
 
 ```tsx
-import { useUser } from "@kova/react";
+import { useUser } from "@115jon/kova-react";
 
 function Profile() {
   const { user, isLoaded, isSignedIn } = useUser();
@@ -195,7 +196,7 @@ All elements are also addressable via the `data-ra-element` attribute in plain C
 Generate a key for your auth server URL:
 
 ```ts
-import { encodePublishableKey, decodePublishableKey } from "@kova/react";
+import { encodePublishableKey, decodePublishableKey } from "@115jon/kova-react";
 
 // Encode
 const key = encodePublishableKey("https://auth.example.com", { mode: "live" });
@@ -212,7 +213,7 @@ const { authUrl, mode } = decodePublishableKey(key);
 For use outside React (e.g., loaders, middleware):
 
 ```ts
-import { createKovaAuthClient } from "@kova/react";
+import { createKovaAuthClient } from "@115jon/kova-react";
 
 export const authClient = createKovaAuthClient({
   authUrl: "https://auth.example.com",
@@ -248,7 +249,7 @@ All plugins from the kova-auth server are enabled by default. Opt out selectivel
 ## Architecture
 
 ```
-@kova/react
+@115jon/kova-react
 ├── KovaAuthProvider   — context, CSS injection, client creation
 ├── Components          — SignIn / SignUp / UserButton / OrgSwitcher / Protect
 │   ├── ui.tsx          — shared primitives (Card, FormField, Alert, Avatar, Spinner…)

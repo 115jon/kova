@@ -2,7 +2,7 @@
  * OrgPage — tests useOrganization() and <OrgSwitcher />.
  */
 
-import { OrgSwitcher, useOrganization } from "@kova/react";
+import { OrgSwitcher, useOrganization } from "@115jon/kova-react";
 
 export function OrgPage() {
   const { organization, membership, isLoaded } = useOrganization();

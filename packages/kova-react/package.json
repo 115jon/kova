@@ -1,5 +1,5 @@
 {
-  "name": "@kova/react",
+  "name": "@115jon/kova-react",
   "version": "0.1.0",
   "description": "Drop-in React SDK for kova-auth — embeddable sign-in/up forms, user button, org switcher, and route protection.",
   "author": "kova-auth",
@@ -33,6 +33,9 @@
     "dist",
     "README.md"
   ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "dependencies": {
     "better-auth": "^1.6.2",
     "@better-auth/api-key": "^1.6.2",

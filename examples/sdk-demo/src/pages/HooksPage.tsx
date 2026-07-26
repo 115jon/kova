@@ -10,7 +10,7 @@
  *                          ↑ the inner .session is KovaSession with .id / .userId / .expiresAt
  */
 
-import { useAuth, useSession, useUser } from "@kova/react";
+import { useAuth, useSession, useUser } from "@115jon/kova-react";
 
 export function HooksPage() {
   const auth = useAuth();

@@ -15,7 +15,7 @@ import {
   useAuth,
   useSignIn,
   useSignUp,
-} from "@kova/react";
+} from "@115jon/kova-react";
 import { useState } from "react";
 import { Log, useLog } from "../components/Log";
 

@@ -7,7 +7,7 @@
  * of the SDK itself.
  */
 
-import { KovaAuthProvider, UserButton } from "@kova/react";
+import { KovaAuthProvider, UserButton } from "@115jon/kova-react";
 import { useState } from "react";
 import { AuthDemoPage } from "./pages/AuthDemoPage";
 import { ConnectedAccountsPage } from "./pages/ConnectedAccountsPage";

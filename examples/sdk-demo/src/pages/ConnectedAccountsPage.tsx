@@ -7,7 +7,7 @@
  *  - Embeds the <ConnectedAccounts /> drop-in component
  */
 
-import { ConnectedAccounts, useLinkedAccounts } from "@kova/react";
+import { ConnectedAccounts, useLinkedAccounts } from "@115jon/kova-react";
 import { Log, useLog } from "../components/Log";
 
 export function ConnectedAccountsPage() {

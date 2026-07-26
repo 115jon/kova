@@ -104,7 +104,7 @@ importers:
 
   examples/sdk-demo:
     dependencies:
-      '@kova/react':
+      '@115jon/kova-react':
         specifier: workspace:*
         version: link:../../packages/kova-react
       react:
