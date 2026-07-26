@@ -50,7 +50,7 @@ jobs:
         run: |
           pnpm --filter @115jon/kova-react pack --pack-destination "$RUNNER_TEMP"
           package_version=$(node -p "require('./packages/kova-react/package.json').version")
-          echo "asset=$RUNNER_TEMP/kova-react-${package_version}.tgz" >> "$GITHUB_OUTPUT"
+          echo "asset=$RUNNER_TEMP/115jon-kova-react-${package_version}.tgz" >> "$GITHUB_OUTPUT"
 
       - name: Upload release asset
         run: gh release upload "$RELEASE_TAG" "${{ steps.package.outputs.asset }}" --repo "$GITHUB_REPOSITORY" --clobber
