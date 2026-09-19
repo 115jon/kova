@@ -63,8 +63,7 @@ export interface ExchangeTicketResult {
 //   - Single-use (deleted on exchange)
 //   - 30-second hard TTL — window for timing attacks shrunk to near-zero
 //   - pk-bound — only the initiating app's pk can exchange it
-//   - origin-bound — redirect_uri is validated to be in the app's allowlist
-//     (enforced in the /api/hosted/oauth-complete handler, not here)
+//   - origin-bound — stored origin must match the exchange Origin header
 //   - The returned sessionToken IS the raw Better Auth session token; it is
 //     equivalent to the cookie value and is validated against D1 on every use.
 //     Storing it in JS memory (not localStorage) provides the same security
@@ -75,6 +74,8 @@ export interface SessionTransferPayload {
   sessionToken: string;
   /** Publishable key that initiated the OAuth — only this app can exchange */
   publishableKey: string;
+  /** Origin of the allowlisted redirect_uri — required at exchange */
+  expectedOrigin: string;
   /** Unix timestamp (ms) for age validation */
   issuedAt: number;
 }
@@ -222,11 +223,13 @@ export async function exchangeAuthTicket(
  * @param kv             KV namespace binding
  * @param sessionToken   Raw Better Auth session token (= the value in the session cookie)
  * @param publishableKey The app's pk — only this app can exchange the code
+ * @param expectedOrigin Origin of the allowlisted redirect_uri
  */
 export async function createSessionTransferCode(
   kv: KVNamespace,
   sessionToken: string,
-  publishableKey: string
+  publishableKey: string,
+  expectedOrigin: string,
 ): Promise<string> {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   const b64 = btoa(String.fromCharCode(...bytes))
@@ -236,6 +239,7 @@ export async function createSessionTransferCode(
   const payload: SessionTransferPayload = {
     sessionToken,
     publishableKey,
+    expectedOrigin,
     issuedAt: Date.now(),
   };
 
@@ -254,12 +258,14 @@ export async function createSessionTransferCode(
  * @param kv             KV namespace binding
  * @param code           The transfer code from the consumer app's URL (`?kova_auth_code=xxx`)
  * @param publishableKey The requesting app's pk — must match what was stored
+ * @param origin         Browser Origin header from the exchange request
  * @returns The session token, or null if the code is invalid/expired/mismatched
  */
 export async function exchangeSessionTransferCode(
   kv: KVNamespace,
   code: string,
-  publishableKey: string
+  publishableKey: string,
+  origin: string | null,
 ): Promise<ExchangeTransferResult | null> {
   const key = `${TRANSFER_KEY_PREFIX}${code}`;
 
@@ -278,9 +284,19 @@ export async function exchangeSessionTransferCode(
 
   // pk binding check
   if (payload.publishableKey !== publishableKey) return null;
+  if (!originMatches(payload.expectedOrigin, origin)) return null;
 
   // Belt-and-suspenders age check (KV TTL is primary guard)
   if (Date.now() - payload.issuedAt > TRANSFER_TTL_SECONDS * 1000 + 5_000) return null;
 
   return { sessionToken: payload.sessionToken };
+}
+
+function originMatches(expected: string | undefined, origin: string | null): boolean {
+  if (!expected || !origin) return false;
+  try {
+    return new URL(expected).origin === new URL(origin).origin;
+  } catch {
+    return false;
+  }
 }

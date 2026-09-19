@@ -87,6 +87,9 @@ export const STATIC_ORIGINS = new Set<string>([
   // Production — combined auth+dashboard worker
   "https://auth.115jon.site",
   "https://kova-auth-server.jontitor.workers.dev",
+  "https://oci-a1.tail91a4f4.ts.net",
+  "https://joi.tail91a4f4.ts.net:5174",
+  "https://git.115jon.com",
 ]);
 
 // ── Security headers (non-CORS) ───────────────────────────────────────────────

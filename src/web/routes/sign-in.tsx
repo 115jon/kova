@@ -2,6 +2,11 @@ import { ProviderIcon } from "@/components/BrandIcons";
 import { KovaLogo } from "@/components/KovaLogo";
 import { authClient, getSession, signIn, twoFactor } from "@/lib/auth-client";
 import { CONFIGURED_PROVIDERS } from "@/lib/providers";
+import {
+  buildNativeHandoffPath,
+  buildSignInReturnPath,
+  type SignInRouteSearch,
+} from "@/lib/sign-in-redirect";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
@@ -13,16 +18,30 @@ import {
   Shield,
   Smartphone,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export const Route = createFileRoute("/sign-in")({
+  validateSearch: (search: Record<string, unknown>): SignInRouteSearch => ({
+    pk: typeof search.pk === "string" ? search.pk : undefined,
+    redirect_url:
+      typeof search.redirect_url === "string" ? search.redirect_url : undefined,
+    native_handoff:
+      typeof search.native_handoff === "string"
+        ? search.native_handoff
+        : undefined,
+  }),
   component: SignInPage,
 });
 
 // ── 2FA challenge screen ──────────────────────────────────────────────────────
 
-function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
-  const navigate = useNavigate();
+function TwoFactorChallenge({
+  onBack,
+  onComplete,
+}: {
+  onBack: () => void;
+  onComplete: () => void;
+}) {
   const [code, setCode] = useState("");
   const [method, setMethod] = useState<"totp" | "otp">("totp");
   const [loading, setLoading] = useState(false);
@@ -44,7 +63,7 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
       // Refresh the Better Auth session store so AuthGuard.useSession()
       // sees the authenticated session immediately (avoids stale-cache bounce).
       await getSession();
-      navigate({ to: "/" });
+      onComplete();
     } catch (e: any) {
       setError(e?.message ?? "Invalid code. Please try again.");
       setCode("");
@@ -154,7 +173,13 @@ function TwoFactorChallenge({ onBack }: { onBack: () => void }) {
 
 // ── Magic Link panel ──────────────────────────────────────────────────────────
 
-function MagicLinkPanel({ onBack }: { onBack: () => void }) {
+function MagicLinkPanel({
+  onBack,
+  returnPath,
+}: {
+  onBack: () => void;
+  returnPath: string;
+}) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -169,8 +194,8 @@ function MagicLinkPanel({ onBack }: { onBack: () => void }) {
         email,
         // Must be absolute — Better Auth resolves relative paths against AUTH_URL
         // (port 8787), not the dashboard origin (port 5174).
-        callbackURL: `${window.location.origin}/`,
-        errorCallbackURL: `${window.location.origin}/sign-in`,
+        callbackURL: new URL(returnPath, window.location.origin).toString(),
+        errorCallbackURL: new URL(returnPath, window.location.origin).toString(),
       });
       if (res?.error) throw new Error(res.error.message ?? "Failed to send link");
       setSent(true);
@@ -285,6 +310,7 @@ function getOAuthDashboardOrigin() {
 
 function SignInPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const { data: session } = authClient.useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -294,12 +320,22 @@ function SignInPage() {
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const [twoFactorRequired, setTwoFactorRequired] = useState(false);
   const [tab, setTab] = useState<SignInTab>("password");
+  const nativeHandoffPath = buildNativeHandoffPath(search);
+  const signInReturnPath = buildSignInReturnPath(search);
+
+  const completeSignIn = useCallback(() => {
+    if (nativeHandoffPath) {
+      window.location.assign(nativeHandoffPath);
+      return;
+    }
+    navigate({ to: "/" });
+  }, [nativeHandoffPath, navigate]);
 
   useEffect(() => {
     if (session?.user) {
-      navigate({ to: "/", replace: true });
+      completeSignIn();
     }
-  }, [navigate, session?.user]);
+  }, [completeSignIn, session?.user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,7 +354,7 @@ function SignInPage() {
         setTwoFactorRequired(true);
       } else {
         await getSession(); // refresh session store before navigating
-        navigate({ to: "/" });
+        completeSignIn();
       }
     } catch {
       setError("Something went wrong. Check the server is running.");
@@ -337,7 +373,7 @@ function SignInPage() {
         throw new Error((res as any).error?.message ?? "Passkey sign-in failed");
       }
       await getSession();
-      navigate({ to: "/" });
+      completeSignIn();
     } catch (e: any) {
       // User cancelled the passkey prompt — silently ignore DOMException
       if (e?.name !== "NotAllowedError") {
@@ -354,7 +390,9 @@ function SignInPage() {
     try {
       const result = await signIn.social({
         provider: providerId as any,
-        callbackURL: `${getOAuthDashboardOrigin()}/`,
+        callbackURL: nativeHandoffPath
+          ? new URL(nativeHandoffPath, getOAuthDashboardOrigin()).toString()
+          : `${getOAuthDashboardOrigin()}/`,
       });
       if (result?.data?.url) {
         window.location.href = result.data.url;
@@ -376,7 +414,10 @@ function SignInPage() {
       }}>
         <div className="public-auth-ambient" style={{ position: "fixed", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99,102,241,0.12), transparent)" }} />
         <div className="card public-auth-card animate-in" style={{ width: "100%", maxWidth: 380, padding: 36 }}>
-          <TwoFactorChallenge onBack={() => { setTwoFactorRequired(false); setError(""); }} />
+          <TwoFactorChallenge
+            onBack={() => { setTwoFactorRequired(false); setError(""); }}
+            onComplete={completeSignIn}
+          />
         </div>
       </div>
     );
@@ -391,7 +432,10 @@ function SignInPage() {
       }}>
         <div className="public-auth-ambient" style={{ position: "fixed", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99,102,241,0.12), transparent)" }} />
         <div className="card public-auth-card animate-in" style={{ width: "100%", maxWidth: 380, padding: 36 }}>
-          <MagicLinkPanel onBack={() => setTab("password")} />
+          <MagicLinkPanel
+            onBack={() => setTab("password")}
+            returnPath={signInReturnPath}
+          />
         </div>
       </div>
     );

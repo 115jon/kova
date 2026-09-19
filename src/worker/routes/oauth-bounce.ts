@@ -49,7 +49,9 @@ import type { Context } from "hono";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { getApplicationById, getApplicationByPublishableKey, isRedirectUriAllowed } from "../applications";
 import { createAuth } from "../auth";
+import { insertAppScopedSession } from "../lib/app-session";
 import { createAuthTicket, createSessionTransferCode } from "../lib/auth-ticket";
+import { escapeHtml } from "../lib/html";
 
 export interface OAuthBounceCtx {
   slug: string;
@@ -231,7 +233,7 @@ async function handleSdkBounce(
 
   const errorHtml = (msg: string) =>
     c.html(
-      `<p style="font-family:monospace;color:#f87171;padding:32px">${msg}</p>`,
+      `<p style="font-family:monospace;color:#f87171;padding:32px">${escapeHtml(msg)}</p>`,
       400
     );
 
@@ -246,9 +248,7 @@ async function handleSdkBounce(
 
   // Validate redirect_uri against allowlist (open-redirect protection)
   if (!isRedirectUriAllowed(app, redirectUri)) {
-    return errorHtml(
-      `redirect_uri '${redirectUri}' is not in the application's allowed redirect URIs.`
-    );
+    return errorHtml("OAuth SDK bounce failed: redirect_uri is not allowlisted.");
   }
 
   // Read the session that Better Auth just created (we are ON the main auth domain)
@@ -269,30 +269,19 @@ async function handleSdkBounce(
   // base Session shape, but it IS present at runtime (it's the primary session identifier).
   const { generateId } = await import("better-auth");
   const appSessionToken = generateId(32);
-  const now = Date.now();
-
   const appSessionId = generateId();
-  const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
-
-  await c.env.DB.prepare(
-    `INSERT INTO session (id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, app_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(
-      appSessionId,
-      session.user.id,
-      appSessionToken,
-      new Date(expiresAt).toISOString(),
-      new Date(now).toISOString(),
-      new Date(now).toISOString(),
-      c.req.header("CF-Connecting-IP") ?? null,
-      c.req.header("User-Agent") ?? null,
-      app.id
-    )
-    .run();
+  await insertAppScopedSession(c.env.DB, {
+    sessionId: appSessionId,
+    userId: session.user.id,
+    token: appSessionToken,
+    appId: app.id,
+    ipAddress: c.req.header("CF-Connecting-IP") ?? null,
+    userAgent: c.req.header("User-Agent") ?? null,
+  });
 
   // Create a 60-second single-use transfer code bound to this pk
-  const code = await createSessionTransferCode(c.env.KV, appSessionToken, pk);
+  const expectedOrigin = new URL(redirectUri).origin;
+  const code = await createSessionTransferCode(c.env.KV, appSessionToken, pk, expectedOrigin);
 
   // ── Build redirect URL ────────────────────────────────────────────────────
   const dest = new URL(redirectUri);

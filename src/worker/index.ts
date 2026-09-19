@@ -14,6 +14,7 @@
 //   /api/webhooks/*             → Webhook endpoints
 //   /api/avatar/*               → Legacy avatar redirect
 //   /health                     → Health check
+//   /.well-known/*              → OIDC discovery alias → /api/auth/.well-known/*
 //   {slug}.auth.115jon.site/*   → Hosted auth subdomain (per-app isolated sign-in)
 //   Dashboard documents/assets   → TanStack Start server entry
 //
@@ -132,6 +133,12 @@ app.use("*", async (c, next) => {
 // Minimal response — no service name or timestamp to avoid info leakage.
 app.get("/health", (c) => c.json({ status: "ok" }));
 
+app.all("/.well-known/*", async (c) => {
+  const url = new URL(c.req.url);
+  url.pathname = `/api/auth${url.pathname}`;
+  return authRouter.fetch(new Request(url, c.req.raw), c.env, c.executionCtx);
+});
+
 // ── Route modules ─────────────────────────────────────────────────────────────
 app.route("/api/auth", authRouter);
 app.route("/api/user", userRouter);
@@ -178,7 +185,13 @@ function authBaseHost(authUrl: string | undefined) {
 
 export function shouldUseHono(request: Request, authUrl?: string) {
   const url = new URL(request.url);
-  if (url.pathname === "/health" || url.pathname.startsWith("/api/")) return true;
+  if (
+    url.pathname === "/health"
+    || url.pathname.startsWith("/api/")
+    || url.pathname.startsWith("/.well-known/")
+  ) {
+    return true;
+  }
   return !isDashboardHost(url.host, authBaseHost(authUrl));
 }
 

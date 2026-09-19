@@ -16,6 +16,7 @@
 
 import { useCallback } from "react";
 import { useKovaAuth } from "../context";
+import { readAuthSessionPayload } from "../session-token";
 import type { KovaUser, UseUserReturn } from "../types";
 
 export function useUser(): UseUserReturn {
@@ -24,7 +25,7 @@ export function useUser(): UseUserReturn {
   const result = sessionResult;
 
   const isLoaded = !result.isPending;
-  const rawUser = result.data?.user ?? null;
+  const rawUser = readAuthSessionPayload(result.data)?.user ?? null;
 
   // Coerce Better Auth's user shape to our typed KovaUser.
   // BA's inferred user type doesn't include plugin-added fields, so we cast
@@ -38,9 +39,9 @@ export function useUser(): UseUserReturn {
             : new Date((v as number | string | undefined) ?? Date.now());
         return {
           id: rawUser.id,
-          name: rawUser.name,
+          name: rawUser.name ?? "",
           fullName: rawUser.name ?? null,
-          email: rawUser.email,
+          email: rawUser.email ?? "",
           emailVerified: !!(u["emailVerified"] as boolean | undefined),
           image: (u["image"] as string | null | undefined) ?? null,
           imageUrl: (u["image"] as string | null | undefined) ?? undefined,

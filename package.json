@@ -8,7 +8,14 @@
   },
   "pnpm": {
     "overrides": {
-      "postcss": "^8.5.10"
+      "postcss": "^8.5.10",
+      "better-auth": "1.6.33",
+      "@better-auth/api-key": "1.6.33",
+      "@better-auth/passkey": "1.6.33",
+      "@better-auth/core": "1.6.33",
+      "@better-auth/drizzle-adapter": "1.6.33",
+      "@better-auth/kysely-adapter": "1.6.33",
+      "seroval": ">=1.5.3"
     }
   },
   "scripts": {
@@ -28,17 +35,17 @@
     "deploy:sdk-demo": "pnpm --filter @kova/sdk-demo run deploy"
   },
   "dependencies": {
-    "@better-auth/api-key": "^1.6.2",
-    "@better-auth/passkey": "^1.6.2",
+    "@better-auth/api-key": "~1.6.33",
+    "@better-auth/passkey": "~1.6.33",
     "@tanstack/react-query": "^5.99.0",
     "@tanstack/react-query-devtools": "^5.99.0",
     "@tanstack/react-router": "^1.163.3",
     "@tanstack/react-start": "^1.164.0",
-    "better-auth": "^1.6.2",
-    "better-auth-cloudflare": "^0.3.0",
+    "better-auth": "~1.6.33",
+    "better-auth-cloudflare": "^0.3.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "hono": "^4.12.14",
+    "hono": "^4.13.8",
     "lucide-react": "^0.564.0",
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",

@@ -16,6 +16,8 @@ interface Env {
   AUTH_URL: string;
   DASHBOARD_URL: string;
   BETTER_AUTH_SECRET: string;
+  FORGEJO_OIDC_CLIENT_ID?: string;
+  FORGEJO_OIDC_CLIENT_SECRET?: string;
 
   // ── OAuth: Google (always required) ─────────────────────────
   GOOGLE_CLIENT_ID: string;

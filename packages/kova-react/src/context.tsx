@@ -22,6 +22,7 @@ import {
 } from "react";
 import { createKovaAuthClient, type KovaAuthClient } from "./client";
 import { resolveAuthUrl } from "./key";
+import { readAuthSessionPayload, shouldMintAppSessionToken } from "./session-token";
 import { injectAppearanceVars } from "./styles/inject";
 import type {
   Appearance,
@@ -66,6 +67,14 @@ const DEFAULT_OAUTH_PROVIDERS = ALL_OAUTH_PROVIDERS.filter((p) =>
 
 // ── Server appearance payload shape ──────────────────────────────────────────
 
+export function appearanceLoadErrorMessage(err: unknown): string {
+  if (err instanceof TypeError) {
+    return "This origin is not allowed to talk to the auth server. Add it to the application's allowed origins.";
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return "Could not load sign-in settings.";
+}
+
 export interface ServerAppearance {
   displayName: string;
   logoUrl: string | null;
@@ -94,8 +103,12 @@ export interface KovaAuthContextValue {
   oauthProviders: OAuthProvider[];
   /** Live server-fetched branding — null until the first fetch resolves. */
   serverAppearance: ServerAppearance | null;
-  /** True once server appearance has resolved, or immediately when no publishable key is used. */
+  /** True once server appearance has resolved, failed, or immediately when no publishable key is used. */
   isAppearanceLoaded: boolean;
+  /** Why appearance loading failed, if it did. Null while loading or after a successful fetch. */
+  appearanceError: string | null;
+  /** Re-run the public appearance fetch. */
+  retryAppearance: () => void;
   afterSignInUrl: string;
   afterSignUpUrl: string;
   afterSignOutUrl: string;
@@ -235,16 +248,26 @@ export function KovaAuthProvider({
   const sessionResult = client.useSession();
 
   useEffect(() => {
-    if (!publishableKey || sessionToken) return;
-    if (sessionResult.isPending || !sessionResult.data?.user) return;
+    if (
+      !shouldMintAppSessionToken({
+        publishableKey,
+        sessionToken,
+        isPending: sessionResult.isPending,
+      })
+    ) {
+      return;
+    }
+
+    const pk = publishableKey;
+    if (!pk) return;
 
     let cancelled = false;
     void fetch(
-      `${resolvedAuthUrl}/api/pub/apps/${publishableKey}/session-token`,
+      `${resolvedAuthUrl}/api/pub/apps/${pk}/session-token`,
       {
         method: "POST",
         credentials: "include",
-        headers: { "X-Publishable-Key": publishableKey },
+        headers: { "X-Publishable-Key": pk },
       },
     )
       .then((r) =>
@@ -264,7 +287,6 @@ export function KovaAuthProvider({
   }, [
     publishableKey,
     resolvedAuthUrl,
-    sessionResult.data,
     sessionResult.isPending,
     sessionToken,
     setPersistentSessionToken,
@@ -327,9 +349,16 @@ export function KovaAuthProvider({
   // ── Server appearance ─────────────────────────────────────────────────────
   const [serverAppearance, setServerAppearance] =
     useState<ServerAppearance | null>(null);
+  const [appearanceError, setAppearanceError] = useState<string | null>(null);
+  const [appearanceRetry, setAppearanceRetry] = useState(0);
+  const retryAppearance = useCallback(() => {
+    setAppearanceError(null);
+    setAppearanceRetry((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     if (!publishableKey) return;
+    let cancelled = false;
     // Public endpoint — KV-cached server-side (5 min TTL).
     // cache: "no-store" bypasses the browser cache so we always reflect the
     // latest KV value. This prevents Cloudflare's CDN from serving a stale
@@ -337,14 +366,23 @@ export function KovaAuthProvider({
     void fetch(`${resolvedAuthUrl}/api/pub/apps/${publishableKey}/appearance`, {
       cache: "no-store",
     })
-      .then((r) => (r.ok ? (r.json() as Promise<ServerAppearance>) : null))
-      .then((data) => {
-        if (data) setServerAppearance(data);
+      .then(async (r) => {
+        if (r.ok) return r.json() as Promise<ServerAppearance>;
+        throw new Error(`Appearance request failed (${r.status})`);
       })
-      .catch(() => {
-        /* progressive enhancement — never blocks sign-in */
+      .then((data) => {
+        if (cancelled) return;
+        setServerAppearance(data);
+        setAppearanceError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setAppearanceError(appearanceLoadErrorMessage(err));
       });
-  }, [resolvedAuthUrl, publishableKey]);
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedAuthUrl, publishableKey, appearanceRetry]);
 
   // Inject/update favicon from server only when explicitly enabled.
   // Embedded SDK components should not overwrite the host site's favicon.
@@ -415,7 +453,10 @@ export function KovaAuthProvider({
       vars,
       oauthProviders: resolvedProviders,
       serverAppearance,
-      isAppearanceLoaded: !publishableKey || serverAppearance !== null,
+      isAppearanceLoaded:
+        !publishableKey || serverAppearance !== null || appearanceError !== null,
+      appearanceError,
+      retryAppearance,
       afterSignInUrl,
       afterSignUpUrl,
       afterSignOutUrl,
@@ -424,11 +465,7 @@ export function KovaAuthProvider({
       sessionResult,
       sessionToken:
         sessionToken ??
-        ((
-          sessionResult.data?.session as unknown as
-            | Record<string, unknown>
-            | undefined
-        )?.["token"] as string | undefined) ??
+        readAuthSessionPayload(sessionResult.data)?.session?.token ??
         null,
       clearSessionToken,
       hasBearerSession: sessionToken !== null,
@@ -441,6 +478,8 @@ export function KovaAuthProvider({
       vars,
       resolvedProviders,
       serverAppearance,
+      appearanceError,
+      retryAppearance,
       afterSignInUrl,
       afterSignUpUrl,
       afterSignOutUrl,

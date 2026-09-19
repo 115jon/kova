@@ -16,6 +16,7 @@
 import { useCallback } from "react";
 import { createKovaAuthClient } from "../client";
 import { useKovaAuth } from "../context";
+import { readAuthSessionPayload } from "../session-token";
 
 export interface UseAuthReturn {
   /** `false` until the initial session check completes (prevents flash of wrong UI). */
@@ -49,7 +50,7 @@ export function useAuth(): UseAuthReturn {
   const result = sessionResult;
 
   const isLoaded = !result.isPending;
-  const session = result.data;
+  const session = readAuthSessionPayload(result.data);
   const user = session?.user ?? null;
   const rawSession = session?.session ?? null;
   const rawSessionToken =

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { STATIC_ORIGINS } from "./middleware/cors";
 import worker, { AppCounter, createWorker } from "./index";
 
 const env = { AUTH_URL: "https://auth.lvh.me" } as Env;
@@ -25,6 +26,30 @@ describe("composed Worker boundary", () => {
 
     expect(await response.text()).toBe("hono");
     expect(await oauthResponse.text()).toBe("hono");
+  });
+
+  it("delegates OIDC discovery to Hono", async () => {
+    const composed = createWorker(handler("start"), handler("hono"));
+
+    const rooted = await composed.fetch(
+      new Request("https://auth.lvh.me/.well-known/openid-configuration"),
+      env,
+      ctx,
+    );
+    const nested = await composed.fetch(
+      new Request("https://auth.lvh.me/api/auth/.well-known/openid-configuration"),
+      env,
+      ctx,
+    );
+
+    expect(await rooted.text()).toBe("hono");
+    expect(await nested.text()).toBe("hono");
+  });
+
+  it("allows the 1:15 Forgejo origin", () => {
+    expect(STATIC_ORIGINS.has("https://git.115jon.com")).toBe(true);
+    expect(STATIC_ORIGINS.has("https://oci-a1.tail91a4f4.ts.net")).toBe(true);
+    expect(STATIC_ORIGINS.has("https://joi.tail91a4f4.ts.net:5174")).toBe(true);
   });
 
   it("delegates dashboard requests to TanStack Start", async () => {

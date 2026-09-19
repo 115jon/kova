@@ -20,6 +20,8 @@ import { Hono } from "hono";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { getApplicationByPublishableKey, isRedirectUriAllowed } from "../../applications";
 import { createAuth } from "../../auth";
+import { resolveAppScopedSession } from "../../lib/app-session";
+import { jsonForHtmlScript } from "../../lib/html";
 
 const pubAppsRouter = new Hono<{ Bindings: Env }>();
 const DEFAULT_ENABLED_PROVIDERS = ["google", "github", "discord", "microsoft"] as const;
@@ -130,7 +132,7 @@ pubAppsRouter.get("/:pk/oauth/start", async (c) => {
   const pk = c.req.param("pk");
   const provider = c.req.query("provider") ?? "";
   const redirectUri = c.req.query("redirect_uri") ?? "";
-  const errorCallbackURL = c.req.query("error_callback_url") ?? redirectUri;
+  const errorCallbackURL = c.req.query("error_callback_url") || redirectUri;
 
   const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
   if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
@@ -138,6 +140,9 @@ pubAppsRouter.get("/:pk/oauth/start", async (c) => {
   if (!provider) return Response.json({ error: "provider is required" }, { status: 400 });
   if (!redirectUri || !isRedirectUriAllowed(app, redirectUri)) {
     return Response.json({ error: "redirect_uri_not_allowed" }, { status: 400 });
+  }
+  if (!isRedirectUriAllowed(app, errorCallbackURL)) {
+    return Response.json({ error: "error_callback_url_not_allowed" }, { status: 400 });
   }
 
   const authOrigin = new URL(c.req.url).origin;
@@ -167,16 +172,16 @@ pubAppsRouter.get("/:pk/oauth/start", async (c) => {
           credentials: "same-origin",
           headers: {
             "content-type": "application/json",
-            "x-publishable-key": ${JSON.stringify(pk)},
+            "x-publishable-key": ${jsonForHtmlScript(pk)},
             "x-kova-auth-sdk": "kova-react"
           },
-          body: ${JSON.stringify(body)}
+          body: ${jsonForHtmlScript(body)}
         });
         const data = await response.json();
         if (!response.ok || !data?.url) throw new Error(data?.message || data?.error || "OAuth start failed");
         window.location.replace(data.url);
       } catch (error) {
-        const target = new URL(${JSON.stringify(errorCallbackURL)});
+        const target = new URL(${jsonForHtmlScript(errorCallbackURL)});
         target.searchParams.set("error", "oauth_start_failed");
         window.location.replace(target.toString());
       }
@@ -216,22 +221,11 @@ pubAppsRouter.post("/:pk/me", async (c) => {
 
   const { generateId } = await import("better-auth");
   const userId = sessionData.user.id;
-  const sessionId = (sessionData as { session?: { id?: string } }).session?.id;
-
-  const sessionRow = sessionId
-    ? await c.env.DB
-      .prepare("SELECT app_id FROM session WHERE id = ? LIMIT 1")
-      .bind(sessionId)
-      .first<{ app_id: string | null }>()
-      .catch(() => null)
-    : null;
-
-  if (sessionRow?.app_id && sessionRow.app_id !== app.id) {
-    return Response.json({ ok: false, reason: "wrong_app_session" });
-  }
 
   // 1. Upsert app_user — idempotent, safe to call on every mount.
   //    INSERT OR IGNORE means repeat calls after the first are no-ops.
+  //    Do not stamp app_id onto the auth-domain cookie session. That cookie
+  //    is SSO; apps mint a sibling bearer row in /session-token instead.
   const wasInserted = await c.env.DB
     .prepare("INSERT OR IGNORE INTO app_user (id, app_id, user_id, role) VALUES (?, ?, ?, 'member')")
     .bind(`apu_${generateId(12)}`, app.id, userId)
@@ -239,20 +233,7 @@ pubAppsRouter.post("/:pk/me", async (c) => {
     .then(r => r.meta.changes > 0)
     .catch(() => false);
 
-  // 2. Stamp session.app_id — only if not already set.
-  //    The OAuth callback from Google carries no X-Publishable-Key so the
-  //    session.create.after hook cannot set app_id. This is the only place
-  //    in the cross-origin SDK flow where both pk→app_id and the session
-  //    are simultaneously resolvable.
-  if (sessionId) {
-    await c.env.DB
-      .prepare("UPDATE session SET app_id = ? WHERE id = ? AND app_id IS NULL")
-      .bind(app.id, sessionId)
-      .run()
-      .catch(() => { /* best-effort — never block the page */ });
-  }
-
-  // 3. Increment APP_COUNTER DO for real-time dashboard stats.
+  // Increment APP_COUNTER DO for real-time dashboard stats.
   //    Only fires when a new app_user row was actually created (first visit),
   //    to avoid double-counting repeat mounts.
   if (wasInserted) {
@@ -271,10 +252,8 @@ pubAppsRouter.post("/:pk/me", async (c) => {
 // ── POST /:pk/session-token — mint bearer bootstrap for an existing session ──
 //
 // Direct visits to an SDK-powered app may arrive with only the auth-domain
-// session cookie available cross-site. The app can prove the user is signed in
-// via get-session, but it still needs the raw session token to authenticate its
-// own backend calls. This endpoint returns that token to an already-authenticated
-// caller after validating the publishable key and current session.
+// SSO cookie. Mint a sibling app-scoped session and return its raw token.
+// Never stamp app_id onto the cookie row — that locks the dashboard out.
 //
 // Auth: requires a valid Better Auth session cookie or bearer token.
 // CORS: enforced by upstream cors middleware against the app's allowed origins.
@@ -292,27 +271,6 @@ pubAppsRouter.post("/:pk/session-token", async (c) => {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const existingSessionId = (sessionData.session as unknown as Record<string, unknown>)["id"];
-  const row = typeof existingSessionId === "string"
-    ? await c.env.DB
-      .prepare("SELECT app_id FROM session WHERE id = ? LIMIT 1")
-      .bind(existingSessionId)
-      .first<{ app_id: string | null }>()
-      .catch(() => null)
-    : null;
-
-  if (row?.app_id && row.app_id !== app.id) {
-    return Response.json({ error: "Not authenticated" }, { status: 401 });
-  }
-
-  if (row?.app_id === null && typeof existingSessionId === "string") {
-    await c.env.DB
-      .prepare("UPDATE session SET app_id = ? WHERE id = ? AND app_id IS NULL")
-      .bind(app.id, existingSessionId)
-      .run()
-      .catch(() => { /* best-effort */ });
-  }
-
   const { generateId } = await import("better-auth");
   await c.env.DB
     .prepare("INSERT OR IGNORE INTO app_user (id, app_id, user_id, role) VALUES (?, ?, ?, 'member')")
@@ -320,30 +278,14 @@ pubAppsRouter.post("/:pk/session-token", async (c) => {
     .run()
     .catch(() => { /* best-effort */ });
 
-  const now = Date.now();
-  const sessionToken = generateId(32);
-  const sessionId = generateId();
-  const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
+  const appSession = await resolveAppScopedSession(c.env.DB, {
+    userId: sessionData.user.id,
+    appId: app.id,
+    ipAddress: c.req.header("CF-Connecting-IP") ?? null,
+    userAgent: c.req.header("User-Agent") ?? null,
+  });
 
-  await c.env.DB
-    .prepare(
-      `INSERT INTO session (id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, app_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .bind(
-      sessionId,
-      sessionData.user.id,
-      sessionToken,
-      new Date(expiresAt).toISOString(),
-      new Date(now).toISOString(),
-      new Date(now).toISOString(),
-      c.req.header("CF-Connecting-IP") ?? null,
-      c.req.header("User-Agent") ?? null,
-      app.id,
-    )
-    .run();
-
-  return Response.json({ sessionToken });
+  return Response.json({ sessionToken: appSession.token });
 });
 
 // ── POST /:pk/revoke-session — revoke the current app-scoped bearer session ──
@@ -439,7 +381,12 @@ pubAppsRouter.post("/:pk/exchange-code", async (c) => {
 
   // Validate the transfer code (single-use, pk-bound, 30s TTL)
   const { exchangeSessionTransferCode } = await import("../../lib/auth-ticket");
-  const result = await exchangeSessionTransferCode(c.env.KV, code, pk);
+  const result = await exchangeSessionTransferCode(
+    c.env.KV,
+    code,
+    pk,
+    c.req.header("Origin") ?? null,
+  );
 
   if (!result) {
     // Code expired, already used, or pk mismatch — all cases treated as invalid

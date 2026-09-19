@@ -28,7 +28,10 @@ import { Context, Hono } from "hono";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { type Application, isRedirectUriAllowed, validateSecretKey } from "../applications";
 import { createAuth } from "../auth";
+import { APP_SESSION_TTL_MS, insertAppScopedSession } from "../lib/app-session";
 import { createAuthTicket, exchangeAuthTicket } from "../lib/auth-ticket";
+import { escapeHtml, jsonForHtmlScript } from "../lib/html";
+import { findMFAEnforcedOrgBlockingUser } from "../org-settings";
 import { encodeOAuthCtx } from "./oauth-bounce";
 
 // ── Router ─────────────────────────────────────────────────────────────────────
@@ -55,15 +58,7 @@ function getHost(c: HC): string {
   return c.req.header("Host") ?? "";
 }
 
-/** Minimal HTML escape for runtime string injection into HTML. */
-function esc(s: string | null | undefined): string {
-  return (s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+const esc = escapeHtml;
 
 // ── HTML template ──────────────────────────────────────────────────────────────
 
@@ -90,7 +85,7 @@ async function buildHostedPage(opts: {
     ? `Sign in to ${esc(app.display_name ?? app.name)}`
     : `Create account — ${esc(app.display_name ?? app.name)}`;
 
-  const bootstrap = JSON.stringify({
+  const bootstrap = jsonForHtmlScript({
     publishableKey: app.publishable_key,
     // authUrl: subdomain — for session reading, sign-out, etc.
     authUrl,
@@ -346,6 +341,14 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
     );
   }
 
+  const blockingOrgId = await findMFAEnforcedOrgBlockingUser(c.env.DB, ticketResult.userId).catch(() => null);
+  if (blockingOrgId) {
+    return c.html(
+      `<p style="font-family:monospace;color:#f87171;padding:32px">Your organization requires two-factor authentication. Enable 2FA before signing in.</p>`,
+      403
+    );
+  }
+
   // Create a Better Auth instance scoped to this subdomain so the session
   // cookie is set on exactly this hostname (no Domain= attribute → RFC 6265 §5.2).
   const auth = createAuth(
@@ -363,31 +366,19 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
     const { generateId } = await import("better-auth");
     const sessionId = generateId();
     const sessionToken = generateId(32);
-    const now = Date.now();
-    const expiresAt = now + 7 * 24 * 60 * 60 * 1000; // 7 days — matches auth.ts session.expiresIn
-
-    // Insert session row directly — same schema Better Auth uses
-    await c.env.DB.prepare(
-      `INSERT INTO session (id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, app_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        sessionId,
-        ticketResult.userId,
-        sessionToken,
-        new Date(expiresAt).toISOString(),
-        new Date(now).toISOString(),
-        new Date(now).toISOString(),
-        c.req.header("CF-Connecting-IP") ?? null,
-        c.req.header("User-Agent") ?? null,
-        app.id
-      )
-      .run();
+    await insertAppScopedSession(c.env.DB, {
+      sessionId,
+      userId: ticketResult.userId,
+      token: sessionToken,
+      appId: app.id,
+      ipAddress: c.req.header("CF-Connecting-IP") ?? null,
+      userAgent: c.req.header("User-Agent") ?? null,
+    });
 
     // Better Auth session cookies are named "better-auth.session_token" and contain session.token.
     // SameSite=None; Secure; HttpOnly — matches the advanced.defaultCookieAttributes in auth.ts.
     // No Domain= attribute → cookie scoped to this exact subdomain hostname (RFC 6265 §5.2).
-    setCookieHeader = `better-auth.session_token=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${7 * 24 * 60 * 60}`;
+    setCookieHeader = `better-auth.session_token=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${Math.floor(APP_SESSION_TTL_MS / 1000)}`;
   } catch {
     // Non-fatal — user can still complete the redirect flow; they just won't
     // have a local subdomain session cookie (OAuth session on main domain is still valid).

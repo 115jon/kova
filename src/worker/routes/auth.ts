@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { getApplicationByPublishableKey, isApplicationSuspended, isOriginAllowed, isRedirectUriAllowed } from "../applications";
 import { createAuth } from "../auth";
+import { dashboardCanUseCookieSession, isSessionUnexpired, resolveAppScopedSession, sdkCookieProvesIdentity } from "../lib/app-session";
 import { withHeaders } from "../middleware/cors";
 
 const authRouter = new Hono<{ Bindings: Env }>();
@@ -56,19 +57,18 @@ authRouter.all("/*", async (c) => {
         );
       }
 
-      const now = Date.now();
       const sessionRow = await db
         .prepare(
           `SELECT id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, activeOrganizationId, app_id
            FROM session
-           WHERE token = ? AND app_id = ? AND expiresAt > ?
+           WHERE token = ? AND app_id = ?
            LIMIT 1`
         )
-        .bind(bearerToken, app.id, now)
+        .bind(bearerToken, app.id)
         .first<Record<string, unknown>>()
         .catch(() => null);
 
-      if (!sessionRow?.["userId"]) {
+      if (!sessionRow?.["userId"] || !isSessionUnexpired(sessionRow["expiresAt"])) {
         return withHeaders(Response.json(null), request, db, env.KV);
       }
 
@@ -127,10 +127,30 @@ authRouter.all("/*", async (c) => {
         );
       }
 
-      return withHeaders(Response.json(row?.app_id === app.id ? sessionData : null), request, db, env.KV);
+      if (!sdkCookieProvesIdentity(row?.app_id) || !sessionData.user?.id) {
+        return withHeaders(Response.json(null), request, db, env.KV);
+      }
+
+      const appSession = await resolveAppScopedSession(db, {
+        userId: sessionData.user.id,
+        appId: app.id,
+        ipAddress: req.header("CF-Connecting-IP") ?? null,
+        userAgent: req.header("User-Agent") ?? null,
+      });
+      return withHeaders(
+        Response.json({ session: appSession, user: sessionData.user }),
+        request,
+        db,
+        env.KV
+      );
     }
 
-    return withHeaders(Response.json(row?.app_id ? null : sessionData), request, db, env.KV);
+    return withHeaders(
+      Response.json(dashboardCanUseCookieSession(row?.app_id) ? sessionData : null),
+      request,
+      db,
+      env.KV
+    );
   }
 
   if (pk) {

@@ -151,6 +151,8 @@ export function SignUp({
     oauthProviders,
     authUrl,
     isAppearanceLoaded,
+    appearanceError,
+    retryAppearance,
   } = useKovaAuth();
   const merged = mergeAppearance(providerAppearance, instanceAppearance);
   const el = merged.elements ?? {};
@@ -179,16 +181,35 @@ export function SignUp({
           elements={el}
         />
         <CardBody elements={el}>
-          <div data-ra-element="socialButtonsRoot" style={el.socialButtonsRoot}>
-            <Skeleton height={38} />
-            <Skeleton height={38} />
-            <Skeleton height={38} />
-          </div>
-          <Divider elements={el} />
-          <Skeleton height={36} style={{ marginBottom: 14 }} />
-          <Skeleton height={36} style={{ marginBottom: 14 }} />
-          <Skeleton height={36} style={{ marginBottom: 14 }} />
-          <Skeleton height={40} />
+          {appearanceError ? (
+            <>
+              <Alert variant="error">{appearanceError}</Alert>
+              <button
+                type="button"
+                data-ra-element="formSubmitButton"
+                style={el.formSubmitButton}
+                onClick={retryAppearance}
+              >
+                Try again
+              </button>
+            </>
+          ) : (
+            <>
+              <div
+                data-ra-element="socialButtonsRoot"
+                style={el.socialButtonsRoot}
+              >
+                <Skeleton height={38} />
+                <Skeleton height={38} />
+                <Skeleton height={38} />
+              </div>
+              <Divider elements={el} />
+              <Skeleton height={36} style={{ marginBottom: 14 }} />
+              <Skeleton height={36} style={{ marginBottom: 14 }} />
+              <Skeleton height={36} style={{ marginBottom: 14 }} />
+              <Skeleton height={40} />
+            </>
+          )}
         </CardBody>
       </Card>
     );

@@ -3,7 +3,7 @@ import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
 import { APIError } from "better-auth/api";
-import { admin, bearer, genericOAuth, magicLink, multiSession, organization, twoFactor, username } from "better-auth/plugins";
+import { admin, bearer, genericOAuth, jwt, magicLink, multiSession, oidcProvider, organization, twoFactor, username } from "better-auth/plugins";
 import { logAudit } from "./audit";
 import {
   invitationEmail,
@@ -37,6 +37,29 @@ import { deliverEvent } from "./webhook";
  *   withCloudflare sets `database` internally from d1Native — don't
  *   set it again in the second arg or it will conflict.
  */
+const FORGEJO_OIDC_REDIRECTS = [
+  "https://git.115jon.com/user/oauth2/kova/callback",
+  "https://oci-a1.tail91a4f4.ts.net/git/user/oauth2/kova/callback",
+];
+
+function forgejoOidcClient(env: Env) {
+  const clientId = env.FORGEJO_OIDC_CLIENT_ID?.trim();
+  const clientSecret = env.FORGEJO_OIDC_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) return [];
+  return [
+    {
+      clientId,
+      clientSecret,
+      name: "1:15",
+      type: "web" as const,
+      redirectUrls: [...FORGEJO_OIDC_REDIRECTS],
+      disabled: false,
+      skipConsent: true,
+      metadata: { product: "forgejo" },
+    },
+  ];
+}
+
 export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Request, baseURLOverride?: string) {
   return betterAuth(
     withCloudflare(
@@ -178,15 +201,18 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
           },
         },
 
-        // ── Email + Password ──────────────────────────────────────
-        emailAndPassword: {
-          enabled: true,
-          requireEmailVerification: true,
-
+        emailVerification: {
           sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }) => {
             const { subject, html } = verificationEmail(url);
             await sendEmail({ to: user.email, subject, html, apiKey: env.RESEND_API_KEY });
           },
+        },
+
+        // ── Email + Password ──────────────────────────────────────
+        emailAndPassword: {
+          enabled: true,
+          requireEmailVerification: true,
+          minPasswordLength: 12,
 
           sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
             const { subject, html } = resetPasswordEmail(url);
@@ -369,12 +395,8 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
                     .run()
                     .catch(() => { });
 
-                  // 2. Stamp session with app_id for per-app analytics
-                  env.DB.prepare(
-                    `UPDATE session SET app_id = ? WHERE id = ?`
-                  ).bind(appId, session.id)
-                    .run()
-                    .catch(() => { });
+                  // Do not stamp app_id onto this session. The auth-domain cookie
+                  // is SSO; SDK apps mint a sibling bearer row instead.
 
                   // 3. Increment AppCounter DO — atomic, no D1 COUNT(*) needed
                   try {
@@ -605,6 +627,32 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
           // unless explicitly configured.
           genericOAuth({
             config: [],
+          }),
+
+          jwt({
+            disableSettingJwtHeader: true,
+            jwks: {
+              keyPairConfig: { alg: "RS256" },
+            },
+            jwt: {
+              issuer: `${String(env.AUTH_URL ?? "").replace(/\/$/, "")}/api/auth`,
+            },
+          }),
+
+          oidcProvider({
+            loginPage: "/sign-in",
+            allowDynamicClientRegistration: false,
+            requirePKCE: false,
+            allowPlainCodeChallengeMethod: true,
+            useJWTPlugin: true,
+            trustedClients: forgejoOidcClient(env),
+            getAdditionalUserInfoClaim: (user) => {
+              const username =
+                typeof user.username === "string" && user.username.trim()
+                  ? user.username.trim()
+                  : user.email.split("@")[0] ?? user.id;
+              return { preferred_username: username };
+            },
           }),
         ],
 

@@ -14,6 +14,7 @@
  */
 
 import { useKovaAuth } from "../context";
+import { readAuthSessionPayload } from "../session-token";
 import type { KovaSession, KovaUser, UseSessionReturn } from "../types";
 
 export function useSession(): UseSessionReturn {
@@ -25,12 +26,13 @@ export function useSession(): UseSessionReturn {
   const result = sessionResult;
 
   const isLoaded = !result.isPending;
-  const isSignedIn = !!result.data?.user && !result.error;
+  const payload = readAuthSessionPayload(result.data);
+  const isSignedIn = !!payload?.user && !result.error;
 
-  const session = result.data
+  const session = payload
     ? {
-        user: result.data.user as unknown as KovaUser,
-        session: result.data.session as unknown as KovaSession,
+        user: payload.user as unknown as KovaUser,
+        session: payload.session as unknown as KovaSession,
       }
     : null;
 

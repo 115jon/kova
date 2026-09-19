@@ -63,7 +63,8 @@ export type { UseRateLimitReturn } from "./hooks/use-rate-limit";
 /**
  * Low-level context access — prefer the purpose-built hooks above.
  */
-export { useKovaAuth } from "./context";
+export { appearanceLoadErrorMessage, useKovaAuth } from "./context";
+export type { KovaAuthContextValue, ServerAppearance } from "./context";
 
 // ── Client factory ────────────────────────────────────────────────────────────
 export { createKovaAuthClient } from "./client";
