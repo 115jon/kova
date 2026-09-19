@@ -7,7 +7,7 @@ import {
   isRedirectUriAllowed,
   type Application,
 } from "./applications";
-import { shouldServeDashboardAssetOrRoute } from "./index";
+import { isDashboardHost, shouldServeDashboardAssetOrRoute } from "./index";
 import { encodeOAuthCtx, decodeOAuthCtx } from "./routes/oauth-bounce";
 import { verifyStripeWebhookSignature } from "./lib/stripe-webhook";
 
@@ -179,5 +179,24 @@ describe("dashboard fallback routing", () => {
     expect(shouldServeDashboardAssetOrRoute("/wp-includes/wlwmanifest.xml")).toBe(false);
     expect(shouldServeDashboardAssetOrRoute("/xmlrpc.php")).toBe(false);
     expect(shouldServeDashboardAssetOrRoute("/%22/assets/index.js%22")).toBe(false);
+    expect(shouldServeDashboardAssetOrRoute("/src/main.tsx")).toBe(false);
+  });
+
+  it("serves Vite development modules only when explicitly enabled", () => {
+    expect(shouldServeDashboardAssetOrRoute("/src/main.tsx", true)).toBe(true);
+    expect(shouldServeDashboardAssetOrRoute("/@vite/client", true)).toBe(true);
+    expect(shouldServeDashboardAssetOrRoute("/node_modules/.vite/deps/react.js", true)).toBe(true);
+  });
+});
+
+describe("dashboard host routing", () => {
+  it("treats loopback dev hosts as the dashboard root", () => {
+    expect(isDashboardHost("localhost:5174", "auth.lvh.me")).toBe(true);
+    expect(isDashboardHost("127.0.0.1:5174", "auth.lvh.me")).toBe(true);
+    expect(isDashboardHost("[::1]:5174", "auth.lvh.me")).toBe(true);
+  });
+
+  it("keeps unknown non-loopback hosts on application resolution", () => {
+    expect(isDashboardHost("unknown.auth.lvh.me", "auth.lvh.me")).toBe(false);
   });
 });

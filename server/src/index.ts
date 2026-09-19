@@ -1,4 +1,4 @@
-﻿﻿// ============================================================================
+﻿// ============================================================================
 // Kova Auth — Cloudflare Worker Entry
 //
 // Routes:
@@ -70,7 +70,37 @@ function hasDashboardPrefix(path: string, prefix: string) {
   return path === prefix || path.startsWith(`${prefix}/`);
 }
 
-export function shouldServeDashboardAssetOrRoute(path: string) {
+function normalizeHost(host: string) {
+  try {
+    return new URL(`http://${host}`).hostname.replace(/^\[|\]$/g, "");
+  } catch {
+    return null;
+  }
+}
+
+export function isDashboardHost(host: string, baseHost: string) {
+  const normalizedHost = normalizeHost(host);
+  if (!normalizedHost) return false;
+
+  return normalizedHost === baseHost || ["localhost", "127.0.0.1", "::1"].includes(normalizedHost);
+}
+
+function canServeViteDevAssets(host: string, baseHost: string) {
+  const normalizedHost = normalizeHost(host);
+  return normalizedHost !== null
+    && (["localhost", "127.0.0.1", "::1"].includes(normalizedHost)
+      || baseHost.endsWith(".lvh.me")
+      || baseHost.endsWith(".localhost"));
+}
+
+export function shouldServeDashboardAssetOrRoute(path: string, includeViteDevAssets = false) {
+  // Vite development modules are requested through the Worker-first dev server
+  // before Vite can transform them. Keep these narrow prefixes out of the 404.
+  if (includeViteDevAssets) {
+    if (path.startsWith("/@")) return true;
+    if (path.startsWith("/src/")) return true;
+    if (path.startsWith("/node_modules/.vite/")) return true;
+  }
   if (path.startsWith("/assets/")) return true;
   if (path === "/favicon.svg" || path === "/_headers") return true;
   if (DASHBOARD_ROUTES.has(path)) return true;
@@ -116,7 +146,7 @@ app.use("*", async (c, next) => {
   const host = c.req.header("Host") ?? "";
 
   // Root domain requests — fall through to normal routing
-  if (!host || host === baseHost) return next();
+  if (!host || isDashboardHost(host, baseHost)) return next();
 
   // Subdomain or custom domain — resolve the owning application
   const ctx = await resolveAppByHost(c.req.raw, c.env.DB, c.env.KV, baseHost);
@@ -179,7 +209,15 @@ app.get("/api/avatar/*", (c) => {
 // would turn them into index.html 200s instead of real 404s.
 // Requires [assets] binding = "ASSETS" + run_worker_first = true in wrangler.toml.
 app.notFound((c) => {
-  if (shouldServeDashboardAssetOrRoute(c.req.path)) {
+  let authBaseHost = "";
+  try {
+    authBaseHost = c.env.AUTH_URL ? new URL(c.env.AUTH_URL).hostname : "";
+  } catch {
+    // The auth middleware already logs malformed AUTH_URL values; keep the
+    // fallback a normal 404 instead of turning this path into a worker error.
+  }
+  const includeViteDevAssets = canServeViteDevAssets(c.req.header("Host") ?? "", authBaseHost);
+  if (shouldServeDashboardAssetOrRoute(c.req.path, includeViteDevAssets)) {
     return c.env.ASSETS.fetch(c.req.raw);
   }
 

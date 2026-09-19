@@ -8,6 +8,8 @@
   },
   "scripts": {
     "dev": "pnpm --filter dashboard run dev",
+    "dev:preview": "pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Mode preview",
+    "dev:local": "pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Mode full",
     "build": "pnpm --filter dashboard run build && pnpm --filter @115jon/kova-react run build",
     "typecheck": "pnpm --filter server run typecheck && pnpm --filter @115jon/kova-react run typecheck",
     "test": "pnpm --filter server run test",
