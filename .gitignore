@@ -1,8 +1,8 @@
 node_modules/
 dist/
-dashboard/dist/
-server/dist/
 .wrangler/
+.output/
+.tanstack/
 *.tsbuildinfo
 .env
 .env.*

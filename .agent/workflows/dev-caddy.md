@@ -21,7 +21,7 @@ mirror of the production `*.auth.115jon.site` setup.
 ## Prerequisites (already done)
 
 - Caddy installed via `scoop install caddy` ✅
-- `AUTH_URL=https://auth.lvh.me` set in `server/.dev.vars` ✅
+- `AUTH_URL=https://auth.lvh.me` set in the root `.dev.vars` ✅
 - Caddy running and CA installed into Windows trust store ✅
 
 ## Google OAuth Console setup (one-time)

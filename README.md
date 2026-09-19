@@ -22,7 +22,7 @@ Unlike legacy monolithic auth platforms, Kova runs completely on the Cloudflare 
 *   **Runtime:** [Cloudflare Workers](https://workers.cloudflare.com/) (Edge V8)
 *   **Router:** [Hono](https://hono.dev/) (Lightweight, robust web framework)
 *   **Database:** [Cloudflare D1](https://developers.cloudflare.com/d1/) (Serverless SQL/SQLite at the edge)
-*   **Frontend Dashboard:** [React 19](https://react.dev/), [Vite](https://vite.dev/), [TanStack Router](https://tanstack.com/router)
+*   **Frontend Dashboard:** [React 19](https://react.dev/), [TanStack Start](https://tanstack.com/start), and [TanStack Router](https://tanstack.com/router) on Vite
 *   **SDK Bundler:** [tsup](https://tsup.egoist.dev/) (TypeScript build tool)
 *   **Package Manager:** [pnpm](https://pnpm.io/) (Monorepo workspaces)
 *   **Local Dev Proxy:** [Caddy](https://caddyserver.com/) (Optional for loopback preview; required for wildcard HTTPS subdomains and OAuth)
@@ -32,19 +32,19 @@ Unlike legacy monolithic auth platforms, Kova runs completely on the Cloudflare 
 ## 📂 Architecture & Directory Structure
 
 ```text
-├── dashboard/                 # React Vite SPA (Vite + TanStack Router)
-│   ├── src/
+├── src/
+│   ├── web/                   # TanStack Start React application
 │   │   ├── components/        # Premium UI & Kova Brand Emblem Components
 │   │   ├── hooks/             # Custom queries and API hooks (TanStack Query)
-│   │   ├── routes/            # Dynamic SPA route hierarchy
+│   │   ├── routes/            # File-based TanStack route hierarchy
 │   │   └── styles.css         # Shared dashboard and landing-page styling tokens
-│   ├── wrangler.toml          # Cloudflare Pages / Workers static asset config
-├── server/                    # Hono-based Backend Worker
-│   ├── src/
+│   └── worker/                # Hono-based Cloudflare Worker
 │   │   ├── routes/            # Modular route controllers (admin, auth, org, webhooks)
-│   │   ├── migrations/        # D1 Database SQL Migrations
 │   │   └── index.ts           # Worker Entrypoint
-│   ├── wrangler.toml          # Worker and Database Binding Configuration
+├── migrations/                # D1 Database SQL Migrations
+├── src/router.tsx             # TanStack Start router factory
+├── vite.config.ts             # Root Vite and Cloudflare integration
+├── wrangler.toml              # Worker and database binding configuration
 ├── packages/
 │   └── kova-react/            # Developer React SDK (with Client-side auth wrappers)
 └── examples/
@@ -58,7 +58,7 @@ Unlike legacy monolithic auth platforms, Kova runs completely on the Cloudflare 
 ### 1. Prerequisites
 
 Before setting up Kova locally, ensure you have:
-*   [Node.js](https://nodejs.org/) v20 or higher
+*   [Node.js](https://nodejs.org/) v22.12 or higher
 *   [pnpm](https://pnpm.io/) (Recommended)
 *   [Caddy Server](https://caddyserver.com/) (Required for local SSL wildcard subdomains and OAuth)
 *   [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) (included in the workspace dependencies)
@@ -94,10 +94,10 @@ The landing page can also be previewed directly at `http://localhost:5174/`. The
 
 ### 5. Environment Variables Setup
 
-Create a `.dev.vars` file inside the `dashboard/` directory and configure your client keys (Google, GitHub, Discord, Resend):
+Create a `.dev.vars` file at the repository root and configure your client keys (Google, GitHub, Discord, Resend):
 
 ```ini
-# dashboard/.dev.vars
+# .dev.vars
 BETTER_AUTH_SECRET=change-me-to-a-random-32-char-string!!
 AUTH_URL=https://auth.lvh.me
 DASHBOARD_URL=https://auth.lvh.me
@@ -115,13 +115,13 @@ DASHBOARD_ADMIN_EMAIL=your-email@example.com
 
 ### 6. Run the Development Environment
 
-Start the combined dashboard and Worker dev server:
+Start the combined web and Worker dev server:
 
 ```bash
-pnpm --filter dashboard run dev
+pnpm dev
 ```
 
-The root shortcut `pnpm dev` runs the same dashboard dev server. For a guided Windows workflow with prerequisite checks, port protection, optional browser opening, and Caddy management, use:
+For a guided Windows workflow with prerequisite checks, port protection, optional browser opening, and Caddy management, use:
 
 ```powershell
 pnpm dev:local
@@ -156,12 +156,12 @@ All workspace scripts are orchestrated from the root:
 | `pnpm dev` | Root | Starts the dashboard Vite + Cloudflare Worker dev server |
 | `pnpm dev:preview` | Root | Runs `scripts/dev.ps1` in loopback-only preview mode |
 | `pnpm dev:local` | Root | Runs `scripts/dev.ps1` with Caddy and full local auth routing |
-| `pnpm --filter dashboard run dev` | Dashboard | Starts the dashboard Vite + Cloudflare Worker dev server on port `5174` |
+| `pnpm preview` | Root | Previews the built Vite application |
 | `caddy start --config Caddyfile` | Root | Starts the HTTPS proxy for `auth.lvh.me` and wildcard app subdomains |
-| `pnpm build` | Root | Compiles packages, bundles React SDK, and builds Vite client |
+| `pnpm build` | Root | Builds the TanStack Start Worker application and React SDK |
 | `pnpm migrate:dev` | Root | Applies D1 migrations locally |
 | `pnpm migrate:prod` | Root | Applies D1 migrations remotely |
-| `pnpm run deploy` | Root | Builds and deploys Workers and Pages to Cloudflare |
+| `pnpm run deploy` | Root | Builds and deploys the single Cloudflare Worker |
 
 ---
 
@@ -173,7 +173,7 @@ Deploying Kova globally to Cloudflare takes just two commands:
    ```bash
    wrangler d1 create kova-auth-db
    ```
-2. Bind the new database ID to `server/wrangler.toml`.
+2. Bind the new database ID to `wrangler.toml`.
 3. Deploy the application:
    ```bash
    pnpm run deploy

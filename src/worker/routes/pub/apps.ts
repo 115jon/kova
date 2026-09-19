@@ -1,0 +1,455 @@
+/**
+ * routes/pub/apps.ts — Public (no-auth) per-application metadata endpoints.
+ *
+ * These routes are intended for the SDK to fetch at load time. All responses
+ * are KV-cached to minimise D1 reads.
+ *
+ * Routes:
+ *   GET /api/pub/apps/:publishableKey/appearance
+ *     → Returns branding/theme payload for the SDK sign-in card.
+ *     → KV cache key: `appearance:{publishableKey}` (TTL: 300 s / 5 min)
+ *     → No authentication required — the publishable key IS the identifier.
+ *
+ *   GET /api/pub/apps/:publishableKey/plan
+ *     → Returns plan name + allowed features for operator-side feature gating.
+ *     → Requires X-Secret-Key header matching the application's secret key.
+ *     → KV cache key: `plan:{appId}` (TTL: 60 s)
+ */
+
+import { Hono } from "hono";
+import type { KVNamespace } from "@cloudflare/workers-types";
+import { getApplicationByPublishableKey, isRedirectUriAllowed } from "../../applications";
+import { createAuth } from "../../auth";
+
+const pubAppsRouter = new Hono<{ Bindings: Env }>();
+const DEFAULT_ENABLED_PROVIDERS = ["google", "github", "discord", "microsoft"] as const;
+
+// ── GET /:pk/appearance ───────────────────────────────────────────────────────
+
+pubAppsRouter.get("/:pk/appearance", async (c) => {
+  const pk = c.req.param("pk");
+
+  // ── 1. KV cache ──────────────────────────────────────────────────────────
+  const cacheKey = `appearance:${pk}`;
+  const cached = await c.env.KV.get(cacheKey).catch(() => null);
+  if (cached) {
+    return new Response(cached, {
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        "X-Appearance-Source": "kv-cache",
+      },
+    });
+  }
+
+  // ── 2. D1 lookup ─────────────────────────────────────────────────────────
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+
+  if (!app) {
+    return Response.json({ error: "Application not found" }, { status: 404 });
+  }
+
+  // Check if app is suspended
+  if (app.suspended_at) {
+    return Response.json(
+      { error: "Application suspended" },
+      { status: 403 }
+    );
+  }
+
+  const enabledProviderRows = await c.env.DB
+    .prepare("SELECT provider, enabled FROM app_oauth_provider WHERE app_id = ?")
+    .bind(app.id)
+    .all<{ provider: string; enabled: number }>()
+    .then(r => r.results)
+    .catch(() => [] as { provider: string; enabled: number }[]);
+  const enabledProviders = enabledProviderRows.length > 0
+    ? enabledProviderRows.filter(row => row.enabled).map(row => row.provider)
+    : [...DEFAULT_ENABLED_PROVIDERS];
+
+  const payload = {
+    displayName: app.display_name ?? app.name,
+    logoUrl: app.logo_url,
+    faviconUrl: app.favicon_url,
+    primaryColor: app.primary_color,
+    backgroundColor: app.background_color,
+    theme: app.theme,
+    homeUrl: app.home_url,
+    termsUrl: app.terms_url,
+    privacyUrl: app.privacy_url,
+    // The admin dashboard enforces plan/admin policy before persisting this flag.
+    // Public consumers should reflect the saved application setting exactly.
+    hideBranding: !!(app.hide_branding),
+    // Enabled OAuth providers, matching the admin dashboard's no-rows default.
+    // Apple/Facebook stay off until explicitly enabled after credentials exist.
+    enabledProviders,
+  };
+
+  const json = JSON.stringify(payload);
+
+  // ── 3. Populate KV cache (fire-and-forget, 5-min TTL) ────────────────────
+  c.env.KV.put(cacheKey, json, { expirationTtl: 300 }).catch(() => { });
+
+  return new Response(json, {
+    headers: {
+      "Content-Type": "application/json",
+      // No client/CDN caching — KV is the correct cache layer (server-side, 5-min TTL,
+      // invalidated immediately when the operator saves new branding in the dashboard).
+      "Cache-Control": "no-store",
+      "X-Appearance-Source": "d1",
+    },
+  });
+});
+
+// ── GET /:pk/plan — feature flags for operator use ────────────────────────────
+
+pubAppsRouter.get("/:pk/plan", async (c) => {
+  const pk = c.req.param("pk");
+
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+  if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+
+  // Plan feature lookup (from plan-limits)
+  const { PLAN_LIMITS } = await import("../../lib/plan-limits");
+  const plan = app.plan ?? "free";
+  const limits = PLAN_LIMITS[plan as keyof typeof PLAN_LIMITS];
+
+  return Response.json({
+    plan,
+    features: limits.features,
+    limits: {
+      users: limits.users,
+      orgs: limits.orgs,
+    },
+    expiresAt: app.plan_expires_at,
+  });
+});
+
+pubAppsRouter.get("/:pk/oauth/start", async (c) => {
+  const pk = c.req.param("pk");
+  const provider = c.req.query("provider") ?? "";
+  const redirectUri = c.req.query("redirect_uri") ?? "";
+  const errorCallbackURL = c.req.query("error_callback_url") ?? redirectUri;
+
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+  if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+  if (!provider) return Response.json({ error: "provider is required" }, { status: 400 });
+  if (!redirectUri || !isRedirectUriAllowed(app, redirectUri)) {
+    return Response.json({ error: "redirect_uri_not_allowed" }, { status: 400 });
+  }
+
+  const authOrigin = new URL(c.req.url).origin;
+  const bounceUrl = new URL(`${authOrigin}/api/hosted/oauth-complete`);
+  bounceUrl.searchParams.set("mode", "sdk");
+  bounceUrl.searchParams.set("pk", pk);
+  bounceUrl.searchParams.set("redirect_uri", redirectUri);
+
+  const body = JSON.stringify({
+    provider,
+    callbackURL: bounceUrl.toString(),
+  });
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Redirecting...</title>
+</head>
+<body>
+  <script>
+    (async () => {
+      try {
+        const response = await fetch("/api/auth/sign-in/social", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "content-type": "application/json",
+            "x-publishable-key": ${JSON.stringify(pk)},
+            "x-kova-auth-sdk": "kova-react"
+          },
+          body: ${JSON.stringify(body)}
+        });
+        const data = await response.json();
+        if (!response.ok || !data?.url) throw new Error(data?.message || data?.error || "OAuth start failed");
+        window.location.replace(data.url);
+      } catch (error) {
+        const target = new URL(${JSON.stringify(errorCallbackURL)});
+        target.searchParams.set("error", "oauth_start_failed");
+        window.location.replace(target.toString());
+      }
+    })();
+  </script>
+</body>
+</html>`;
+
+  return c.html(html);
+});
+
+// ── POST /:pk/me — register existing session into app_user ───────────────────
+//
+// Called by the SDK on mount when a session already exists.  If a user was
+// previously signed into the platform and visits an SDK-powered app without
+// signing out, the databaseHooks session.create.after won't fire again.
+// This endpoint is the fallback: it upserts app_user idempotently.
+//
+// Auth: requires a valid session cookie (Better Auth standard).
+// No admin required — this is a per-app self-registration endpoint.
+
+pubAppsRouter.post("/:pk/me", async (c) => {
+  const pk = c.req.param("pk");
+
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+  if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+
+  // Resolve the current session using the same Better Auth instance as auth.ts.
+  // This correctly reads HttpOnly session cookies regardless of name/prefix.
+  const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
+  const sessionData = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+
+  if (!sessionData?.user?.id) {
+    return Response.json({ ok: false, reason: "no_session" });
+  }
+
+  const { generateId } = await import("better-auth");
+  const userId = sessionData.user.id;
+  const sessionId = (sessionData as { session?: { id?: string } }).session?.id;
+
+  const sessionRow = sessionId
+    ? await c.env.DB
+      .prepare("SELECT app_id FROM session WHERE id = ? LIMIT 1")
+      .bind(sessionId)
+      .first<{ app_id: string | null }>()
+      .catch(() => null)
+    : null;
+
+  if (sessionRow?.app_id && sessionRow.app_id !== app.id) {
+    return Response.json({ ok: false, reason: "wrong_app_session" });
+  }
+
+  // 1. Upsert app_user — idempotent, safe to call on every mount.
+  //    INSERT OR IGNORE means repeat calls after the first are no-ops.
+  const wasInserted = await c.env.DB
+    .prepare("INSERT OR IGNORE INTO app_user (id, app_id, user_id, role) VALUES (?, ?, ?, 'member')")
+    .bind(`apu_${generateId(12)}`, app.id, userId)
+    .run()
+    .then(r => r.meta.changes > 0)
+    .catch(() => false);
+
+  // 2. Stamp session.app_id — only if not already set.
+  //    The OAuth callback from Google carries no X-Publishable-Key so the
+  //    session.create.after hook cannot set app_id. This is the only place
+  //    in the cross-origin SDK flow where both pk→app_id and the session
+  //    are simultaneously resolvable.
+  if (sessionId) {
+    await c.env.DB
+      .prepare("UPDATE session SET app_id = ? WHERE id = ? AND app_id IS NULL")
+      .bind(app.id, sessionId)
+      .run()
+      .catch(() => { /* best-effort — never block the page */ });
+  }
+
+  // 3. Increment APP_COUNTER DO for real-time dashboard stats.
+  //    Only fires when a new app_user row was actually created (first visit),
+  //    to avoid double-counting repeat mounts.
+  if (wasInserted) {
+    try {
+      const doId = c.env.APP_COUNTER.idFromName(app.id);
+      c.env.APP_COUNTER.get(doId).fetch("https://do/increment", {
+        method: "POST",
+        body: JSON.stringify({ users: 1 }),
+      }).catch(() => { /* DO not available in local dev without --remote */ });
+    } catch { /* ignore — DO binding missing */ }
+  }
+
+  return Response.json({ ok: true, userId });
+});
+
+// ── POST /:pk/session-token — mint bearer bootstrap for an existing session ──
+//
+// Direct visits to an SDK-powered app may arrive with only the auth-domain
+// session cookie available cross-site. The app can prove the user is signed in
+// via get-session, but it still needs the raw session token to authenticate its
+// own backend calls. This endpoint returns that token to an already-authenticated
+// caller after validating the publishable key and current session.
+//
+// Auth: requires a valid Better Auth session cookie or bearer token.
+// CORS: enforced by upstream cors middleware against the app's allowed origins.
+
+pubAppsRouter.post("/:pk/session-token", async (c) => {
+  const pk = c.req.param("pk");
+
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+  if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+
+  const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
+  const sessionData = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+  if (!sessionData?.user?.id || !sessionData?.session) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const existingSessionId = (sessionData.session as unknown as Record<string, unknown>)["id"];
+  const row = typeof existingSessionId === "string"
+    ? await c.env.DB
+      .prepare("SELECT app_id FROM session WHERE id = ? LIMIT 1")
+      .bind(existingSessionId)
+      .first<{ app_id: string | null }>()
+      .catch(() => null)
+    : null;
+
+  if (row?.app_id && row.app_id !== app.id) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  if (row?.app_id === null && typeof existingSessionId === "string") {
+    await c.env.DB
+      .prepare("UPDATE session SET app_id = ? WHERE id = ? AND app_id IS NULL")
+      .bind(app.id, existingSessionId)
+      .run()
+      .catch(() => { /* best-effort */ });
+  }
+
+  const { generateId } = await import("better-auth");
+  await c.env.DB
+    .prepare("INSERT OR IGNORE INTO app_user (id, app_id, user_id, role) VALUES (?, ?, ?, 'member')")
+    .bind(`apu_${generateId(12)}`, app.id, sessionData.user.id)
+    .run()
+    .catch(() => { /* best-effort */ });
+
+  const now = Date.now();
+  const sessionToken = generateId(32);
+  const sessionId = generateId();
+  const expiresAt = now + 7 * 24 * 60 * 60 * 1000;
+
+  await c.env.DB
+    .prepare(
+      `INSERT INTO session (id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, app_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .bind(
+      sessionId,
+      sessionData.user.id,
+      sessionToken,
+      new Date(expiresAt).toISOString(),
+      new Date(now).toISOString(),
+      new Date(now).toISOString(),
+      c.req.header("CF-Connecting-IP") ?? null,
+      c.req.header("User-Agent") ?? null,
+      app.id,
+    )
+    .run();
+
+  return Response.json({ sessionToken });
+});
+
+// ── POST /:pk/revoke-session — revoke the current app-scoped bearer session ──
+//
+// SDK apps use bearer sessions so sign-out can be isolated from the platform
+// dashboard session. Better Auth's multi-session revoke endpoint only revokes
+// signed multi-session cookies, so bearer sessions need this app-scoped path.
+pubAppsRouter.post("/:pk/revoke-session", async (c) => {
+  const pk = c.req.param("pk");
+
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+  if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+
+  const bearerToken = c.req.header("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  if (bearerToken) {
+    await c.env.DB
+      .prepare("DELETE FROM session WHERE token = ? AND app_id = ?")
+      .bind(bearerToken, app.id)
+      .run()
+      .catch(() => { });
+
+    return Response.json({ ok: true });
+  }
+
+  const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
+  const sessionData = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+  const sessionId = (sessionData?.session as unknown as Record<string, unknown> | undefined)?.["id"];
+  const sessionToken = (sessionData?.session as unknown as Record<string, unknown> | undefined)?.["token"];
+
+  if (typeof sessionId !== "string" || typeof sessionToken !== "string") {
+    return Response.json({ ok: true });
+  }
+
+  const row = await c.env.DB
+    .prepare("SELECT app_id FROM session WHERE id = ? LIMIT 1")
+    .bind(sessionId)
+    .first<{ app_id: string | null }>()
+    .catch(() => null);
+
+  if (row?.app_id !== app.id) {
+    return Response.json({ ok: true });
+  }
+
+  await c.env.DB
+    .prepare("DELETE FROM session WHERE id = ? AND token = ? AND app_id = ?")
+    .bind(sessionId, sessionToken, app.id)
+    .run()
+    .catch(() => { });
+
+  return Response.json({ ok: true });
+});
+
+// ── POST /:pk/exchange-code — transfer code → session token ───────────────────
+//
+// Called by the SDK immediately after landing back at the consumer app from the
+// oauth-complete bounce (mode=sdk).  The SDK passes the `kova_auth_code` that
+// was appended to the redirect URI.  The server:
+//   1. Verifies the code exists in KV, was created for this pk, and is < 30s old.
+//   2. Deletes the code (single-use).
+//   3. Returns the raw session token.
+//
+// The SDK stores the token in memory (React state) and injects it as
+// `Authorization: Bearer <token>` on all requests to the auth server.  Better Auth
+// validates Bearer tokens against its D1 sessions table — same code path as the
+// HttpOnly cookie, without requiring cross-site cookie support in the browser.
+//
+// Security:
+//   - No secret key required (equivalent security via code's TTL/binding/single-use).
+//   - The transfer code has 256-bit entropy — not brute-forceable in 30s.
+//   - CORS is enforced by the upstream corsMiddleware (origin must be in allowed_origins).
+//   - The session token IS the raw cookie value; once returned, it has the same
+//     lifetime as any other Better Auth session (default: 7 days with cookieCache).
+
+pubAppsRouter.post("/:pk/exchange-code", async (c) => {
+  const pk = c.req.param("pk");
+
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+  if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+
+  let body: { code?: string };
+  try {
+    body = (await c.req.json()) as { code?: string };
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const code = typeof body.code === "string" ? body.code.trim() : "";
+  if (!code) {
+    return Response.json({ error: "code is required" }, { status: 400 });
+  }
+
+  // Validate the transfer code (single-use, pk-bound, 30s TTL)
+  const { exchangeSessionTransferCode } = await import("../../lib/auth-ticket");
+  const result = await exchangeSessionTransferCode(c.env.KV, code, pk);
+
+  if (!result) {
+    // Code expired, already used, or pk mismatch — all cases treated as invalid
+    return Response.json(
+      { error: "invalid_code", message: "The transfer code is invalid, expired, or already used." },
+      { status: 401 }
+    );
+  }
+
+  return Response.json({ sessionToken: result.sessionToken });
+});
+
+export { pubAppsRouter };

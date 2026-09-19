@@ -70,7 +70,7 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Caddyfile = Join-Path $RepoRoot "Caddyfile"
-$DevVars = Join-Path $RepoRoot "dashboard\.dev.vars"
+$DevVars = Join-Path $RepoRoot ".dev.vars"
 $DashboardUrl = "http://localhost:$Port/"
 $AuthUrl = "https://auth.lvh.me/"
 
@@ -151,12 +151,12 @@ function Assert-LocalConfiguration {
     }
 
     if (-not (Test-Path -LiteralPath $DevVars)) {
-        throw "dashboard/.dev.vars was not found. Create it before starting the Worker dev server."
+        throw ".dev.vars was not found at the repository root. Create it before starting the Worker dev server."
     }
 
     $authUrl = Get-DevVar -Path $DevVars -Name "AUTH_URL"
     if ([string]::IsNullOrWhiteSpace($authUrl)) {
-        throw "dashboard/.dev.vars must define AUTH_URL."
+        throw ".dev.vars must define AUTH_URL."
     }
 
     if ($Mode -eq "full" -and $authUrl -ne $AuthUrl.TrimEnd("/")) {
@@ -236,7 +236,6 @@ if ($Mode -eq "full") {
 $targetUrl = if ($Mode -eq "full" -and -not $SkipCaddy) { $AuthUrl } else { $DashboardUrl }
 $pnpm = (Get-Command pnpm).Source
 $arguments = @(
-    "--filter", "dashboard",
     "run", "dev",
     "--host", "localhost",
     "--port", $Port.ToString()
