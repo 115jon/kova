@@ -24,14 +24,14 @@
     "dev:local": "pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Mode full",
     "build": "vite build && pnpm run build:sdk",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit && pnpm --filter @kova/react run typecheck",
+    "typecheck": "tsc --noEmit && pnpm --filter @115jon/kova-react run typecheck",
     "test": "vitest run",
     "deploy": "pnpm build && wrangler deploy",
     "migrate:dev": "wrangler d1 migrations apply kova-auth-db --local",
     "migrate:prod": "wrangler d1 migrations apply kova-auth-db --remote",
     "cf-typegen": "wrangler types",
     "generate": "better-auth generate --output migrations",
-    "build:sdk": "pnpm --filter @kova/react run build",
+    "build:sdk": "pnpm --filter @115jon/kova-react run build",
     "deploy:sdk-demo": "pnpm --filter @kova/sdk-demo run deploy"
   },
   "dependencies": {
