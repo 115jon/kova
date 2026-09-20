@@ -1,8 +1,17 @@
+const APPROVE_PATH = /^\/approve\/dc_[A-Za-z0-9_-]+$/;
+
 export type SignInRouteSearch = {
   pk?: string;
   redirect_url?: string;
   native_handoff?: string;
 };
+
+export function safeApproveReturnPath(redirectUrl: string | undefined): string | null {
+  if (!redirectUrl) return null;
+  const trimmed = redirectUrl.trim();
+  if (!APPROVE_PATH.test(trimmed)) return null;
+  return trimmed;
+}
 
 export function buildNativeHandoffPath(
   search: SignInRouteSearch,

@@ -50,7 +50,8 @@ type AuditAction =
   | "org.created" | "org.updated" | "org.deleted"
   | "member.invited" | "member.joined" | "member.removed" | "member.roleChanged"
   | "admin.userBanned" | "admin.userUnbanned" | "admin.userDeleted"
-  | "admin.roleChanged" | "admin.passwordReset";
+  | "admin.roleChanged" | "admin.passwordReset"
+  | "device.approved";
 
 // ── Event catalogue ──────────────────────────────────────────────────────────
 
@@ -74,6 +75,7 @@ const EVENT_CATALOG: EventDef[] = [
   { action: "twoFactor.enabled", label: "2FA enabled", description: "Two-factor authentication was switched on.", category: "2fa" },
   { action: "twoFactor.disabled", label: "2FA disabled", description: "Two-factor authentication was switched off.", category: "2fa" },
   { action: "twoFactor.challengePassed", label: "2FA challenge passed", description: "User passed a 2FA step successfully.", category: "2fa" },
+  { action: "device.approved", label: "Machine approved", description: "An admin approved a bootstrap machine challenge.", category: "2fa" },
   { action: "apiKey.created", label: "API key created", description: "A new API key was issued.", category: "key" },
   { action: "apiKey.revoked", label: "API key revoked", description: "An API key was deleted.", category: "key" },
   { action: "apiKey.allExpiredDeleted", label: "Expired keys removed", description: "Batch sweep removed all expired API keys.", category: "key" },

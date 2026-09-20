@@ -76,6 +76,7 @@ const ACTION_MAP: Record<string, ActionMeta> = {
   "admin.userUnbanned": { label: "User unbanned", icon: <Shield size={11} />, color: "rgba(52,211,153,0.12)", textColor: "#34d399", category: "admin" },
   "admin.userDeleted": { label: "User deleted", icon: <User size={11} />, color: "rgba(239,68,68,0.15)", textColor: "#f87171", category: "admin" },
   "admin.roleChanged": { label: "Role changed", icon: <Shield size={11} />, color: "rgba(239,68,68,0.12)", textColor: "#f87171", category: "admin" },
+  "device.approved": { label: "Machine approved", icon: <Shield size={11} />, color: "rgba(52,211,153,0.15)", textColor: "#34d399", category: "security" },
 };
 
 function actionMeta(action: string): ActionMeta {

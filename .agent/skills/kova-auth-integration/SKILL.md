@@ -389,6 +389,20 @@ For React/Tauri shells, seed the provider with `initialSessionToken` and mirror 
 
 When a native API request returns `401`, refresh the app token once through the provider, retry once, then clear local auth state and require sign-in. Do not retry indefinitely.
 
+## Machine approval (bootstrap QR)
+
+House bootstrap does not type a TOTP into the wizard. The wizard creates a challenge and shows a QR of the approve URL. The phone camera opens that page in the Kova dashboard. After admin sign-in + authenticator 2FA, Approve mints a one-time `approvalToken` the wizard claims.
+
+```text
+POST /api/device-challenges           → { id, approveUrl, pollUrl, expiresAt }
+GET  /api/device-challenges/:id       → public status (never the token)
+GET  /approve/:id                     → phone page
+POST /api/device-challenges/:id/approve  (admin + 2FA session)
+POST /api/device-challenges/:id/claim → { approvalToken } once
+```
+
+Challenges live 10 minutes in KV. Approving requires platform admin, 2FA, and `DASHBOARD_ADMIN_EMAIL` when that var is set. This token is not git or age secrets — mint consumes it later.
+
 ## Sign-out
 
 There are two relevant session types:

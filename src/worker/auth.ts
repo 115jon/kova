@@ -14,6 +14,7 @@ import {
   verificationEmail,
 } from "./email";
 import { getAppId } from "./lib/app-context";
+import { isAllowlistedAdminEmail, parseEmailAllowlist } from "./lib/roles";
 import { resolveOrigin, STATIC_ORIGINS } from "./middleware/cors";
 import {
   findAutoJoinDomainForEmail,
@@ -228,11 +229,8 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
           user: {
             create: {
               before: async (user: { email?: string;[key: string]: unknown }) => {
-                const adminEmails = (env.DASHBOARD_ADMIN_EMAIL ?? "")
-                  .split(",")
-                  .map((e) => e.trim().toLowerCase())
-                  .filter(Boolean);
-                if (adminEmails.length && adminEmails.includes((user.email ?? "").toLowerCase())) {
+                if (isAllowlistedAdminEmail(user.email, env.DASHBOARD_ADMIN_EMAIL)
+                  && parseEmailAllowlist(env.DASHBOARD_ADMIN_EMAIL).length > 0) {
                   return { data: { ...user, role: "admin" } };
                 }
               },

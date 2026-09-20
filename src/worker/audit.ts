@@ -53,7 +53,8 @@ export type AuditAction =
   | "admin.userImpersonated"    // admin initiated impersonation session
   | "admin.userLocked"          // admin locked user (soft-lock, no sign-in)
   | "admin.userUnlocked"        // admin unlocked user
-  | "admin.userAvatarUpdated";  // admin updated an app member's avatar
+  | "admin.userAvatarUpdated"  // admin updated an app member's avatar
+  | "device.approved";
 
 export interface AuditPayload {
   /** Subject — the user the event is *about* (may differ from actor on admin actions). */

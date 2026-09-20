@@ -5,6 +5,7 @@ import { CONFIGURED_PROVIDERS } from "@/lib/providers";
 import {
   buildNativeHandoffPath,
   buildSignInReturnPath,
+  safeApproveReturnPath,
   type SignInRouteSearch,
 } from "@/lib/sign-in-redirect";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -328,8 +329,13 @@ function SignInPage() {
       window.location.assign(nativeHandoffPath);
       return;
     }
+    const approvePath = safeApproveReturnPath(search.redirect_url);
+    if (approvePath) {
+      window.location.assign(approvePath);
+      return;
+    }
     navigate({ to: "/" });
-  }, [nativeHandoffPath, navigate]);
+  }, [nativeHandoffPath, navigate, search.redirect_url]);
 
   useEffect(() => {
     if (session?.user) {
@@ -392,7 +398,9 @@ function SignInPage() {
         provider: providerId as any,
         callbackURL: nativeHandoffPath
           ? new URL(nativeHandoffPath, getOAuthDashboardOrigin()).toString()
-          : `${getOAuthDashboardOrigin()}/`,
+          : safeApproveReturnPath(search.redirect_url)
+            ? new URL(search.redirect_url!, getOAuthDashboardOrigin()).toString()
+            : `${getOAuthDashboardOrigin()}/`,
       });
       if (result?.data?.url) {
         window.location.href = result.data.url;

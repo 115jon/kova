@@ -23,6 +23,7 @@ import { Route as ApiKeysRouteImport } from './routes/api-keys'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersUserIdRouteImport } from './routes/users_.$userId'
 import { Route as OrganizationsOrgIdRouteImport } from './routes/organizations_.$orgId'
+import { Route as ApproveChallengeIdRouteImport } from './routes/approve.$challengeId'
 import { Route as ApplicationsAppIdRouteImport } from './routes/applications_.$appId'
 import { Route as AcceptInvitationInvitationIdRouteImport } from './routes/accept-invitation.$invitationId'
 import { Route as ApplicationsAppIdUsersUserIdRouteImport } from './routes/applications_.$appId_.users_.$userId'
@@ -97,6 +98,11 @@ const OrganizationsOrgIdRoute = OrganizationsOrgIdRouteImport.update({
   path: '/organizations/$orgId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApproveChallengeIdRoute = ApproveChallengeIdRouteImport.update({
+  id: '/approve/$challengeId',
+  path: '/approve/$challengeId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApplicationsAppIdRoute = ApplicationsAppIdRouteImport.update({
   id: '/applications_/$appId',
   path: '/applications/$appId',
@@ -130,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/webhooks': typeof WebhooksRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/applications/$appId': typeof ApplicationsAppIdRoute
+  '/approve/$challengeId': typeof ApproveChallengeIdRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
   '/users/$userId': typeof UsersUserIdRoute
   '/applications/$appId/users/$userId': typeof ApplicationsAppIdUsersUserIdRoute
@@ -149,6 +156,7 @@ export interface FileRoutesByTo {
   '/webhooks': typeof WebhooksRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/applications/$appId': typeof ApplicationsAppIdRoute
+  '/approve/$challengeId': typeof ApproveChallengeIdRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
   '/users/$userId': typeof UsersUserIdRoute
   '/applications/$appId/users/$userId': typeof ApplicationsAppIdUsersUserIdRoute
@@ -169,6 +177,7 @@ export interface FileRoutesById {
   '/webhooks': typeof WebhooksRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/applications_/$appId': typeof ApplicationsAppIdRoute
+  '/approve/$challengeId': typeof ApproveChallengeIdRoute
   '/organizations_/$orgId': typeof OrganizationsOrgIdRoute
   '/users_/$userId': typeof UsersUserIdRoute
   '/applications_/$appId_/users_/$userId': typeof ApplicationsAppIdUsersUserIdRoute
@@ -190,6 +199,7 @@ export interface FileRouteTypes {
     | '/webhooks'
     | '/accept-invitation/$invitationId'
     | '/applications/$appId'
+    | '/approve/$challengeId'
     | '/organizations/$orgId'
     | '/users/$userId'
     | '/applications/$appId/users/$userId'
@@ -209,6 +219,7 @@ export interface FileRouteTypes {
     | '/webhooks'
     | '/accept-invitation/$invitationId'
     | '/applications/$appId'
+    | '/approve/$challengeId'
     | '/organizations/$orgId'
     | '/users/$userId'
     | '/applications/$appId/users/$userId'
@@ -228,6 +239,7 @@ export interface FileRouteTypes {
     | '/webhooks'
     | '/accept-invitation/$invitationId'
     | '/applications_/$appId'
+    | '/approve/$challengeId'
     | '/organizations_/$orgId'
     | '/users_/$userId'
     | '/applications_/$appId_/users_/$userId'
@@ -248,6 +260,7 @@ export interface RootRouteChildren {
   WebhooksRoute: typeof WebhooksRoute
   AcceptInvitationInvitationIdRoute: typeof AcceptInvitationInvitationIdRoute
   ApplicationsAppIdRoute: typeof ApplicationsAppIdRoute
+  ApproveChallengeIdRoute: typeof ApproveChallengeIdRoute
   OrganizationsOrgIdRoute: typeof OrganizationsOrgIdRoute
   UsersUserIdRoute: typeof UsersUserIdRoute
   ApplicationsAppIdUsersUserIdRoute: typeof ApplicationsAppIdUsersUserIdRoute
@@ -353,6 +366,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrganizationsOrgIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/approve/$challengeId': {
+      id: '/approve/$challengeId'
+      path: '/approve/$challengeId'
+      fullPath: '/approve/$challengeId'
+      preLoaderRoute: typeof ApproveChallengeIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/applications_/$appId': {
       id: '/applications_/$appId'
       path: '/applications/$appId'
@@ -392,6 +412,7 @@ const rootRouteChildren: RootRouteChildren = {
   WebhooksRoute: WebhooksRoute,
   AcceptInvitationInvitationIdRoute: AcceptInvitationInvitationIdRoute,
   ApplicationsAppIdRoute: ApplicationsAppIdRoute,
+  ApproveChallengeIdRoute: ApproveChallengeIdRoute,
   OrganizationsOrgIdRoute: OrganizationsOrgIdRoute,
   UsersUserIdRoute: UsersUserIdRoute,
   ApplicationsAppIdUsersUserIdRoute: ApplicationsAppIdUsersUserIdRoute,

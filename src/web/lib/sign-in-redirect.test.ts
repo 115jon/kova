@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildNativeHandoffPath,
   buildSignInReturnUrl,
+  safeApproveReturnPath,
 } from "./sign-in-redirect";
 
 describe("sign-in redirect helpers", () => {
@@ -42,5 +43,14 @@ describe("sign-in redirect helpers", () => {
     expect(buildSignInReturnUrl({}, "https://auth.example")).toBe(
       "https://auth.example/sign-in",
     );
+  });
+
+  it("only returns to same-origin device approve paths", () => {
+    expect(safeApproveReturnPath("/approve/dc_abcdefghijklmnopqrstuvwxyz012345")).toBe(
+      "/approve/dc_abcdefghijklmnopqrstuvwxyz012345",
+    );
+    expect(safeApproveReturnPath("https://evil.example/approve/dc_abc")).toBeNull();
+    expect(safeApproveReturnPath("/settings")).toBeNull();
+    expect(safeApproveReturnPath("//evil.example")).toBeNull();
   });
 });

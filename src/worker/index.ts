@@ -12,6 +12,7 @@
 //   /api/admin/apps/*           → Application registry + per-app sub-routes
 //   /api/pub/apps/*             → Public app metadata (appearance, plan)
 //   /api/webhooks/*             → Webhook endpoints
+//   /api/device-challenges/*    → Bootstrap machine approval challenges
 //   /api/avatar/*               → Legacy avatar redirect
 //   /health                     → Health check
 //   /.well-known/*              → OIDC discovery alias → /api/auth/.well-known/*
@@ -40,6 +41,7 @@ import { handleOAuthBounce } from "./routes/oauth-bounce";
 import { orgRouter } from "./routes/org";
 import { pubAppsRouter } from "./routes/pub/apps";
 import { userRouter } from "./routes/user";
+import { deviceChallengesRouter } from "./routes/device-challenges";
 import { webhooksRouter } from "./routes/webhooks";
 
 // ── Durable Object export — required for Workers runtime to instantiate it ──
@@ -148,6 +150,7 @@ app.route("/api/admin/apps", appsRouter);
 app.route("/api/admin/apps/:appId/users", appUsersRouter);
 app.route("/api/pub/apps", pubAppsRouter);
 app.route("/api/webhooks", webhooksRouter);
+app.route("/api/device-challenges", deviceChallengesRouter);
 
 // ── Central OAuth bounce ──────────────────────────────────────────────────────
 // After a social sign-in on the main auth domain, Better Auth redirects here.

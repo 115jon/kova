@@ -48,7 +48,8 @@ export type AuditAction =
   | "admin.userUnbanned"
   | "admin.userDeleted"
   | "admin.roleChanged"
-  | "admin.passwordReset";
+  | "admin.passwordReset"
+  | "device.approved";
 
 export interface WebhookEndpoint {
   id: string;

@@ -926,6 +926,7 @@ function DashboardRoot() {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const isPublic = ["/sign-in", "/auth-error"].some(p => location.pathname === p)
     || location.pathname.startsWith("/accept-invitation")
+    || location.pathname.startsWith("/approve/")
     || (location.pathname === "/" && !session);
 
   React.useEffect(() => {
