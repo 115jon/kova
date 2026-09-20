@@ -97,12 +97,19 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
   };
 
   const handleEnable = async (pwd?: string) => {
-    // Password is required by Better Auth's Zod schema — always a string
-    if (!pwd) { setError("Password is required"); return; }
+    const typed = pwd?.trim() ?? "";
+    if (hasCredential && !typed) {
+      setError("Password is required");
+      return;
+    }
     setError(""); setLoading(true);
     try {
-      const res = await twoFactor.enable({ password: pwd });
-      if (res.error) throw new Error(res.error.message);
+      const res = await twoFactor.enable(typed ? { password: typed } : {});
+      if (res.error) {
+        throw new Error(
+          res.error.message || res.error.code || res.error.statusText || "Could not start 2FA",
+        );
+      }
       const uri: string = res.data?.totpURI ?? "";
       setTotpUri(uri);
       const match = uri.match(/secret=([A-Z2-7]+)/i);
@@ -193,62 +200,68 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
 
       {/* ── Idle state ── */}
 
-      {/* OAuth-only: must set a password first — Better Auth validates it as required string at the API/Zod level */}
-      {step === "idle" && !hasCredential && (
-        <div style={{
-          display: "flex", alignItems: "flex-start", gap: 10,
-          background: "var(--color-amber-dim)", border: "1px solid rgba(251,191,36,0.2)",
-          borderRadius: 4, padding: "10px 14px",
-          fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)",
-        }}>
-          <AlertCircle size={14} color="#facc15" style={{ flexShrink: 0, marginTop: 2 }} />
-          <p style={{ lineHeight: 1.6 }}>
-            To enable two-factor authentication, you need a password on your account first.
-            Use the{" "}
-            <strong style={{ color: "#e2e8f0" }}>Set a Password</strong>{" "}
-            section below, then come back here.
-          </p>
-        </div>
-      )}
-
-      {step === "idle" && hasCredential && !enabled && (
-        <button className="btn btn-primary"
-          onClick={() => setStep("password")}>
+      {step === "idle" && !enabled && (
+        <button
+          className="btn btn-primary"
+          disabled={loading}
+          onClick={() => {
+            if (hasCredential) setStep("password");
+            else void handleEnable();
+          }}
+          type="button"
+        >
           <Smartphone size={14} /> Set up authenticator app
         </button>
       )}
 
-      {step === "idle" && hasCredential && enabled && (
-        <button className="btn btn-danger" onClick={() => setStep("password")}>
+      {step === "idle" && enabled && (
+        <button
+          className="btn btn-danger"
+          onClick={() => {
+            if (hasCredential) setStep("password");
+            else void handleDisable();
+          }}
+          type="button"
+        >
           <X size={14} /> Disable 2FA
         </button>
       )}
 
       {step === "password" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <form
+          style={{ display: "flex", flexDirection: "column", gap: 10 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const typed = String(new FormData(e.currentTarget).get("password") ?? "");
+            const pwd = typed || password;
+            if (enabled) void handleDisable(pwd);
+            else void handleEnable(pwd);
+          }}
+        >
           <p style={{ fontSize: "0.82rem", color: "#94a3b8" }}>
             {enabled ? "Enter your password to disable 2FA:" : "Enter your password to start setup:"}
           </p>
           <input
             autoFocus
+            autoComplete="current-password"
             className="input"
+            name="password"
             type="password"
             placeholder="Your current password"
             value={password}
             onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && (enabled ? handleDisable(password) : handleEnable(password))}
           />
           <div style={{ display: "flex", gap: 8 }}>
             <button
               className={enabled ? "btn btn-danger" : "btn btn-primary"}
               disabled={loading}
-              onClick={() => enabled ? handleDisable(password) : handleEnable(password)}
+              type="submit"
             >
               {loading ? "Please wait…" : enabled ? "Confirm & disable" : "Continue"}
             </button>
-            <button className="btn btn-ghost" onClick={reset}>Cancel</button>
+            <button className="btn btn-ghost" onClick={reset} type="button">Cancel</button>
           </div>
-        </div>
+        </form>
       )}
 
       {step === "qr" && (
@@ -681,7 +694,12 @@ function CredentialsSection({ hasCredential, userId, onPasswordSet }: {
         <div className="form-group">
           <label className="form-label">{hasCredential ? "New password" : "Password"}</label>
           <input className="input" type="password" value={next} onChange={e => setNext(e.target.value)}
-            required autoComplete="new-password" minLength={8} />
+            required autoComplete="new-password" minLength={12} />
+          {!hasCredential && (
+            <p style={{ fontSize: "0.72rem", color: "#64748b", marginTop: 6 }}>
+              12+ chars, upper, lower, number, and a special character.
+            </p>
+          )}
         </div>
         <div className="form-group">
           <label className="form-label">Confirm password</label>
@@ -829,22 +847,21 @@ function SettingsPage() {
           <PasskeysSection />
         </SectionCard>
 
-        {/* 2FA */}
-        <SectionCard icon={<KeyRound size={14} />} color="var(--color-accent)" title="Two-Factor Authentication">
-          <TwoFactorSection hasCredential={ready ? hasCredential : true} />
-        </SectionCard>
-
-        {/* Password / Set password */}
+        {/* Password first — 2FA enable needs a credential account */}
         <SectionCard
           icon={<Lock size={14} />}
           color="var(--color-green)"
           title={hasCredential ? "Change Password" : "Set a Password"}
         >
           <CredentialsSection
-            hasCredential={ready ? hasCredential : true}
+            hasCredential={ready ? hasCredential : false}
             userId={session?.user.id ?? ""}
             onPasswordSet={handlePasswordSet}
           />
+        </SectionCard>
+
+        <SectionCard icon={<KeyRound size={14} />} color="var(--color-accent)" title="Two-Factor Authentication">
+          <TwoFactorSection hasCredential={ready ? hasCredential : false} />
         </SectionCard>
 
         {/* Server info */}

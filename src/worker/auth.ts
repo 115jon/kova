@@ -527,6 +527,9 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
           // TOTP + email OTP 2FA
           twoFactor({
             issuer: "kova-auth",
+            // OAuth-only users have no credential password. Requiring one
+            // made twoFactor.enable always return INVALID_PASSWORD.
+            allowPasswordless: true,
             otpOptions: {
               sendOTP: async ({ user, otp }: { user: { email: string }; otp: string }) => {
                 const { subject, html } = twoFactorOtpEmail(otp);
