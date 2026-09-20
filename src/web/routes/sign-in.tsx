@@ -5,7 +5,7 @@ import { CONFIGURED_PROVIDERS } from "@/lib/providers";
 import {
   buildNativeHandoffPath,
   buildSignInReturnPath,
-  safeApproveReturnPath,
+  safeSignInReturnPath,
   type SignInRouteSearch,
 } from "@/lib/sign-in-redirect";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -30,6 +30,8 @@ export const Route = createFileRoute("/sign-in")({
       typeof search.native_handoff === "string"
         ? search.native_handoff
         : undefined,
+    add_account:
+      typeof search.add_account === "string" ? search.add_account : undefined,
   }),
   component: SignInPage,
 });
@@ -329,19 +331,19 @@ function SignInPage() {
       window.location.assign(nativeHandoffPath);
       return;
     }
-    const approvePath = safeApproveReturnPath(search.redirect_url);
-    if (approvePath) {
-      window.location.assign(approvePath);
+    const returnPath = safeSignInReturnPath(search.redirect_url);
+    if (returnPath) {
+      window.location.assign(returnPath);
       return;
     }
     navigate({ to: "/" });
   }, [nativeHandoffPath, navigate, search.redirect_url]);
 
   useEffect(() => {
-    if (session?.user) {
+    if (session?.user && !search.add_account) {
       completeSignIn();
     }
-  }, [completeSignIn, session?.user]);
+  }, [completeSignIn, search.add_account, session?.user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -398,7 +400,7 @@ function SignInPage() {
         provider: providerId as any,
         callbackURL: nativeHandoffPath
           ? new URL(nativeHandoffPath, getOAuthDashboardOrigin()).toString()
-          : safeApproveReturnPath(search.redirect_url)
+          : safeSignInReturnPath(search.redirect_url)
             ? new URL(search.redirect_url!, getOAuthDashboardOrigin()).toString()
             : `${getOAuthDashboardOrigin()}/`,
       });

@@ -1,16 +1,25 @@
+import { safeOauthContinuePath } from "../../worker/lib/oidc-account-picker";
+
 const APPROVE_PATH = /^\/approve\/dc_[A-Za-z0-9_-]+$/;
 
 export type SignInRouteSearch = {
   pk?: string;
   redirect_url?: string;
   native_handoff?: string;
+  add_account?: string;
 };
+
+export { safeOauthContinuePath };
 
 export function safeApproveReturnPath(redirectUrl: string | undefined): string | null {
   if (!redirectUrl) return null;
   const trimmed = redirectUrl.trim();
   if (!APPROVE_PATH.test(trimmed)) return null;
   return trimmed;
+}
+
+export function safeSignInReturnPath(redirectUrl: string | undefined): string | null {
+  return safeApproveReturnPath(redirectUrl) ?? safeOauthContinuePath(redirectUrl);
 }
 
 export function buildNativeHandoffPath(
@@ -37,6 +46,7 @@ export function buildSignInReturnPath(search: SignInRouteSearch): string {
   if (search.native_handoff) {
     params.set("native_handoff", search.native_handoff);
   }
+  if (search.add_account) params.set("add_account", search.add_account);
 
   const query = params.toString();
   return query ? `/sign-in?${query}` : "/sign-in";

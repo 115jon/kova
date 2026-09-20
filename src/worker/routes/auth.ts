@@ -2,6 +2,11 @@ import { Hono } from "hono";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { getApplicationByPublishableKey, isApplicationSuspended, isOriginAllowed, isRedirectUriAllowed } from "../applications";
 import { createAuth } from "../auth";
+import {
+  buildOidcContinueLocation,
+  OIDC_ACCOUNT_SELECTED_PARAM,
+  shouldOfferOidcAccountPicker,
+} from "../lib/oidc-account-picker";
 import { dashboardCanUseCookieSession, isSessionUnexpired, resolveAppScopedSession, sdkCookieProvesIdentity } from "../lib/app-session";
 import { withHeaders } from "../middleware/cors";
 
@@ -26,6 +31,21 @@ authRouter.all("/*", async (c) => {
   const { req, env } = c;
   const db = env.DB;
   const request = req.raw;
+
+  if (req.method === "GET" && req.path.endsWith("/oauth2/authorize")) {
+    const url = new URL(req.url);
+    if (
+      shouldOfferOidcAccountPicker({
+        method: req.method,
+        pathname: url.pathname,
+        clientId: url.searchParams.get("client_id"),
+        forgejoClientId: env.FORGEJO_OIDC_CLIENT_ID,
+        accountSelected: url.searchParams.get(OIDC_ACCOUNT_SELECTED_PARAM),
+      })
+    ) {
+      return c.redirect(buildOidcContinueLocation(url.origin, url.search), 302);
+    }
+  }
 
   const pk = req.header("X-Publishable-Key");
   const app = pk ? await getApplicationByPublishableKey(db, pk).catch(() => null) : null;

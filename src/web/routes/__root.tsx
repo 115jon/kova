@@ -924,7 +924,7 @@ function DashboardRoot() {
   const { data: session } = useSession();
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
-  const isPublic = ["/sign-in", "/auth-error"].some(p => location.pathname === p)
+  const isPublic = ["/sign-in", "/auth-error", "/oauth/continue"].some(p => location.pathname === p)
     || location.pathname.startsWith("/accept-invitation")
     || location.pathname.startsWith("/approve/")
     || (location.pathname === "/" && !session);

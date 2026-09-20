@@ -3,6 +3,7 @@ import {
   buildNativeHandoffPath,
   buildSignInReturnUrl,
   safeApproveReturnPath,
+  safeSignInReturnPath,
 } from "./sign-in-redirect";
 
 describe("sign-in redirect helpers", () => {
@@ -39,6 +40,17 @@ describe("sign-in redirect helpers", () => {
     );
   });
 
+  it("keeps add-account so a second Kova session can sign in", () => {
+    expect(
+      buildSignInReturnUrl(
+        { redirect_url: "/oauth/continue?client_id=forgejo", add_account: "1" },
+        "https://auth.example",
+      ),
+    ).toBe(
+      "https://auth.example/sign-in?redirect_url=%2Foauth%2Fcontinue%3Fclient_id%3Dforgejo&add_account=1",
+    );
+  });
+
   it("uses the ordinary sign-in page when no native handoff is requested", () => {
     expect(buildSignInReturnUrl({}, "https://auth.example")).toBe(
       "https://auth.example/sign-in",
@@ -52,5 +64,12 @@ describe("sign-in redirect helpers", () => {
     expect(safeApproveReturnPath("https://evil.example/approve/dc_abc")).toBeNull();
     expect(safeApproveReturnPath("/settings")).toBeNull();
     expect(safeApproveReturnPath("//evil.example")).toBeNull();
+  });
+
+  it("returns to the 1:15 account picker after sign-in", () => {
+    expect(
+      safeSignInReturnPath("/oauth/continue?client_id=forgejo-client&state=abc"),
+    ).toBe("/oauth/continue?client_id=forgejo-client&state=abc");
+    expect(safeSignInReturnPath("/dashboard")).toBeNull();
   });
 });

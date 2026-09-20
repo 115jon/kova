@@ -23,6 +23,7 @@ import { Route as ApiKeysRouteImport } from './routes/api-keys'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsersUserIdRouteImport } from './routes/users_.$userId'
 import { Route as OrganizationsOrgIdRouteImport } from './routes/organizations_.$orgId'
+import { Route as OauthContinueRouteImport } from './routes/oauth.continue'
 import { Route as ApproveChallengeIdRouteImport } from './routes/approve.$challengeId'
 import { Route as ApplicationsAppIdRouteImport } from './routes/applications_.$appId'
 import { Route as AcceptInvitationInvitationIdRouteImport } from './routes/accept-invitation.$invitationId'
@@ -98,6 +99,11 @@ const OrganizationsOrgIdRoute = OrganizationsOrgIdRouteImport.update({
   path: '/organizations/$orgId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OauthContinueRoute = OauthContinueRouteImport.update({
+  id: '/oauth/continue',
+  path: '/oauth/continue',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApproveChallengeIdRoute = ApproveChallengeIdRouteImport.update({
   id: '/approve/$challengeId',
   path: '/approve/$challengeId',
@@ -137,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/applications/$appId': typeof ApplicationsAppIdRoute
   '/approve/$challengeId': typeof ApproveChallengeIdRoute
+  '/oauth/continue': typeof OauthContinueRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
   '/users/$userId': typeof UsersUserIdRoute
   '/applications/$appId/users/$userId': typeof ApplicationsAppIdUsersUserIdRoute
@@ -157,6 +164,7 @@ export interface FileRoutesByTo {
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/applications/$appId': typeof ApplicationsAppIdRoute
   '/approve/$challengeId': typeof ApproveChallengeIdRoute
+  '/oauth/continue': typeof OauthContinueRoute
   '/organizations/$orgId': typeof OrganizationsOrgIdRoute
   '/users/$userId': typeof UsersUserIdRoute
   '/applications/$appId/users/$userId': typeof ApplicationsAppIdUsersUserIdRoute
@@ -178,6 +186,7 @@ export interface FileRoutesById {
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
   '/applications_/$appId': typeof ApplicationsAppIdRoute
   '/approve/$challengeId': typeof ApproveChallengeIdRoute
+  '/oauth/continue': typeof OauthContinueRoute
   '/organizations_/$orgId': typeof OrganizationsOrgIdRoute
   '/users_/$userId': typeof UsersUserIdRoute
   '/applications_/$appId_/users_/$userId': typeof ApplicationsAppIdUsersUserIdRoute
@@ -200,6 +209,7 @@ export interface FileRouteTypes {
     | '/accept-invitation/$invitationId'
     | '/applications/$appId'
     | '/approve/$challengeId'
+    | '/oauth/continue'
     | '/organizations/$orgId'
     | '/users/$userId'
     | '/applications/$appId/users/$userId'
@@ -220,6 +230,7 @@ export interface FileRouteTypes {
     | '/accept-invitation/$invitationId'
     | '/applications/$appId'
     | '/approve/$challengeId'
+    | '/oauth/continue'
     | '/organizations/$orgId'
     | '/users/$userId'
     | '/applications/$appId/users/$userId'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/accept-invitation/$invitationId'
     | '/applications_/$appId'
     | '/approve/$challengeId'
+    | '/oauth/continue'
     | '/organizations_/$orgId'
     | '/users_/$userId'
     | '/applications_/$appId_/users_/$userId'
@@ -261,6 +273,7 @@ export interface RootRouteChildren {
   AcceptInvitationInvitationIdRoute: typeof AcceptInvitationInvitationIdRoute
   ApplicationsAppIdRoute: typeof ApplicationsAppIdRoute
   ApproveChallengeIdRoute: typeof ApproveChallengeIdRoute
+  OauthContinueRoute: typeof OauthContinueRoute
   OrganizationsOrgIdRoute: typeof OrganizationsOrgIdRoute
   UsersUserIdRoute: typeof UsersUserIdRoute
   ApplicationsAppIdUsersUserIdRoute: typeof ApplicationsAppIdUsersUserIdRoute
@@ -366,6 +379,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrganizationsOrgIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/oauth/continue': {
+      id: '/oauth/continue'
+      path: '/oauth/continue'
+      fullPath: '/oauth/continue'
+      preLoaderRoute: typeof OauthContinueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/approve/$challengeId': {
       id: '/approve/$challengeId'
       path: '/approve/$challengeId'
@@ -413,6 +433,7 @@ const rootRouteChildren: RootRouteChildren = {
   AcceptInvitationInvitationIdRoute: AcceptInvitationInvitationIdRoute,
   ApplicationsAppIdRoute: ApplicationsAppIdRoute,
   ApproveChallengeIdRoute: ApproveChallengeIdRoute,
+  OauthContinueRoute: OauthContinueRoute,
   OrganizationsOrgIdRoute: OrganizationsOrgIdRoute,
   UsersUserIdRoute: UsersUserIdRoute,
   ApplicationsAppIdUsersUserIdRoute: ApplicationsAppIdUsersUserIdRoute,

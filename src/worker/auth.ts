@@ -641,7 +641,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
           }),
 
           oidcProvider({
-            loginPage: "/sign-in",
+            loginPage: "/oauth/continue",
             allowDynamicClientRegistration: false,
             requirePKCE: false,
             allowPlainCodeChallengeMethod: true,
