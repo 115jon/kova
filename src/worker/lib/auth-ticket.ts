@@ -292,8 +292,23 @@ export async function exchangeSessionTransferCode(
   return { sessionToken: payload.sessionToken };
 }
 
+function isOpaqueOrCustomSchemeOrigin(value: string): boolean {
+  if (value === "null") return true;
+  try {
+    const url = new URL(value);
+    return url.protocol !== "http:" && url.protocol !== "https:";
+  } catch {
+    return false;
+  }
+}
+
 function originMatches(expected: string | undefined, origin: string | null): boolean {
-  if (!expected || !origin) return false;
+  if (!expected) return false;
+  // Custom-scheme bounce stores opaque origin "null". Native webviews then
+  // exchange from tauri.localhost (or with no Origin). The code is already
+  // pk-bound, single-use, and 60s TTL.
+  if (isOpaqueOrCustomSchemeOrigin(expected)) return true;
+  if (!origin) return false;
   try {
     return new URL(expected).origin === new URL(origin).origin;
   } catch {

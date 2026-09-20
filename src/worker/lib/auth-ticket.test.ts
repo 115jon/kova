@@ -54,4 +54,37 @@ describe("session transfer origin binding", () => {
       exchangeSessionTransferCode(kv, code, "pk_live_1", null),
     ).resolves.toBeNull();
   });
+
+  it("exchanges custom-scheme codes from a native webview origin", async () => {
+    const kv = memoryKv();
+    const code = await createSessionTransferCode(
+      kv,
+      "session_tok",
+      "pk_live_1",
+      "null",
+    );
+
+    await expect(
+      exchangeSessionTransferCode(
+        kv,
+        code,
+        "pk_live_1",
+        "https://tauri.localhost",
+      ),
+    ).resolves.toEqual({ sessionToken: "session_tok" });
+  });
+
+  it("exchanges custom-scheme codes when the webview omits Origin", async () => {
+    const kv = memoryKv();
+    const code = await createSessionTransferCode(
+      kv,
+      "session_tok",
+      "pk_live_1",
+      "ralphmeet://auth",
+    );
+
+    await expect(
+      exchangeSessionTransferCode(kv, code, "pk_live_1", null),
+    ).resolves.toEqual({ sessionToken: "session_tok" });
+  });
 });
