@@ -58,3 +58,33 @@ export function buildSignInReturnUrl(
 ): string {
   return new URL(buildSignInReturnPath(search), origin).toString();
 }
+
+const CONTINUE_SEARCH_KEY = "kova:oidc-continue-search";
+
+export function persistOauthContinueSearch(search: string): void {
+  if (typeof sessionStorage === "undefined") return;
+  const query = search.startsWith("?") ? search : search ? `?${search}` : "";
+  if (!query.includes("client_id=")) return;
+  sessionStorage.setItem(CONTINUE_SEARCH_KEY, query);
+}
+
+export function restoreOauthContinueSearch(currentSearch: string): string {
+  const current = currentSearch.startsWith("?") || currentSearch === ""
+    ? currentSearch
+    : `?${currentSearch}`;
+  if (current.includes("client_id=")) {
+    persistOauthContinueSearch(current);
+    return current;
+  }
+  if (typeof sessionStorage === "undefined") return current;
+  return sessionStorage.getItem(CONTINUE_SEARCH_KEY) ?? current;
+}
+
+export function oauthContinueCallbackUrl(
+  origin: string,
+  redirectUrl: string | undefined,
+): string | null {
+  const path = safeOauthContinuePath(redirectUrl);
+  if (!path) return null;
+  return new URL(path, origin).toString();
+}

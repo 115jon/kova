@@ -32,11 +32,23 @@ export function buildAuthorizeUrlAfterAccountSelected(origin: string, search: st
 export function safeOauthContinuePath(redirectUrl: string | undefined): string | null {
   if (!redirectUrl) return null;
   const trimmed = redirectUrl.trim();
-  if (trimmed !== "/oauth/continue" && !trimmed.startsWith("/oauth/continue?")) {
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.includes("\\")) {
     return null;
   }
-  if (trimmed.includes("://") || trimmed.includes("\\") || trimmed.includes("..")) {
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed, "https://kova.invalid");
+  } catch {
     return null;
   }
-  return trimmed;
+
+  if (parsed.username || parsed.password || parsed.host !== "kova.invalid") {
+    return null;
+  }
+  if (parsed.pathname !== OIDC_CONTINUE_PATH) {
+    return null;
+  }
+
+  return `${parsed.pathname}${parsed.search}`;
 }

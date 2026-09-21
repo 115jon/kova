@@ -5,6 +5,7 @@ import { CONFIGURED_PROVIDERS } from "@/lib/providers";
 import {
   buildNativeHandoffPath,
   buildSignInReturnPath,
+  oauthContinueCallbackUrl,
   safeSignInReturnPath,
   type SignInRouteSearch,
 } from "@/lib/sign-in-redirect";
@@ -396,13 +397,15 @@ function SignInPage() {
     setError("");
     setSocialLoading(providerId);
     try {
+      const continueCallback = oauthContinueCallbackUrl(
+        getOAuthDashboardOrigin(),
+        search.redirect_url,
+      );
       const result = await signIn.social({
         provider: providerId as any,
         callbackURL: nativeHandoffPath
           ? new URL(nativeHandoffPath, getOAuthDashboardOrigin()).toString()
-          : safeSignInReturnPath(search.redirect_url)
-            ? new URL(search.redirect_url!, getOAuthDashboardOrigin()).toString()
-            : `${getOAuthDashboardOrigin()}/`,
+          : continueCallback ?? `${getOAuthDashboardOrigin()}/`,
       });
       if (result?.data?.url) {
         window.location.href = result.data.url;
@@ -444,7 +447,9 @@ function SignInPage() {
         <div className="card public-auth-card animate-in" style={{ width: "100%", maxWidth: 380, padding: 36 }}>
           <MagicLinkPanel
             onBack={() => setTab("password")}
-            returnPath={signInReturnPath}
+            returnPath={
+              safeSignInReturnPath(search.redirect_url) ?? signInReturnPath
+            }
           />
         </div>
       </div>
@@ -469,7 +474,9 @@ function SignInPage() {
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 28, display: "flex", flexDirection: "column", alignItems: "center" }}>
           <KovaLogo size={36} variant="full" />
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-secondary)", marginTop: 8 }}>Admin Dashboard</p>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-secondary)", marginTop: 8 }}>
+            {search.add_account ? "Add another account" : "Admin Dashboard"}
+          </p>
         </div>
 
         {error && (

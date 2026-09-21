@@ -1,7 +1,11 @@
 import { KovaLogo } from "@/components/KovaLogo";
 import { UserAvatar } from "@/components/UserAvatar";
 import { multiSession, useSession } from "@/lib/auth-client";
-import { buildSignInReturnPath } from "@/lib/sign-in-redirect";
+import {
+  buildSignInReturnPath,
+  persistOauthContinueSearch,
+  restoreOauthContinueSearch,
+} from "@/lib/sign-in-redirect";
 import { buildAuthorizeUrlAfterAccountSelected } from "../../worker/lib/oidc-account-picker";
 import { createFileRoute } from "@tanstack/react-router";
 import { PlusCircle } from "lucide-react";
@@ -23,11 +27,16 @@ export const Route = createFileRoute("/oauth/continue")({
   component: OauthContinuePage,
 });
 
+function continueSearch(): string {
+  return restoreOauthContinueSearch(window.location.search);
+}
+
 function continuePath(): string {
-  return `/oauth/continue${window.location.search}`;
+  return `/oauth/continue${continueSearch()}`;
 }
 
 function signInForAnotherAccount(): string {
+  persistOauthContinueSearch(window.location.search);
   return buildSignInReturnPath({ redirect_url: continuePath(), add_account: "1" });
 }
 
@@ -41,6 +50,13 @@ function OauthContinuePage() {
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [switching, setSwitching] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const restored = continueSearch();
+    if (restored && restored !== window.location.search) {
+      window.history.replaceState(null, "", `/oauth/continue${restored}`);
+    }
+  }, []);
 
   useEffect(() => {
     if (!session?.user) {
@@ -65,7 +81,7 @@ function OauthContinuePage() {
         await multiSession.setActive({ sessionToken });
       }
       window.location.assign(
-        buildAuthorizeUrlAfterAccountSelected(window.location.origin, window.location.search),
+        buildAuthorizeUrlAfterAccountSelected(window.location.origin, continueSearch()),
       );
     } catch (e: unknown) {
       setSwitching(null);

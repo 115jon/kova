@@ -70,6 +70,13 @@ describe("sign-in redirect helpers", () => {
     expect(
       safeSignInReturnPath("/oauth/continue?client_id=forgejo-client&state=abc"),
     ).toBe("/oauth/continue?client_id=forgejo-client&state=abc");
+    expect(
+      safeSignInReturnPath(
+        "/oauth/continue?client_id=forgejo-115&redirect_uri=https://git.115jon.com/user/oauth2/kova/callback",
+      ),
+    ).toBe(
+      "/oauth/continue?client_id=forgejo-115&redirect_uri=https://git.115jon.com/user/oauth2/kova/callback",
+    );
     expect(safeSignInReturnPath("/dashboard")).toBeNull();
   });
 });

@@ -78,6 +78,16 @@ describe("safeOauthContinuePath", () => {
     ).toBe("/oauth/continue?client_id=forgejo-client&state=abc");
   });
 
+  it("keeps a nested Forgejo redirect_uri so add-account can return to the picker", () => {
+    expect(
+      safeOauthContinuePath(
+        "/oauth/continue?client_id=forgejo-115&redirect_uri=https://git.115jon.com/user/oauth2/kova/callback&state=abc",
+      ),
+    ).toBe(
+      "/oauth/continue?client_id=forgejo-115&redirect_uri=https://git.115jon.com/user/oauth2/kova/callback&state=abc",
+    );
+  });
+
   it("rejects open redirects", () => {
     expect(safeOauthContinuePath("https://evil.example/oauth/continue")).toBeNull();
     expect(safeOauthContinuePath("/oauth/continue/../sign-in")).toBeNull();
