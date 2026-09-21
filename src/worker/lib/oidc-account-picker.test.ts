@@ -4,6 +4,7 @@ import {
   buildOidcContinueLocation,
   safeOauthContinuePath,
   shouldOfferOidcAccountPicker,
+  sortAccountsLastUsedFirst,
 } from "./oidc-account-picker";
 
 describe("OIDC account picker gate", () => {
@@ -67,6 +68,26 @@ describe("OIDC continue URLs", () => {
     ).toBe(
       "https://auth.115jon.site/api/auth/oauth2/authorize?client_id=forgejo-client&state=abc&account_selected=1",
     );
+  });
+});
+
+describe("sortAccountsLastUsedFirst", () => {
+  it("puts the last-used Forgejo account first", () => {
+    const accounts = [
+      { user: { id: "a" } },
+      { user: { id: "b" } },
+      { user: { id: "c" } },
+    ];
+    expect(sortAccountsLastUsedFirst(accounts, "c").map((item) => item.user.id)).toEqual([
+      "c",
+      "a",
+      "b",
+    ]);
+  });
+
+  it("leaves order alone without a last-used id", () => {
+    const accounts = [{ user: { id: "a" } }, { user: { id: "b" } }];
+    expect(sortAccountsLastUsedFirst(accounts, null)).toEqual(accounts);
   });
 });
 

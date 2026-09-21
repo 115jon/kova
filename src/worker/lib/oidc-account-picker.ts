@@ -1,5 +1,18 @@
 export const OIDC_ACCOUNT_SELECTED_PARAM = "account_selected";
 export const OIDC_CONTINUE_PATH = "/oauth/continue";
+export const OIDC_LAST_USER_STORAGE_KEY = "kova:oidc-last-user:forgejo";
+
+export function sortAccountsLastUsedFirst<T extends { user: { id: string } }>(
+  accounts: T[],
+  lastUserId: string | null | undefined,
+): T[] {
+  if (!lastUserId) return accounts;
+  return [...accounts].sort((a, b) => {
+    if (a.user.id === lastUserId) return -1;
+    if (b.user.id === lastUserId) return 1;
+    return 0;
+  });
+}
 
 export function shouldOfferOidcAccountPicker(opts: {
   method: string;

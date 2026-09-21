@@ -677,9 +677,9 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
         //   be invalidated before their TTL expires. The JWE cache gives us
         //   JWT-equivalent performance while preserving the revocation guarantee.
         session: {
-          expiresIn: 60 * 60 * 24 * 7,   // 7-day hard cap (was 30 days)
-          updateAge: 0,                    // disable sliding window — no auto-extend
-          disableSessionRefresh: true,     // sessions are fixed-duration, not rolling
+          expiresIn: 60 * 60 * 24 * 30,  // 30-day cap; use slides it forward
+          updateAge: 60 * 60 * 24,       // refresh at most once a day when used
+          disableSessionRefresh: false,  // keep the chosen Kova session alive
           freshAge: 60 * 10,              // re-auth required for sensitive ops within 10 min
 
           cookieCache: {
