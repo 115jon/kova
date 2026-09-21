@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildNativeHandoffPath,
   buildSignInReturnUrl,
+  isAddAccount,
   safeApproveReturnPath,
   safeSignInReturnPath,
+  searchParamString,
 } from "./sign-in-redirect";
 
 describe("sign-in redirect helpers", () => {
@@ -38,6 +40,15 @@ describe("sign-in redirect helpers", () => {
     expect(buildSignInReturnUrl(nativeSearch, "https://auth.example")).toBe(
       "https://auth.example/sign-in?pk=pk_dev_float&redirect_url=float%3A%2F%2Fauth&native_handoff=1",
     );
+  });
+
+  it("keeps add-account even when the router JSON-parses 1 as a number", () => {
+    expect(searchParamString(1)).toBe("1");
+    expect(searchParamString("1")).toBe("1");
+    expect(isAddAccount(1)).toBe(true);
+    expect(isAddAccount("1")).toBe(true);
+    expect(isAddAccount(true)).toBe(true);
+    expect(isAddAccount(undefined)).toBe(false);
   });
 
   it("keeps add-account so a second Kova session can sign in", () => {

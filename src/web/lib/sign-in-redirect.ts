@@ -11,6 +11,20 @@ export type SignInRouteSearch = {
 
 export { safeOauthContinuePath };
 
+export function searchParamString(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : undefined;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "boolean") return value ? "1" : undefined;
+  return undefined;
+}
+
+export function isAddAccount(value: unknown): boolean {
+  return value === "1" || value === "true" || value === "yes" || value === 1 || value === true;
+}
+
 export function safeApproveReturnPath(redirectUrl: string | undefined): string | null {
   if (!redirectUrl) return null;
   const trimmed = redirectUrl.trim();

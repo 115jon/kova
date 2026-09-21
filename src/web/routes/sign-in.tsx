@@ -5,8 +5,10 @@ import { CONFIGURED_PROVIDERS } from "@/lib/providers";
 import {
   buildNativeHandoffPath,
   buildSignInReturnPath,
+  isAddAccount,
   oauthContinueCallbackUrl,
   safeSignInReturnPath,
+  searchParamString,
   type SignInRouteSearch,
 } from "@/lib/sign-in-redirect";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -24,15 +26,10 @@ import { useCallback, useEffect, useState } from "react";
 
 export const Route = createFileRoute("/sign-in")({
   validateSearch: (search: Record<string, unknown>): SignInRouteSearch => ({
-    pk: typeof search.pk === "string" ? search.pk : undefined,
-    redirect_url:
-      typeof search.redirect_url === "string" ? search.redirect_url : undefined,
-    native_handoff:
-      typeof search.native_handoff === "string"
-        ? search.native_handoff
-        : undefined,
-    add_account:
-      typeof search.add_account === "string" ? search.add_account : undefined,
+    pk: searchParamString(search.pk),
+    redirect_url: searchParamString(search.redirect_url),
+    native_handoff: searchParamString(search.native_handoff),
+    add_account: isAddAccount(search.add_account) ? "1" : undefined,
   }),
   component: SignInPage,
 });
@@ -341,7 +338,7 @@ function SignInPage() {
   }, [nativeHandoffPath, navigate, search.redirect_url]);
 
   useEffect(() => {
-    if (session?.user && !search.add_account) {
+    if (session?.user && !isAddAccount(search.add_account)) {
       completeSignIn();
     }
   }, [completeSignIn, search.add_account, session?.user]);
@@ -475,7 +472,7 @@ function SignInPage() {
         <div style={{ textAlign: "center", marginBottom: 28, display: "flex", flexDirection: "column", alignItems: "center" }}>
           <KovaLogo size={36} variant="full" />
           <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-secondary)", marginTop: 8 }}>
-            {search.add_account ? "Add another account" : "Admin Dashboard"}
+            {isAddAccount(search.add_account) ? "Add another account" : "Admin Dashboard"}
           </p>
         </div>
 

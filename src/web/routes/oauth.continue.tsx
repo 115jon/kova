@@ -248,6 +248,10 @@ function OauthContinuePage() {
             })}
             <a
               href={signInForAnotherAccount()}
+              onClick={(event) => {
+                event.preventDefault();
+                window.location.assign(signInForAnotherAccount());
+              }}
               style={{
                 display: "flex",
                 alignItems: "center",
