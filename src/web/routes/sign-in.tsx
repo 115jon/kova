@@ -13,7 +13,7 @@ import {
   searchParamString,
   type SignInRouteSearch,
 } from "@/lib/sign-in-redirect";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useHydrated, useNavigate } from "@tanstack/react-router";
 import { AlertCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
@@ -106,6 +106,8 @@ function AuthFrame({ children }: { children: ReactNode }) {
 
 function KovaSignInPage({ search }: { search: SignInRouteSearch }) {
   const navigate = useNavigate();
+  // The SDK needs this page's origin, which the server render doesn't have.
+  const hydrated = useHydrated();
   const signInReturnPath = buildSignInReturnPath(search);
 
   const completeSignIn = useCallback(() => {
@@ -119,15 +121,17 @@ function KovaSignInPage({ search }: { search: SignInRouteSearch }) {
 
   return (
     <AuthFrame>
-      <KovaAuthProvider
-        authUrl={currentOrigin()}
-        oauthProviders={KOVA_PROVIDERS}
-        afterSignInUrl={signInReturnPath}
-        appearance={KOVA_APPEARANCE}
-      >
-        <CompleteOnSession enabled={!isAddAccount(search.add_account)} onComplete={completeSignIn} />
-        <SignIn afterSignInUrl={signInReturnPath} />
-      </KovaAuthProvider>
+      {hydrated && (
+        <KovaAuthProvider
+          authUrl={currentOrigin()}
+          oauthProviders={KOVA_PROVIDERS}
+          afterSignInUrl={signInReturnPath}
+          appearance={KOVA_APPEARANCE}
+        >
+          <CompleteOnSession enabled={!isAddAccount(search.add_account)} onComplete={completeSignIn} />
+          <SignIn afterSignInUrl={signInReturnPath} />
+        </KovaAuthProvider>
+      )}
     </AuthFrame>
   );
 }
