@@ -14,6 +14,15 @@ import { withWallpaper } from "./user-wallpaper";
 
 const authRouter = new Hono<{ Bindings: Env }>();
 
+/** Where an internal bounce URL (`/api/hosted/oauth-complete?...`) sends the browser, if it says. */
+function bounceDestination(bounceUrl: string): string | null {
+  try {
+    return new URL(bounceUrl).searchParams.get("redirect_uri");
+  } catch {
+    return null;
+  }
+}
+
 /** D1 returns SQLite integers where Better Auth's own session response has booleans. */
 function sqliteBool(value: unknown): boolean {
   return value === true || value === 1 || value === "1" || value === "true";
@@ -236,17 +245,19 @@ authRouter.all("/*", async (c) => {
           const body = (await bodyClone.json()) as Record<string, unknown>;
           const callbackURL =
             typeof body["callbackURL"] === "string" ? body["callbackURL"] : null;
-          // Allow the auth server's own /api/hosted/* bounce endpoints as callbackURL
-          // without requiring them in the app's redirect_uris. These are internal
-          // handlers (oauth-complete) that we control — they validate redirect_uri
-          // against the app allowlist before forwarding to the actual consumer app.
+          // The auth server's own /api/hosted/* bounce endpoints are allowed as
+          // callbackURL without being listed in the app's redirect_uris, but they
+          // send the browser on to their redirect_uri, so that is what the
+          // allowlist applies to. Checking it here fails a bad redirect when the
+          // email is requested instead of when the link is clicked.
           const isInternalBounce = callbackURL?.startsWith(`${env.AUTH_URL}/api/hosted/`) ?? false;
-          if (callbackURL && !isInternalBounce && !isRedirectUriAllowed(app, callbackURL)) {
+          const destination = isInternalBounce ? bounceDestination(callbackURL!) : callbackURL;
+          if (destination && !isRedirectUriAllowed(app, destination)) {
             return withHeaders(
               Response.json(
                 {
                   error: "redirect_uri_not_allowed",
-                  message: `callbackURL '${callbackURL}' is not in the allowed redirect URIs for application '${app.name}'. Update the application's redirect URIs in the kova-auth dashboard.`,
+                  message: `callbackURL '${destination}' is not in the allowed redirect URIs for application '${app.name}'. Update the application's redirect URIs in the kova-auth dashboard.`,
                 },
                 { status: 403 }
               ),

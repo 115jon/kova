@@ -117,9 +117,37 @@ interface SendEmailOptions {
   subject: string;
   html: string;
   apiKey: string;
+  /** Log the message and its links instead of sending it. See devEmailCaptureEnabled. */
+  capture?: boolean;
 }
 
-export async function sendEmail({ to, subject, html, apiKey }: SendEmailOptions) {
+const LOCAL_AUTH_HOST = /^(localhost|127\.0\.0\.1|\[::1\]|(.+\.)?lvh\.me)$/;
+
+/**
+ * Local test hook: with KOVA_DEV_EMAIL_CAPTURE=1 the worker prints each email's
+ * links to its log instead of calling Resend, so magic-link, reset and
+ * verification flows can be driven without real mail. The flag only exists in
+ * a local, gitignored .dev.vars, and it is ignored unless AUTH_URL is a
+ * loopback or lvh.me host, so a deployed worker can never honor it.
+ */
+export function devEmailCaptureEnabled(env: { AUTH_URL?: string; KOVA_DEV_EMAIL_CAPTURE?: string }): boolean {
+  if (env.KOVA_DEV_EMAIL_CAPTURE !== "1" || !env.AUTH_URL) return false;
+  try {
+    return LOCAL_AUTH_HOST.test(new URL(env.AUTH_URL).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function captureEmail(to: string, subject: string, html: string) {
+  const links = [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+  console.log(`[kova-dev-mail] ${JSON.stringify({ to, subject, links })}`);
+  return { captured: true };
+}
+
+export async function sendEmail({ to, subject, html, apiKey, capture }: SendEmailOptions) {
+  if (capture) return captureEmail(to, subject, html);
+
   const res = await fetch(RESEND_API, {
     method: "POST",
     headers: {

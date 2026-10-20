@@ -111,6 +111,11 @@ GITHUB_CLIENT_SECRET=your-github-client-secret
 # Email Dispatch
 RESEND_API_KEY=your-resend-key
 DASHBOARD_ADMIN_EMAIL=your-email@example.com
+
+# Optional, local only: print email links (magic link, verification, reset) to
+# the dev server log instead of sending them. Ignored unless AUTH_URL is
+# localhost, 127.0.0.1 or lvh.me, so a deployed worker never honors it.
+KOVA_DEV_EMAIL_CAPTURE=1
 ```
 
 ### 6. Run the Development Environment

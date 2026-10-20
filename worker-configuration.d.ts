@@ -44,6 +44,8 @@ interface Env {
   // ── Email ────────────────────────────────────────────────────
   DASHBOARD_ADMIN_EMAIL: string;
   RESEND_API_KEY: string;
+  /** Local-only (.dev.vars): log emails instead of sending. Ignored unless AUTH_URL is loopback or lvh.me. */
+  KOVA_DEV_EMAIL_CAPTURE?: string;
 
   // ── CDN integration ──────────────────────────────────────────
   CDN_URL: string;

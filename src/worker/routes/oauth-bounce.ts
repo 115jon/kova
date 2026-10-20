@@ -403,6 +403,19 @@ async function handleSdkBounce(
     return errorHtml("OAuth SDK bounce failed: redirect_uri is not allowlisted.");
   }
 
+  // A failed email link (expired or invalid token, wrong user) is sent here by
+  // Better Auth with `error`. No sign-in happened, so any session cookie in
+  // this browser belongs to someone else: minting for it would hand the app
+  // the wrong account. Report the failure to the app instead.
+  const failure = c.req.query("error");
+  if (failure) {
+    const failed = new URL(redirectUri);
+    failed.searchParams.set("kova_auth_error", /^[A-Za-z0-9_.-]{1,64}$/.test(failure) ? failure : "auth_failed");
+    const failedState = c.req.query("state") ?? "";
+    if (failedState) failed.searchParams.set("state", failedState);
+    return Response.redirect(failed.toString(), 302);
+  }
+
   // Read the session that Better Auth just created (we are ON the main auth domain)
   const auth = createAuth(
     c.env,

@@ -10,14 +10,16 @@
  * registration has one. A registration of just an origin and `/` (no query)
  * allows any path on that origin. An optional `state` is echoed back unchanged.
  * `native_handoff=1` is accepted as a legacy hint and changes nothing.
+ * `/sign-up` takes the same query, for the page that creates the account.
  */
 export function appSignInUrl(
   authOrigin: string,
   publishableKey: string,
   redirectUrl?: string,
   state?: string,
+  page: "sign-in" | "sign-up" = "sign-in",
 ): string {
-  const url = new URL("/sign-in", authOrigin);
+  const url = new URL(`/${page}`, authOrigin);
   url.searchParams.set("pk", publishableKey);
   if (redirectUrl) url.searchParams.set("redirect_url", redirectUrl);
   if (state) url.searchParams.set("state", state);

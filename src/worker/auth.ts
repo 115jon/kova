@@ -6,6 +6,7 @@ import { APIError } from "better-auth/api";
 import { admin, bearer, genericOAuth, jwt, magicLink, multiSession, oidcProvider, organization, twoFactor, username } from "better-auth/plugins";
 import { logAudit } from "./audit";
 import {
+  devEmailCaptureEnabled,
   invitationEmail,
   magicLinkEmail,
   resetPasswordEmail,
@@ -14,6 +15,7 @@ import {
   verificationEmail,
 } from "./email";
 import { getAppId } from "./lib/app-context";
+import { passkeyOrigins } from "./lib/passkey-origins";
 import { isAllowlistedAdminEmail, parseEmailAllowlist } from "./lib/roles";
 import { resolveOrigin, STATIC_ORIGINS } from "./middleware/cors";
 import {
@@ -103,6 +105,10 @@ function trustedOidcClients(env: Env): TrustedOidcClient[] {
 }
 
 export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Request, baseURLOverride?: string) {
+  const capture = devEmailCaptureEnabled(env);
+  const send = (mail: { to: string; subject: string; html: string }) =>
+    sendEmail({ ...mail, apiKey: env.RESEND_API_KEY, capture });
+
   return betterAuth(
     withCloudflare(
       // ── First arg: Cloudflare bindings + options ──────────────
@@ -239,14 +245,18 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
             "/sign-in/magic-link": { window: 60, max: 3 },      // magic link send throttle
             "/two-factor/verify-totp": { window: 60, max: 5 }, // TOTP guessing protection
             "/two-factor/send-otp": { window: 60, max: 3 },    // email OTP send throttle
-            "/forget-password": { window: 60, max: 3 },         // reset email throttle
+            "/request-password-reset": { window: 60, max: 3 }, // reset email throttle
           },
         },
 
         emailVerification: {
+          // Whoever opens the emailed link owns the mailbox, so verifying also
+          // signs them in. Without it the app page sends them back signed out
+          // (or, with another account's cookie in the browser, as that account).
+          autoSignInAfterVerification: true,
           sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }) => {
             const { subject, html } = verificationEmail(url);
-            await sendEmail({ to: user.email, subject, html, apiKey: env.RESEND_API_KEY });
+            await send({ to: user.email, subject, html });
           },
         },
 
@@ -258,7 +268,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
 
           sendResetPassword: async ({ user, url }: { user: { email: string }; url: string }) => {
             const { subject, html } = resetPasswordEmail(url);
-            await sendEmail({ to: user.email, subject, html, apiKey: env.RESEND_API_KEY });
+            await send({ to: user.email, subject, html });
           },
         },
 
@@ -349,11 +359,10 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
                       inviteLink,
                       role: domainRecord.default_role,
                     });
-                    sendEmail({
+                    send({
                       to: user.email,
                       subject,
                       html,
-                      apiKey: env.RESEND_API_KEY,
                     }).catch(() => { });
                   }
                 }
@@ -573,7 +582,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
             otpOptions: {
               sendOTP: async ({ user, otp }: { user: { email: string }; otp: string }) => {
                 const { subject, html } = twoFactorOtpEmail(otp);
-                await sendEmail({ to: user.email, subject, html, apiKey: env.RESEND_API_KEY });
+                await send({ to: user.email, subject, html });
               },
             },
           }),
@@ -606,7 +615,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
                 inviteLink,
                 role: data.role,
               });
-              await sendEmail({ to: data.email, subject, html, apiKey: env.RESEND_API_KEY });
+              await send({ to: data.email, subject, html });
             },
           }),
 
@@ -633,7 +642,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
             expiresIn: 60 * 10, // 10 minutes
             sendMagicLink: async ({ email, url }: { email: string; url: string }) => {
               const { subject, html } = magicLinkEmail(url);
-              await sendEmail({ to: email, subject, html, apiKey: env.RESEND_API_KEY });
+              await send({ to: email, subject, html });
             },
           }),
 
@@ -646,10 +655,8 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
           //   this is fine for local dev.
           //
           // origin = the page origin where window.navigator.credentials is
-          //   called. Because the WebAuthn UI runs inside the DASHBOARD (port
-          //   5174 in dev, custom domain in prod), this must be DASHBOARD_URL
-          //   — NOT AUTH_URL. The browser embeds the page's origin in the
-          //   authenticator data and the server must match it exactly.
+          //   called. The browser embeds it in the signed response and the
+          //   server must match it exactly. See passkeyOrigins.
           // Passkey (WebAuthn) — biometric / hardware key sign-in.
           passkey({
             rpName: "kova-auth",
@@ -660,7 +667,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
                 return "localhost";
               }
             })(),
-            origin: env.DASHBOARD_URL,
+            origin: passkeyOrigins(env),
           }),
 
           // Generic OAuth / OIDC — allows custom identity providers (Keycloak,

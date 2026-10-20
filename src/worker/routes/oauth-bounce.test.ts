@@ -191,6 +191,41 @@ describe("main host to hosted device completion", () => {
   });
 });
 
+describe("SDK handoff after a failed email link", () => {
+  const redirect = "https://consumer.example/callback";
+
+  function bounce(params: Record<string, string>) {
+    const query = new URLSearchParams({ mode: "sdk", pk: "pk_test", redirect_uri: redirect, ...params });
+    return main.request(`/bounce?${query}`, { headers: { cookie: "better-auth.session_token=other-account" } }, environment() as never);
+  }
+
+  it("reports the error to the app and never mints for the session already in the browser", async () => {
+    insertSession.mockClear();
+    getSession.mockClear();
+    const response = await bounce({ error: "INVALID_TOKEN", state: "nonce" });
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get("location")!);
+    expect(location.origin + location.pathname).toBe(redirect);
+    expect(location.searchParams.get("kova_auth_error")).toBe("INVALID_TOKEN");
+    expect(location.searchParams.get("state")).toBe("nonce");
+    expect(location.searchParams.has("code")).toBe(false);
+    expect(location.searchParams.has("kova_auth_code")).toBe(false);
+    expect(insertSession).not.toHaveBeenCalled();
+    expect(getSession).not.toHaveBeenCalled();
+  });
+
+  it("passes only a plain error code on", async () => {
+    const response = await bounce({ error: "<script>alert(1)</script>" });
+    expect(new URL(response.headers.get("location")!).searchParams.get("kova_auth_error")).toBe("auth_failed");
+  });
+
+  it("still refuses a redirect the app did not register", async () => {
+    const response = await bounce({ error: "INVALID_TOKEN", redirect_uri: "https://evil.example/callback" });
+    expect(response.status).toBe(400);
+    expect(response.headers.get("location")).toBeNull();
+  });
+});
+
 describe("SDK handoff platform session restore", () => {
   const savedSessions = [
     { session: { id: "main-session", token: "token-new", updatedAt: "2026-10-20T10:00:00.000Z" } },

@@ -79,6 +79,41 @@ describe("auth route origin enforcement", () => {
   });
 });
 
+describe("email-link callbackURL for app requests", () => {
+  async function requestMagicLink(callbackURL: string) {
+    const { authRouter } = await import("./auth");
+    authHandler.mockClear();
+    return authRouter.request(
+      new Request("https://auth.lvh.me/api/auth/sign-in/magic-link", {
+        method: "POST",
+        headers: {
+          Origin: "https://meet.example",
+          "Content-Type": "application/json",
+          "X-Publishable-Key": "pk_test",
+        },
+        body: JSON.stringify({ email: "a@b.test", callbackURL }),
+      }),
+      {},
+      env,
+    );
+  }
+  const bounce = (redirectUri: string) =>
+    `https://auth.lvh.me/api/hosted/oauth-complete?mode=sdk&pk=pk_test&redirect_uri=${encodeURIComponent(redirectUri)}`;
+
+  it("accepts the SDK bounce when it returns to an allowed redirect", async () => {
+    const response = await requestMagicLink(bounce("http://localhost:5180/done"));
+    expect(await response.text()).toBe("handled");
+    expect(authHandler).toHaveBeenCalledOnce();
+  });
+
+  it("refuses the SDK bounce when its redirect is not allowed, before any email is sent", async () => {
+    const response = await requestMagicLink(bounce("https://evil.example/steal"));
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: "redirect_uri_not_allowed" });
+    expect(authHandler).not.toHaveBeenCalled();
+  });
+});
+
 type Row = Record<string, unknown> | null;
 
 /** D1 stand-in that answers by table, so the routes' own SQL needs no parsing. */

@@ -239,13 +239,13 @@ describe("hosted per-app sign-in alias", () => {
     );
   });
 
-  it("accepts redirect_url and opens the bare page from / and /sign-up", async () => {
+  it("accepts redirect_url, and sends /sign-up to the sign-up page", async () => {
     const res = await get(`/?redirect_url=${encodeURIComponent("https://app.example.com/callback")}`);
     expect(res.headers.get("location")).toBe(
       "https://auth.115jon.site/sign-in?pk=pk_live_mira&redirect_url=https%3A%2F%2Fapp.example.com%2Fcallback",
     );
     expect((await get("/sign-up")).headers.get("location")).toBe(
-      "https://auth.115jon.site/sign-in?pk=pk_live_mira",
+      "https://auth.115jon.site/sign-up?pk=pk_live_mira",
     );
   });
 

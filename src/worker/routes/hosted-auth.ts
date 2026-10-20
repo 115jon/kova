@@ -8,7 +8,7 @@
  *
  * ## Route overview
  *
- *   GET  / , /sign-in, /sign-up            → 302 to {AUTH_URL}/sign-in?pk=…&redirect_url=…
+ *   GET  / , /sign-in, /sign-up            → 302 to {AUTH_URL}/sign-in (or /sign-up)?pk=…&redirect_url=…
  *                                            (device_return sign-in still renders here)
  *   ALL  /api/auth/*                       → Proxied to Better Auth (subdomain-scoped session)
  *   POST /api/hosted/create-ticket         → Issues short-lived auth code after sign-in
@@ -223,7 +223,7 @@ async function hostedSignIn(c: HC, mode: HostedPageMode): Promise<Response> {
   }
 
   return c.redirect(
-    appSignInUrl(c.env.AUTH_URL, app.publishable_key, redirectUri || undefined, c.req.query("state") || undefined),
+    appSignInUrl(c.env.AUTH_URL, app.publishable_key, redirectUri || undefined, c.req.query("state") || undefined, mode),
     302,
   );
 }
