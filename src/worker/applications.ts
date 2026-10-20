@@ -182,7 +182,7 @@ export function rowToApp(row: AppRow): Application {
     display_name: row.display_name ?? null,
     logo_url: row.logo_url ?? null,
     favicon_url: row.favicon_url ?? null,
-    primary_color: row.primary_color ?? "#3b82f6",
+    primary_color: row.primary_color ?? "#026f8e",
     background_color: row.background_color ?? "#0f172a",
     theme: (row.theme ?? "dark") as "dark" | "light" | "auto",
     home_url: row.home_url ?? null,

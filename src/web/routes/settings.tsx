@@ -3,10 +3,12 @@ import { ProviderIcon } from "@/components/BrandIcons";
 import { CustomFieldsSection } from "@/components/CustomFieldsSection";
 import { AUTH_URL, authClient, listAccounts, passkey, signOut, twoFactor, updateUser, useSession } from "@/lib/auth-client";
 import { validatePassword } from "@/lib/password";
+import { sentenceCase } from "@/lib/utils";
+import { setThemePreference, useTheme, type ThemePreference } from "@/lib/theme";
 import type { ProviderId } from "@/lib/providers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
-  AlertCircle, Check, CheckCircle, Clock,
+  AlertCircle, Check, CheckCircle, Clock, Palette,
   Copy,
   Eye, EyeOff, Fingerprint, KeyRound, Lock, LogOut, PlusCircle,
   Server, Settings, Shield, Sliders, Smartphone, Trash2, User, X,
@@ -45,29 +47,25 @@ export const Route = createFileRoute("/settings")({
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function SectionCard({ icon, color, title, children }: {
-  icon: React.ReactNode; color: string; title: string; children: React.ReactNode;
+function SectionCard({ icon, title, children }: {
+  icon: React.ReactNode; title: string; children: React.ReactNode;
 }) {
   return (
-    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+    <section className="card card-flush">
       <div className="panel-header">
-        {/* Icon + title grouped left — prevents space-between from splitting them */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ color, display: "flex", alignItems: "center" }}>{icon}</span>
-          <h2 className="panel-title">{title}</h2>
-        </div>
+        <h2 className="panel-title">{icon}{title}</h2>
       </div>
       {children}
-    </div>
+    </section>
   );
 }
 
 
 function InfoRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", borderBottom: "1px solid var(--color-border)" }}>
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)" }}>{label}</span>
-      <span style={{ fontFamily: mono ? "var(--font-mono)" : "var(--font-sans)", fontSize: "0.78rem", color: "var(--color-text-primary)" }}>{value}</span>
+    <div className="kv-row">
+      <span className="kv-label">{label}</span>
+      <span className={mono ? "kv-value text-mono" : "kv-value"}>{value}</span>
     </div>
   );
 }
@@ -161,42 +159,26 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
   };
 
   return (
-    <div style={{ padding: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 9, flexShrink: 0,
-            background: enabled ? "rgba(34,197,94,0.1)" : "rgba(99,102,241,0.1)",
-            border: `1px solid ${enabled ? "rgba(34,197,94,0.2)" : "rgba(99,102,241,0.2)"}`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            {enabled ? <CheckCircle size={16} color="#22c55e" /> : <Smartphone size={16} color="#818cf8" />}
-          </div>
-          <div>
-            <p style={{ fontSize: "0.9rem", fontWeight: 600, color: "#e2e8f0" }}>
-              Authenticator app
-            </p>
-            <p style={{ fontSize: "0.77rem", color: "#64748b" }}>
+    <div className="panel-body stack">
+      <div className="row-between">
+        <div className="row" style={{ gap: 12 }}>
+          <span className={enabled ? "icon-tile tone-success" : "icon-tile"} aria-hidden="true">
+            {enabled ? <CheckCircle /> : <Smartphone />}
+          </span>
+          <div className="min-w-0">
+            <p className="text-strong">Authenticator app</p>
+            <p className="text-sm text-secondary">
               {enabled ? "2FA is active — sign-ins require a TOTP code" : "Protect your account with Google Authenticator or Authy"}
             </p>
           </div>
         </div>
         {enabled
-          ? <span className="badge badge-green"><CheckCircle size={10} /> Enabled</span>
-          : <span className="badge badge-gray">Disabled</span>
+          ? <span className="badge badge-success"><CheckCircle aria-hidden="true" /> Enabled</span>
+          : <span className="badge badge-neutral">Disabled</span>
         }
       </div>
 
-      {error && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-          borderRadius: 4, padding: "8px 12px",
-          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
-        }}>
-          <AlertCircle size={13} /> {error}
-        </div>
-      )}
+      {error && <p className="alert alert-danger" role="alert"><AlertCircle /> {error}</p>}
 
       {/* ── Idle state ── */}
 
@@ -208,9 +190,10 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
             if (hasCredential) setStep("password");
             else void handleEnable();
           }}
+          style={{ alignSelf: "flex-start" }}
           type="button"
         >
-          <Smartphone size={14} /> Set up authenticator app
+          <Smartphone /> Set up authenticator app
         </button>
       )}
 
@@ -221,15 +204,16 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
             if (hasCredential) setStep("password");
             else void handleDisable();
           }}
+          style={{ alignSelf: "flex-start" }}
           type="button"
         >
-          <X size={14} /> Disable 2FA
+          <X /> Disable 2FA
         </button>
       )}
 
       {step === "password" && (
         <form
-          style={{ display: "flex", flexDirection: "column", gap: 10 }}
+          className="stack"
           onSubmit={(e) => {
             e.preventDefault();
             const typed = String(new FormData(e.currentTarget).get("password") ?? "");
@@ -238,12 +222,13 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
             else void handleEnable(pwd);
           }}
         >
-          <p style={{ fontSize: "0.82rem", color: "#94a3b8" }}>
+          <p className="text-secondary">
             {enabled ? "Enter your password to disable 2FA:" : "Enter your password to start setup:"}
           </p>
           <input
             autoFocus
             autoComplete="current-password"
+            aria-label="Current password"
             className="input"
             name="password"
             type="password"
@@ -251,7 +236,7 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
             value={password}
             onChange={e => setPassword(e.target.value)}
           />
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="row">
             <button
               className={enabled ? "btn btn-danger" : "btn btn-primary"}
               disabled={loading}
@@ -259,59 +244,65 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
             >
               {loading ? "Please wait…" : enabled ? "Confirm & disable" : "Continue"}
             </button>
-            <button className="btn btn-ghost" onClick={reset} type="button">Cancel</button>
+            <button className="btn btn-secondary" onClick={reset} type="button">Cancel</button>
           </div>
         </form>
       )}
 
       {step === "qr" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <p style={{ fontSize: "0.82rem", color: "#94a3b8", lineHeight: 1.6 }}>
-            Scan this QR code with <strong style={{ color: "#e2e8f0" }}>Google Authenticator</strong>,{" "}
-            <strong style={{ color: "#e2e8f0" }}>Authy</strong>, or any TOTP app.
+        <div className="stack">
+          <p className="text-secondary">
+            Scan this QR code with <strong className="text-strong">Google Authenticator</strong>,{" "}
+            <strong className="text-strong">Authy</strong>, or any TOTP app.
           </p>
-          <div style={{
-            background: "#fff", borderRadius: 12, padding: 16,
-            display: "inline-flex", alignSelf: "flex-start",
-          }}>
-            {totpUri && <QRCodeSVG value={totpUri} size={180} level="M" />}
-          </div>
+          {/* Literal black on white: the code must stay scannable in both themes. */}
+          {totpUri && (
+            <QRCodeSVG
+              value={totpUri}
+              size={196}
+              level="M"
+              fgColor="#000000"
+              bgColor="#ffffff"
+              marginSize={4}
+              aria-label="Authenticator setup QR code"
+              style={{ alignSelf: "flex-start", borderRadius: "var(--radius-md)" }}
+            />
+          )}
 
           {/* Manual entry */}
-          <div>
-            <p style={{ fontSize: "0.72rem", color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-              Can't scan? Enter key manually
-            </p>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <code style={{
-                flex: 1, background: "var(--color-surface-700)", borderRadius: 8,
-                padding: "8px 12px", fontFamily: "monospace", fontSize: "0.85rem",
-                color: showSecret ? "#c4b5fd" : "#475569",
-                letterSpacing: showSecret ? "0.12em" : undefined, wordBreak: "break-all",
-              }}>
+          <div className="form-group">
+            <p className="form-label">Can't scan? Enter the key manually</p>
+            <div className="row">
+              <code className="min-w-0" style={{ flex: 1, padding: "8px 12px" }}>
                 {showSecret ? secret : "•".repeat(secret.length)}
               </code>
-              <button className="btn btn-ghost" style={{ padding: 8 }} onClick={() => setShowSecret(s => !s)}>
-                {showSecret ? <EyeOff size={14} /> : <Eye size={14} />}
+              <button
+                aria-label={showSecret ? "Hide key" : "Show key"}
+                className="btn btn-secondary btn-icon"
+                onClick={() => setShowSecret(s => !s)}
+                type="button"
+              >
+                {showSecret ? <EyeOff /> : <Eye />}
               </button>
             </div>
           </div>
 
-          <button className="btn btn-primary" onClick={() => setStep("verify")}>
+          <button className="btn btn-primary" onClick={() => setStep("verify")} type="button">
             I've scanned it → Continue
           </button>
-          <button className="btn btn-ghost" style={{ fontSize: "0.8rem" }} onClick={reset}>Cancel</button>
+          <button className="btn btn-secondary" onClick={reset} type="button">Cancel</button>
         </div>
       )}
 
       {step === "verify" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <p style={{ fontSize: "0.82rem", color: "#94a3b8" }}>
+        <div className="stack">
+          <p className="text-secondary">
             Enter the 6-digit code from your authenticator app to confirm setup:
           </p>
           <input
             autoFocus
-            className="input"
+            aria-label="6-digit code"
+            className="input input-mono"
             type="text"
             inputMode="numeric"
             maxLength={6}
@@ -319,47 +310,43 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
             value={verifyCode}
             onChange={e => setVerifyCode(e.target.value.replace(/\D/g, ""))}
             onKeyDown={e => e.key === "Enter" && handleVerify()}
-            style={{ textAlign: "center", fontSize: "1.6rem", letterSpacing: "0.3em", fontFamily: "monospace" }}
+            style={{ textAlign: "center", letterSpacing: "0.3em" }}
           />
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="row">
             <button
               className="btn btn-primary"
               disabled={loading || verifyCode.length < 6}
               onClick={handleVerify}
-              style={{ flex: 1, justifyContent: "center" }}
+              style={{ flex: 1 }}
+              type="button"
             >
-              {loading ? "Verifying…" : <><Check size={14} /> Confirm & activate</>}
+              {loading ? "Verifying…" : <><Check /> Confirm &amp; activate</>}
             </button>
-            <button className="btn btn-ghost" onClick={() => setStep("qr")}>Back</button>
+            <button className="btn btn-secondary" onClick={() => setStep("qr")} type="button">Back</button>
           </div>
         </div>
       )}
 
       {step === "backupCodes" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{
-            background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.2)",
-            borderRadius: 8, padding: "10px 14px", fontSize: "0.82rem", color: "#facc15",
-            display: "flex", gap: 8, alignItems: "flex-start",
-          }}>
-            <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 2 }} />
+        <div className="stack">
+          <p className="alert alert-warning" role="status">
+            <AlertCircle />
             Save these backup codes somewhere safe. Each can only be used once if you lose access to your authenticator.
-          </div>
-          <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr",
-            gap: 6, background: "var(--color-surface-raised)", borderRadius: 4,
-            padding: 14, border: "1px solid var(--color-border)",
-          }}>
+          </p>
+          <div
+            className="code-block"
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}
+          >
             {backupCodes.map((c, i) => (
-              <code key={i} style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>{c}</code>
+              <span key={i}>{c}</span>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" onClick={copyBackupCodes} style={{ flex: 1, justifyContent: "center" }}>
-              {copied ? <><Check size={13} /> Copied!</> : <><Copy size={13} /> Copy all</>}
+          <div className="row">
+            <button className="btn btn-secondary" onClick={copyBackupCodes} style={{ flex: 1 }} type="button">
+              {copied ? <><Check /> Copied</> : <><Copy /> Copy all</>}
             </button>
-            <button className="btn btn-primary" onClick={reset} style={{ flex: 1, justifyContent: "center" }}>
-              <CheckCircle size={13} /> Done
+            <button className="btn btn-primary" onClick={reset} style={{ flex: 1 }} type="button">
+              <CheckCircle /> Done
             </button>
           </div>
         </div>
@@ -416,82 +403,57 @@ function PasskeysSection() {
   };
 
   return (
-    <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.86rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Registered passkeys</p>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-secondary)", marginTop: 2 }}>Sign in with Touch ID, Face ID, or a hardware security key.</p>
+    <div className="panel-body stack">
+      <div className="row-between" style={{ flexWrap: "wrap" }}>
+        <div className="min-w-0">
+          <p className="text-strong">Registered passkeys</p>
+          <p className="text-sm text-secondary">Sign in with Touch ID, Face ID, or a hardware security key.</p>
         </div>
         <button
           id="add-passkey-btn"
-          className="btn btn-primary"
+          className="btn btn-primary btn-sm"
           disabled={adding}
           onClick={handleAdd}
-          style={{ fontSize: "0.8rem" }}
+          type="button"
         >
-          <Fingerprint size={13} /> {adding ? "Waiting…" : "Add passkey"}
+          <Fingerprint /> {adding ? "Waiting…" : "Add passkey"}
         </button>
       </div>
 
-      {error && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-          borderRadius: 4, padding: "8px 12px",
-          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
-        }}>
-          <AlertCircle size={13} /> {error}
-        </div>
-      )}
-      {success && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
-          borderRadius: 4, padding: "8px 12px",
-          fontFamily: "var(--font-mono)", color: "var(--color-green)", fontSize: "0.76rem",
-        }}>
-          <CheckCircle size={13} /> {success}
-        </div>
-      )}
+      {error && <p className="alert alert-danger" role="alert"><AlertCircle /> {error}</p>}
+      {success && <p className="alert alert-success" role="status"><CheckCircle /> {success}</p>}
 
       {passkeys.length === 0 ? (
-        <div style={{
-          background: "var(--color-surface-raised)", borderRadius: 4, padding: "12px 16px",
-          fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-tertiary)",
-          textAlign: "center", border: "1px solid var(--color-border)",
-        }}>
-          No passkeys registered yet.
+        <div className="empty-state" style={{ padding: "var(--space-6)" }}>
+          <span className="empty-state-icon" aria-hidden="true"><Fingerprint /></span>
+          <p className="empty-state-title">No passkeys registered yet</p>
+          <p className="empty-state-body">Add one to sign in without a password.</p>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="card card-flush" style={{ boxShadow: "none" }}>
           {passkeys.map(pk => (
-            <div
-              key={pk.id}
-              style={{
-                display: "flex", alignItems: "center", gap: 10,
-                background: "var(--color-surface-raised)", borderRadius: 4,
-                padding: "9px 12px", border: "1px solid var(--color-border)",
-              }}
-            >
-              <Fingerprint size={14} color="var(--color-text-accent)" style={{ flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.82rem", color: "var(--color-text-primary)", fontWeight: 500 }}>
-                  {pk.name ?? "Passkey"}
-                </p>
+            <div key={pk.id} className="list-row">
+              <span className="icon-tile icon-tile-sm" aria-hidden="true"><Fingerprint /></span>
+              <div className="list-row-main">
+                <p className="list-row-title">{pk.name ?? "Passkey"}</p>
                 {pk.createdAt && (
-                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 1 }}>
+                  <p className="text-sm text-tertiary">
                     Added {new Date(pk.createdAt).toLocaleDateString()}
                   </p>
                 )}
               </div>
-              <button
-                className="btn btn-ghost"
-                style={{ padding: "4px 8px", fontSize: "0.76rem", color: "var(--color-red)" }}
-                onClick={() => handleDelete(pk.id)}
-                title="Remove passkey"
-              >
-                <Trash2 size={13} />
-              </button>
+              <div className="list-row-actions">
+                <button
+                  aria-label="Remove passkey"
+                  className="btn btn-subtle btn-icon btn-sm"
+                  onClick={() => handleDelete(pk.id)}
+                  style={{ color: "var(--color-danger-text)" }}
+                  title="Remove passkey"
+                  type="button"
+                >
+                  <Trash2 />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -529,30 +491,12 @@ function UsernameSection({ currentUsername }: { currentUsername?: string | null 
   };
 
   return (
-    <div style={{ padding: 20 }}>
-      {success && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
-          borderRadius: 4, padding: "8px 12px",
-          fontFamily: "var(--font-mono)", color: "var(--color-green)", fontSize: "0.76rem",
-        }}>
-          <CheckCircle size={13} /> Username updated!
-        </div>
-      )}
-      {error && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-          borderRadius: 4, padding: "8px 12px",
-          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
-        }}>
-          <AlertCircle size={13} /> {error}
-        </div>
-      )}
-      <form onSubmit={handleSave} style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-        <div style={{ flex: 1 }}>
-          <label className="form-label">Username <span style={{ color: "var(--color-text-tertiary)" }}>(3–32 chars)</span></label>
+    <div className="panel-body stack">
+      {success && <p className="alert alert-success" role="status"><CheckCircle /> Username updated</p>}
+      {error && <p className="alert alert-danger" role="alert"><AlertCircle /> {error}</p>}
+      <form onSubmit={handleSave} className="row" style={{ alignItems: "flex-end" }}>
+        <div className="form-group" style={{ flex: 1 }}>
+          <label className="form-label" htmlFor="username-input">Username <span className="text-tertiary">(3–32 chars)</span></label>
           <input
             id="username-input"
             className="input"
@@ -567,7 +511,7 @@ function UsernameSection({ currentUsername }: { currentUsername?: string | null 
           />
         </div>
         <button type="submit" className="btn btn-primary" disabled={loading}>
-          <Check size={13} /> {loading ? "Saving…" : "Save"}
+          <Check /> {loading ? "Saving…" : "Save"}
         </button>
       </form>
     </div>
@@ -646,70 +590,79 @@ function CredentialsSection({ hasCredential, userId, onPasswordSet }: {
   };
 
   return (
-    <div style={{ padding: 20 }}>
+    <div className="panel-body stack">
       {!hasCredential && (
-        <div style={{
-          display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 16,
-          background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
-          borderRadius: 4, padding: "10px 14px",
-          fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)",
-        }}>
-          <PlusCircle size={14} color="#818cf8" style={{ flexShrink: 0, marginTop: 2 }} />
-          <p style={{ lineHeight: 1.6 }}>
-            You signed in with an OAuth provider. Set a password to also be
-            able to sign in with email + password and to enable 2FA.
-          </p>
-        </div>
+        <p className="alert alert-info" role="status">
+          <PlusCircle />
+          You signed in with an OAuth provider. Set a password to also be
+          able to sign in with email + password and to enable 2FA.
+        </p>
       )}
 
       {success && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
-          borderRadius: 4, padding: "8px 12px",
-          fontFamily: "var(--font-mono)", color: "var(--color-green)", fontSize: "0.76rem",
-        }}>
-          <CheckCircle size={13} />
-          {hasCredential ? "Password changed. All other sessions revoked." : "Password set! You can now sign in with email + password."}
-        </div>
+        <p className="alert alert-success" role="status">
+          <CheckCircle />
+          {hasCredential ? "Password changed. All other sessions revoked." : "Password set. You can now sign in with email + password."}
+        </p>
       )}
-      {error && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)",
-          borderRadius: 8, padding: "8px 12px", color: "#f87171", fontSize: "0.8rem",
-        }}>
-          <AlertCircle size={13} /> {error}
-        </div>
-      )}
+      {error && <p className="alert alert-danger" role="alert"><AlertCircle /> {error}</p>}
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <form onSubmit={handleSubmit} className="stack">
         {hasCredential && (
-          <div>
-            <label style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500, display: "block", marginBottom: 5 }}>Current password</label>
-            <input className="input" type="password" value={current} onChange={e => setCurrent(e.target.value)}
+          <div className="form-group">
+            <label className="form-label" htmlFor="current-password-input">Current password</label>
+            <input className="input" id="current-password-input" type="password" value={current} onChange={e => setCurrent(e.target.value)}
               required autoComplete="current-password" />
           </div>
         )}
         <div className="form-group">
-          <label className="form-label">{hasCredential ? "New password" : "Password"}</label>
-          <input className="input" type="password" value={next} onChange={e => setNext(e.target.value)}
+          <label className="form-label" htmlFor="new-password-input">{hasCredential ? "New password" : "Password"}</label>
+          <input className="input" id="new-password-input" type="password" value={next} onChange={e => setNext(e.target.value)}
             required autoComplete="new-password" minLength={12} />
           {!hasCredential && (
-            <p style={{ fontSize: "0.72rem", color: "#64748b", marginTop: 6 }}>
-              12+ chars, upper, lower, number, and a special character.
-            </p>
+            <p className="form-hint">12+ chars, upper, lower, number, and a special character.</p>
           )}
         </div>
         <div className="form-group">
-          <label className="form-label">Confirm password</label>
-          <input className="input" type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+          <label className="form-label" htmlFor="confirm-password-input">Confirm password</label>
+          <input className="input" id="confirm-password-input" type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
             required autoComplete="new-password" />
         </div>
-        <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: 4 }}>
-          <Lock size={13} /> {loading ? "Saving…" : hasCredential ? "Change password" : "Set password"}
+        <button type="submit" className="btn btn-primary" disabled={loading} style={{ alignSelf: "flex-start" }}>
+          <Lock /> {loading ? "Saving…" : hasCredential ? "Change password" : "Set password"}
         </button>
       </form>
+    </div>
+  );
+}
+
+// ── Appearance ────────────────────────────────────────────────────────────────
+
+const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
+];
+
+function AppearanceSection() {
+  const { preference } = useTheme();
+  return (
+    <div className="panel-body stack-sm">
+      <p className="form-label" id="theme-label">Theme</p>
+      <div className="segmented" role="group" aria-labelledby="theme-label" style={{ maxWidth: 360 }}>
+        {THEME_OPTIONS.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            className="segmented-option"
+            aria-pressed={preference === value}
+            onClick={() => setThemePreference(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="form-hint">System follows your device. Hosted sign-in pages use each app's own theme.</p>
     </div>
   );
 }
@@ -754,19 +707,21 @@ function SettingsPage() {
   };
 
   return (
-    <div className="animate-in">
-      <div style={{ marginBottom: 24 }}>
-        <p className="section-label" style={{ marginBottom: 4 }}>Account</p>
-        <h1 className="page-title">Settings</h1>
-        <p className="page-subtitle">Account security &amp; platform configuration</p>
-      </div>
+    <div>
+      <header className="page-header">
+        <div className="page-header-main">
+          <p className="section-label">Account</p>
+          <h1 className="page-title">Settings</h1>
+          <p className="page-subtitle">Account security and platform configuration</p>
+        </div>
+      </header>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div className="stack-lg">
 
         {/* Profile */}
         {session && (
-          <SectionCard icon={<Shield size={14} />} color="var(--color-text-accent)" title="Profile">
-            <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 14, borderBottom: "1px solid var(--color-border)" }}>
+          <SectionCard icon={<Shield />} title="Profile">
+            <div className="list-row">
               <AvatarUpload
                 src={localImage ?? ((session.user as any).image as string | null)}
                 name={session.user.name}
@@ -779,29 +734,26 @@ function SettingsPage() {
                   await updateUser({ image: url } as any);
                 }}
               />
-              <div>
-                <p style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: "var(--color-text-primary)" }}>{session.user.name}</p>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)" }}>{session.user.email}</p>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>Click avatar to change photo</p>
+              <div className="list-row-main">
+                <p className="list-row-title">{session.user.name}</p>
+                <p className="text-sm text-secondary truncate">{session.user.email}</p>
+                <div className="row" style={{ marginTop: 4, flexWrap: "wrap" }}>
+                  <p className="text-sm text-tertiary">Click the avatar to change your photo</p>
                   {hasCustomAvatar() && (
                     <button
-                      onClick={handleRemoveAvatar}
+                      className="btn btn-subtle btn-sm"
                       disabled={removingAvatar}
-                      style={{
-                        all: "unset", cursor: removingAvatar ? "wait" : "pointer",
-                        fontSize: "0.7rem", color: "#ef4444",
-                        opacity: removingAvatar ? 0.5 : 1,
-                        textDecoration: "underline", textDecorationStyle: "dotted",
-                      }}
+                      onClick={handleRemoveAvatar}
+                      style={{ color: "var(--color-danger-text)" }}
+                      type="button"
                     >
                       {removingAvatar ? "Removing…" : "Remove photo"}
                     </button>
                   )}
                 </div>
               </div>
-              <span className="badge badge-blue" style={{ marginLeft: "auto" }}>
-                {(session.user as any).role ?? "user"}
+              <span className="badge badge-info">
+                {sentenceCase((session.user as any).role ?? "user")}
               </span>
             </div>
             <InfoRow label="User ID" value={session.user.id} mono />
@@ -809,49 +761,48 @@ function SettingsPage() {
             {currentUsername && <InfoRow label="Username" value={currentUsername} mono />}
             {/* Linked OAuth providers */}
             {ready && oauthProviders.length > 0 && (
-              <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--color-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-secondary)" }}>Linked providers</span>
-                <div style={{ display: "flex", gap: 6 }}>
+              <div className="kv-row">
+                <span className="kv-label">Linked providers</span>
+                <div className="row" style={{ gap: 6 }}>
                   {oauthProviders.map(a => (
-                    <div key={a.providerId} title={a.providerId} style={{
-                      width: 24, height: 24, borderRadius: 4,
-                      background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      <ProviderIcon id={a.providerId as ProviderId} size={13} />
-                    </div>
+                    <span key={a.providerId} className="icon-tile icon-tile-sm tone-neutral" title={a.providerId}>
+                      <ProviderIcon id={a.providerId as ProviderId} size={14} />
+                    </span>
                   ))}
                 </div>
               </div>
             )}
-            <div style={{ padding: "12px 20px" }}>
-              <button className="btn btn-ghost" style={{ fontSize: "0.8rem" }} onClick={handleSignOut}>
-                <LogOut size={13} /> Sign out
+            <div className="panel-footer" style={{ justifyContent: "flex-start" }}>
+              <button className="btn btn-secondary btn-sm" onClick={handleSignOut} type="button">
+                <LogOut /> Sign out
               </button>
             </div>
           </SectionCard>
         )}
 
+        <SectionCard icon={<Palette />} title="Appearance">
+          <AppearanceSection />
+        </SectionCard>
+
         {/* Username */}
-        <SectionCard icon={<User size={14} />} color="var(--color-green)" title="Username">
+        <SectionCard icon={<User />} title="Username">
           <UsernameSection currentUsername={currentUsername} />
         </SectionCard>
 
         {/* Custom Fields */}
-        <SectionCard icon={<Sliders size={14} />} color="var(--color-text-accent)" title="Custom Fields">
+        <SectionCard icon={<Sliders />} title="Custom fields">
           <CustomFieldsSection />
         </SectionCard>
 
         {/* Passkeys */}
-        <SectionCard icon={<Fingerprint size={14} />} color="var(--color-text-accent)" title="Passkeys">
+        <SectionCard icon={<Fingerprint />} title="Passkeys">
           <PasskeysSection />
         </SectionCard>
 
         {/* Password first — 2FA enable needs a credential account */}
         <SectionCard
-          icon={<Lock size={14} />}
-          color="var(--color-green)"
-          title={hasCredential ? "Change Password" : "Set a Password"}
+          icon={<Lock />}
+          title={hasCredential ? "Change password" : "Set a password"}
         >
           <CredentialsSection
             hasCredential={ready ? hasCredential : false}
@@ -860,38 +811,35 @@ function SettingsPage() {
           />
         </SectionCard>
 
-        <SectionCard icon={<KeyRound size={14} />} color="var(--color-text-accent)" title="Two-Factor Authentication">
+        <SectionCard icon={<KeyRound />} title="Two-factor authentication">
           <TwoFactorSection hasCredential={ready ? hasCredential : false} />
         </SectionCard>
 
         {/* Server info */}
-        <SectionCard icon={<Server size={14} />} color="var(--color-text-accent)" title="Server">
-          <InfoRow label="Auth Server URL" value={AUTH_URL || "(proxied via Vite)"} mono />
-          <InfoRow label="Auth Base Path" value="/api/auth" mono />
-          <InfoRow label="Email Verification" value="Enabled (Resend)" />
-          <InfoRow label="Rate Limiting" value="5 req / 60 s on sign-in" />
-          <InfoRow label="2FA Plugin" value="TOTP + Email OTP" />
-          <InfoRow label="Passkey Plugin" value="WebAuthn (biometric / hardware key)" />
-          <InfoRow label="Magic Link Plugin" value="Enabled (10 min expiry)" />
-          <InfoRow label="Bearer Plugin" value="Authorization: Bearer <token>" />
-          <div style={{ padding: "12px 20px" }} />
+        <SectionCard icon={<Server />} title="Server">
+          <InfoRow label="Auth server URL" value={AUTH_URL || "(proxied via Vite)"} mono />
+          <InfoRow label="Auth base path" value="/api/auth" mono />
+          <InfoRow label="Email verification" value="Enabled (Resend)" />
+          <InfoRow label="Rate limiting" value="5 req / 60 s on sign-in" />
+          <InfoRow label="2FA plugin" value="TOTP + Email OTP" />
+          <InfoRow label="Passkey plugin" value="WebAuthn (biometric / hardware key)" />
+          <InfoRow label="Magic link plugin" value="Enabled (10 min expiry)" />
+          <InfoRow label="Bearer plugin" value="Authorization: Bearer <token>" mono />
         </SectionCard>
 
         {/* Session */}
-        <SectionCard icon={<Clock size={14} />} color="var(--color-green)" title="Session">
-          <InfoRow label="Session Expiry" value="7 days" />
-          <InfoRow label="Sliding Window" value="Disabled (fixed duration)" />
-          <InfoRow label="Cookie Cache TTL" value="5 minutes (JWE encrypted)" />
-          <InfoRow label="Multi-Session" value="Up to 5 simultaneous accounts" />
-          <div style={{ padding: "12px 20px" }} />
+        <SectionCard icon={<Clock />} title="Session">
+          <InfoRow label="Session expiry" value="7 days" />
+          <InfoRow label="Sliding window" value="Disabled (fixed duration)" />
+          <InfoRow label="Cookie cache TTL" value="5 minutes (JWE encrypted)" />
+          <InfoRow label="Multi-session" value="Up to 5 simultaneous accounts" />
         </SectionCard>
 
         {/* Cloudflare resources */}
-        <SectionCard icon={<Settings size={14} />} color="var(--color-amber)" title="Cloudflare Resources">
+        <SectionCard icon={<Settings />} title="Cloudflare resources">
           <InfoRow label="Database" value="D1 — kova-auth-db" />
-          <InfoRow label="Session / Rate-limit Cache" value="KV — kova-auth-kv" />
-          <InfoRow label="File Storage" value="R2 — kova-auth-avatars" />
-          <div style={{ padding: "12px 20px" }} />
+          <InfoRow label="Session / rate-limit cache" value="KV — kova-auth-kv" />
+          <InfoRow label="File storage" value="R2 — kova-auth-avatars" />
         </SectionCard>
 
       </div>

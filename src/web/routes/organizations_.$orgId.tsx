@@ -1,11 +1,11 @@
 import { AvatarUpload } from "@/components/AvatarUpload";
 import { ConfirmModal } from "@/components/ConfirmModal";
-import { Modal } from "@/components/Modal";
+import { Modal, ModalHeader } from "@/components/Modal";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import { UserAvatar } from "@/components/UserAvatar";
 import { organization } from "@/lib/auth-client";
-import { relativeTime } from "@/lib/utils";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { relativeTime, sentenceCase } from "@/lib/utils";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle, ArrowLeft,
   CheckCircle,
@@ -15,7 +15,7 @@ import {
   RefreshCw,
   Settings,
   Shield,
-  Trash2, UserMinus, UserPlus, Users, UsersRound, X
+  Trash2, UserMinus, UserPlus, Users, UsersRound
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -25,38 +25,14 @@ export const Route = createFileRoute("/organizations_/$orgId")({
 
 type Tab = "members" | "invitations" | "teams" | "roles" | "activity" | "settings";
 
-// ── Role badge styling ────────────────────────────────────────────────────────
-
-function roleBadgeStyle(role: string): React.CSSProperties {
-  if (role === "owner") return { background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)", color: "var(--color-amber)" };
-  if (role === "admin") return { background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)", color: "var(--color-text-accent)" };
-  return { background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" };
-}
-
 // ── Shared inline error / success banners ─────────────────────────────────────
 
 function ErrBanner({ msg }: { msg: string }) {
-  return (
-    <div style={{
-      background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-      borderRadius: 4, padding: "8px 12px", fontFamily: "var(--font-mono)",
-      color: "var(--color-red)", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 6,
-    }}>
-      <AlertCircle size={12} /> {msg}
-    </div>
-  );
+  return <p className="alert alert-danger" role="alert"><AlertCircle /> {msg}</p>;
 }
 
 function OkBanner({ msg }: { msg: string }) {
-  return (
-    <div style={{
-      background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
-      borderRadius: 4, padding: "8px 12px", fontFamily: "var(--font-mono)",
-      color: "var(--color-green)", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: 6,
-    }}>
-      <CheckCircle size={12} /> {msg}
-    </div>
-  );
+  return <p className="alert alert-success" role="status"><CheckCircle /> {msg}</p>;
 }
 
 // ── Invite Member Modal ───────────────────────────────────────────────────────
@@ -93,43 +69,40 @@ function InviteModal({ orgId, teams, onClose, onInvited }: {
 
   return (
     <Modal onClose={onClose} maxWidth={420}>
-      <div className="modal-header">
-        <p className="panel-title">Invite member</p>
-        <button className="btn btn-ghost" style={{ padding: 5, marginLeft: "auto" }} onClick={onClose}>
-          <X size={13} />
-        </button>
-      </div>
-      <form onSubmit={handle} className="modal-body">
-        <div className="form-group">
-          <label className="form-label">Email</label>
-          <input className="input" type="email" placeholder="colleague@example.com" value={email}
-            onChange={e => setEmail(e.target.value)} autoFocus required />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Role</label>
-          <select className="input" value={role} onChange={e => setRole(e.target.value as any)}
-            style={{ appearance: "none", cursor: "pointer" }}>
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
-        {teams.length > 0 && (
+      <ModalHeader
+        title="Invite member"
+        icon={<span className="icon-tile" aria-hidden="true"><Mail /></span>}
+      />
+      <form onSubmit={handle}>
+        <div className="modal-body">
           <div className="form-group">
-            <label className="form-label">Assign to team <span style={{ color: "var(--color-text-tertiary)" }}>(optional)</span></label>
-            <select className="input" value={teamId} onChange={e => setTeamId(e.target.value)}
-              style={{ appearance: "none", cursor: "pointer" }}>
-              <option value="">No team</option>
-              {teams.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            <label className="form-label" htmlFor="invite-email">Email</label>
+            <input id="invite-email" className="input" type="email" placeholder="colleague@example.com" value={email}
+              onChange={e => setEmail(e.target.value)} autoFocus required />
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="invite-role">Role</label>
+            <select id="invite-role" className="select" value={role} onChange={e => setRole(e.target.value as any)}>
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
             </select>
           </div>
-        )}
-        {error && <ErrBanner msg={error} />}
-        {success && <OkBanner msg="Invitation sent!" />}
-        <div className="modal-footer" style={{ border: "none", padding: 0 }}>
-          <button type="button" className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }}
-            disabled={loading || !email || success}>
-            <Mail size={13} /> {loading ? "Sending…" : "Send invite"}
+          {teams.length > 0 && (
+            <div className="form-group">
+              <label className="form-label" htmlFor="invite-team">Assign to team <span className="text-tertiary">(optional)</span></label>
+              <select id="invite-team" className="select" value={teamId} onChange={e => setTeamId(e.target.value)}>
+                <option value="">No team</option>
+                {teams.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+          )}
+          {error && <ErrBanner msg={error} />}
+          {success && <OkBanner msg="Invitation sent!" />}
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={loading || !email || success}>
+            <Mail /> {loading ? "Sending…" : "Send invite"}
           </button>
         </div>
       </form>
@@ -161,20 +134,22 @@ function CreateTeamModal({ orgId, onClose, onCreated }: { orgId: string; onClose
 
   return (
     <Modal onClose={onClose} maxWidth={380}>
-      <div className="modal-header">
-        <p className="panel-title">New team</p>
-        <button className="btn btn-ghost" style={{ padding: 5, marginLeft: "auto" }} onClick={onClose}><X size={13} /></button>
-      </div>
-      <form onSubmit={handle} className="modal-body">
-        <div className="form-group">
-          <label className="form-label">Team name</label>
-          <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Frontend, Platform…" autoFocus required />
+      <ModalHeader
+        title="New team"
+        icon={<span className="icon-tile" aria-hidden="true"><UsersRound /></span>}
+      />
+      <form onSubmit={handle}>
+        <div className="modal-body">
+          <div className="form-group">
+            <label className="form-label" htmlFor="team-name">Team name</label>
+            <input id="team-name" className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Frontend, Platform…" autoFocus required />
+          </div>
+          {error && <ErrBanner msg={error} />}
         </div>
-        {error && <ErrBanner msg={error} />}
-        <div className="modal-footer" style={{ border: "none", padding: 0 }}>
-          <button type="button" className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} disabled={loading || !name}>
-            <Plus size={13} /> {loading ? "Creating…" : "Create team"}
+        <div className="modal-footer">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={loading || !name}>
+            <Plus /> {loading ? "Creating…" : "Create team"}
           </button>
         </div>
       </form>
@@ -230,51 +205,43 @@ function AddTeamMemberModal({ teamId, orgId, members, currentTeamUserIds, onClos
 
   return (
     <Modal onClose={onClose} maxWidth={420}>
-      <div className="modal-header">
-        <p className="panel-title">Add members to team</p>
-        <button className="btn btn-ghost" style={{ padding: 5, marginLeft: "auto" }} onClick={onClose}><X size={13} /></button>
-      </div>
-      <form onSubmit={handle} className="modal-body">
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)", marginBottom: 12 }}>
-          Select one or more members to add:
-        </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 280, overflowY: "auto" }}>
-          {available.length === 0 && (
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-tertiary)" }}>
-              {members.length === 0 ? "No org members to add." : "All members are already in this team."}
-            </p>
-          )}
-          {available.map((m: any) => {
-            const uid = m.userId ?? m.user?.id ?? m.id;
-            const checked = selected.has(uid);
-            return (
-              <label key={m.id} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "8px 10px", borderRadius: 6, cursor: "pointer",
-                background: checked ? "var(--color-accent-dim)" : "transparent",
-                border: checked ? "1px solid rgba(59,130,246,0.25)" : "1px solid transparent",
-                transition: "background 0.12s, border 0.12s",
-              }}>
-                <input type="checkbox" checked={checked} onChange={() => toggle(uid)}
-                  style={{ accentColor: "var(--color-accent)", width: 14, height: 14, cursor: "pointer", flexShrink: 0 }} />
-                <UserAvatar src={(m.user as any)?.image ?? null} name={m.user?.name ?? uid} size={28} style={{ flexShrink: 0 }} />
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.82rem", fontWeight: 500, color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {m.user?.name ?? "—"}
-                  </p>
-                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {m.user?.email ?? uid}
-                  </p>
-                </div>
-              </label>
-            );
-          })}
+      <ModalHeader
+        title="Add members to team"
+        icon={<span className="icon-tile" aria-hidden="true"><UserPlus /></span>}
+      />
+      <form onSubmit={handle}>
+        <div className="modal-body">
+          <p className="text-secondary">Select one or more members to add.</p>
+          <div className="stack-sm" style={{ maxHeight: 280, overflowY: "auto" }}>
+            {available.length === 0 && (
+              <p className="text-secondary">
+                {members.length === 0 ? "No org members to add." : "All members are already in this team."}
+              </p>
+            )}
+            {available.map((m: any) => {
+              const uid = m.userId ?? m.user?.id ?? m.id;
+              const checked = selected.has(uid);
+              return (
+                <label key={m.id} className="row" style={{
+                  gap: 10, padding: "8px 10px", borderRadius: "var(--radius-md)", cursor: "pointer",
+                  background: checked ? "var(--color-accent-soft)" : "transparent",
+                }}>
+                  <input type="checkbox" checked={checked} onChange={() => toggle(uid)} />
+                  <UserAvatar src={(m.user as any)?.image ?? null} name={m.user?.name ?? uid} size={32} />
+                  <div className="min-w-0">
+                    <p className="text-strong truncate">{m.user?.name ?? "—"}</p>
+                    <p className="text-mono text-sm text-tertiary truncate">{m.user?.email ?? uid}</p>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          {error && <ErrBanner msg={error} />}
         </div>
-        {error && <ErrBanner msg={error} />}
-        <div className="modal-footer" style={{ border: "none", padding: 0 }}>
-          <button type="button" className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} disabled={loading || !selected.size}>
-            <UserPlus size={13} /> {loading ? "Adding…" : `Add ${selected.size > 0 ? `(${selected.size})` : ""}`}
+        <div className="modal-footer">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={loading || !selected.size}>
+            <UserPlus /> {loading ? "Adding…" : `Add ${selected.size > 0 ? `(${selected.size})` : ""}`}
           </button>
         </div>
       </form>
@@ -328,47 +295,46 @@ function CreateRoleModal({ orgId, onClose, onCreated }: { orgId: string; onClose
 
   return (
     <Modal onClose={onClose} maxWidth={480}>
-      <div className="modal-header">
-        <p className="panel-title">New role</p>
-        <button className="btn btn-ghost" style={{ padding: 5, marginLeft: "auto" }} onClick={onClose}><X size={13} /></button>
-      </div>
-      <form onSubmit={handle} className="modal-body" style={{ gap: 14 }}>
-        <div className="form-group">
-          <label className="form-label">Role name</label>
-          <input className="input" value={roleName} onChange={e => setRoleName(e.target.value)}
-            placeholder="e.g. billing-manager, deployer…" autoFocus required />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Permissions</label>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {PERMISSION_RESOURCES.map(({ resource, actions }) => (
-              <div key={resource}>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", fontWeight: 700, color: "var(--color-text-secondary)", marginBottom: 5, textTransform: "lowercase" }}>
-                  {resource}
-                </p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {actions.map(action => {
-                    const checked = (perms[resource] ?? []).includes(action);
-                    return (
-                      <label key={action} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-                        <input type="checkbox" checked={checked} onChange={() => toggle(resource, action)}
-                          style={{ accentColor: "var(--color-accent)", width: 13, height: 13, cursor: "pointer" }} />
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: checked ? "var(--color-text-accent)" : "var(--color-text-secondary)" }}>
-                          {action}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+      <ModalHeader
+        title="New role"
+        icon={<span className="icon-tile" aria-hidden="true"><Shield /></span>}
+      />
+      <form onSubmit={handle}>
+        <div className="modal-body">
+          <div className="form-group">
+            <label className="form-label" htmlFor="role-name">Role name</label>
+            <input id="role-name" className="input" value={roleName} onChange={e => setRoleName(e.target.value)}
+              placeholder="e.g. billing-manager, deployer…" autoFocus required />
           </div>
+          <fieldset className="form-group" style={{ border: 0 }}>
+            <legend className="form-label" style={{ marginBottom: 6 }}>Permissions</legend>
+            <div className="stack">
+              {PERMISSION_RESOURCES.map(({ resource, actions }) => (
+                <div key={resource} className="stack-sm">
+                  <p className="text-strong text-sm">{sentenceCase(resource)}</p>
+                  <div className="row" style={{ flexWrap: "wrap", columnGap: 16 }}>
+                    {actions.map(action => {
+                      const checked = (perms[resource] ?? []).includes(action);
+                      return (
+                        <label key={action} className="row" style={{ gap: 6, cursor: "pointer" }}>
+                          <input type="checkbox" checked={checked} onChange={() => toggle(resource, action)} />
+                          <span className={checked ? "text-sm text-strong" : "text-sm text-secondary"}>
+                            {sentenceCase(action)}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </fieldset>
+          {error && <ErrBanner msg={error} />}
         </div>
-        {error && <ErrBanner msg={error} />}
-        <div className="modal-footer" style={{ border: "none", padding: 0 }}>
-          <button type="button" className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} disabled={loading || !roleName}>
-            <Shield size={13} /> {loading ? "Creating…" : "Create role"}
+        <div className="modal-footer">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={loading || !roleName}>
+            <Shield /> {loading ? "Creating…" : "Create role"}
           </button>
         </div>
       </form>
@@ -391,36 +357,26 @@ interface AuditLogRow {
   createdAt: number;
 }
 
-const ACTION_META: Record<string, { label: string; color: string }> = {
-  "user.signIn": { label: "Signed in", color: "var(--color-text-accent)" },
-  "user.signOut": { label: "Signed out", color: "var(--color-text-tertiary)" },
-  "user.signUp": { label: "Signed up", color: "var(--color-green)" },
-  "apiKey.created": { label: "API key created", color: "var(--color-amber)" },
-  "apiKey.revoked": { label: "API key revoked", color: "var(--color-red)" },
-  "member.invited": { label: "Member invited", color: "var(--color-text-accent)" },
-  "member.joined": { label: "Member joined", color: "var(--color-text-accent)" },
-  "member.removed": { label: "Member removed", color: "var(--color-red)" },
-  "member.roleChanged": { label: "Role changed", color: "var(--color-amber)" },
-  "session.revoked": { label: "Session revoked", color: "var(--color-red)" },
-  "admin.userBanned": { label: "User banned", color: "var(--color-red)" },
-  "admin.userUnbanned": { label: "User unbanned", color: "var(--color-green)" },
+type BadgeTone = "success" | "danger" | "warning" | "info" | "neutral";
+
+const ACTION_META: Record<string, { label: string; tone: BadgeTone }> = {
+  "user.signIn": { label: "Signed in", tone: "info" },
+  "user.signOut": { label: "Signed out", tone: "neutral" },
+  "user.signUp": { label: "Signed up", tone: "success" },
+  "apiKey.created": { label: "API key created", tone: "warning" },
+  "apiKey.revoked": { label: "API key revoked", tone: "danger" },
+  "member.invited": { label: "Member invited", tone: "info" },
+  "member.joined": { label: "Member joined", tone: "info" },
+  "member.removed": { label: "Member removed", tone: "danger" },
+  "member.roleChanged": { label: "Role changed", tone: "warning" },
+  "session.revoked": { label: "Session revoked", tone: "danger" },
+  "admin.userBanned": { label: "User banned", tone: "danger" },
+  "admin.userUnbanned": { label: "User unbanned", tone: "success" },
 };
 
 function ActionBadge({ action }: { action: string }) {
   const meta = ACTION_META[action];
-  const label = meta?.label ?? action;
-  const color = meta?.color ?? "var(--color-text-secondary)";
-  return (
-    <span style={{
-      display: "inline-block",
-      background: `color-mix(in srgb, ${color} 12%, transparent)`,
-      border: `1px solid color-mix(in srgb, ${color} 25%, transparent)`,
-      color, borderRadius: 3, padding: "1px 7px",
-      fontFamily: "var(--font-mono)", fontSize: "0.68rem", fontWeight: 600,
-    }}>
-      {label}
-    </span>
-  );
+  return <span className={`badge badge-${meta?.tone ?? "neutral"}`}>{meta?.label ?? action}</span>;
 }
 
 function OrgAuditLog({ orgId }: { orgId: string }) {
@@ -457,76 +413,65 @@ function OrgAuditLog({ orgId }: { orgId: string }) {
   useEffect(() => { fetchLogs(true); }, [fetchLogs]);
 
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <p className="panel-title">Recent activity</p>
-        <button className="btn btn-ghost" onClick={() => fetchLogs(true)} disabled={loading} title="Refresh" style={{ padding: "4px 8px" }}>
-          <RefreshCw size={13} className={loading ? "spin" : ""} />
-        </button>
-      </div>
+    <div className="stack">
+      {error && <ErrBanner msg={error} />}
 
-      {error && (
-        <div style={{
-          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-          borderRadius: 4, padding: "9px 13px",
-          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem", marginBottom: 12,
-        }}>
-          {error}
+      <div className="card card-flush">
+        <div className="panel-header">
+          <h2 className="panel-title"><ClipboardList /> Recent activity</h2>
+          <button type="button" className="btn btn-subtle btn-icon btn-sm" onClick={() => fetchLogs(true)} disabled={loading} title="Refresh" aria-label="Refresh activity">
+            <RefreshCw className={loading ? "spin" : ""} />
+          </button>
         </div>
-      )}
 
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
-          <div className="loading empty-state" style={{ fontSize: "0.78rem" }}>Loading activity…</div>
+          <div className="skeleton-rows" role="status" aria-label="Loading activity">
+            <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
+          </div>
         ) : logs.length === 0 ? (
           <div className="empty-state">
-            <ClipboardList size={18} color="var(--color-text-tertiary)" strokeWidth={1.5} style={{ marginBottom: 10 }} />
-            <p>No activity recorded yet for this organization.</p>
+            <span className="empty-state-icon" aria-hidden="true"><ClipboardList /></span>
+            <p className="empty-state-title">No activity yet</p>
+            <p className="empty-state-body">Nothing has been recorded for this organization.</p>
           </div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="data-table is-stackable">
             <thead>
-              <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
-                {["When", "Event", "Actor", "Target", "IP"].map(h => (
-                  <th key={h} style={{
-                    padding: "8px 14px", textAlign: "left",
-                    fontFamily: "var(--font-mono)", fontSize: "0.6rem", fontWeight: 600,
-                    color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em",
-                  }}>{h}</th>
-                ))}
+              <tr>
+                <th>When</th>
+                <th>Event</th>
+                <th>Actor</th>
+                <th>Target</th>
+                <th>IP</th>
               </tr>
             </thead>
             <tbody>
-              {logs.map((row, i) => (
-                <tr key={row.id} style={{
-                  borderBottom: i < logs.length - 1 ? "1px solid var(--color-border)" : "none",
-                  transition: "background 0.1s",
-                }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-hover)")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "")}
-                >
-                  <td style={{ padding: "9px 14px", fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)", whiteSpace: "nowrap" }}>
+              {logs.map(row => (
+                <tr key={row.id}>
+                  <td data-label="When" className="cell-meta">
                     <span title={new Date(row.createdAt).toLocaleString()}>
                       {relativeTime(new Date(row.createdAt).toISOString())}
                     </span>
                   </td>
-                  <td style={{ padding: "9px 14px" }}>
+                  <td data-label="Event">
                     <ActionBadge action={row.action} />
                   </td>
-                  <td style={{ padding: "9px 14px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                      <UserAvatar src={row.actorImage ?? null} name={row.actorName ?? row.actor} size={22} style={{ flexShrink: 0 }} />
-                      <span style={{ fontFamily: "var(--font-sans)", fontSize: "0.78rem", color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 110 }}>
+                  <td data-label="Actor">
+                    <div className="row">
+                      <UserAvatar src={row.actorImage ?? null} name={row.actorName ?? row.actor} size={24} />
+                      <span className="truncate" style={{ maxWidth: 160 }}>
                         {row.actorName ?? row.actorEmail ?? row.actor}
                       </span>
                     </div>
                   </td>
-                  <td style={{ padding: "9px 14px", fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {row.targetLabel ?? (row.targetId
-                      ? <code>{row.targetId.slice(0, 10)}…</code>
-                      : <span>—</span>)}
+                  <td data-label="Target">
+                    {row.targetLabel
+                      ? <span className="truncate" style={{ display: "block", maxWidth: 180 }}>{row.targetLabel}</span>
+                      : row.targetId
+                        ? <code>{row.targetId.slice(0, 10)}…</code>
+                        : <span className="text-tertiary">—</span>}
                   </td>
-                  <td style={{ padding: "9px 14px", fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
+                  <td data-label="IP" className="text-mono text-tertiary">
                     {row.ipAddress ?? "—"}
                   </td>
                 </tr>
@@ -536,8 +481,8 @@ function OrgAuditLog({ orgId }: { orgId: string }) {
         )}
 
         {nextCursor && !loading && (
-          <div style={{ padding: "10px 16px", borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "center" }}>
-            <button className="btn btn-ghost" style={{ fontSize: "0.76rem" }} onClick={() => fetchLogs(false)} disabled={loadingMore}>
+          <div className="panel-footer" style={{ justifyContent: "center" }}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => fetchLogs(false)} disabled={loadingMore}>
               {loadingMore ? "Loading…" : "Load more"}
             </button>
           </div>
@@ -624,10 +569,16 @@ function TeamsTab({ orgId, members }: { orgId: string; members: any[] }) {
     });
   };
 
-  if (loading) return <div className="loading empty-state" style={{ fontSize: "0.78rem" }}>Loading teams…</div>;
+  if (loading) return (
+    <div className="card card-flush">
+      <div className="skeleton-rows" role="status" aria-label="Loading teams">
+        <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
+      </div>
+    </div>
+  );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="stack">
       {confirmState && (
         <ConfirmModal
           title={confirmState.title}
@@ -651,74 +602,63 @@ function TeamsTab({ orgId, members }: { orgId: string; members: any[] }) {
         />
       )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button className="btn btn-primary" style={{ fontSize: "0.76rem", padding: "5px 11px" }} onClick={() => setShowCreate(true)}>
-          <Plus size={12} /> New team
+      <div className="row" style={{ justifyContent: "flex-end" }}>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+          <Plus /> New team
         </button>
       </div>
 
       {error && <ErrBanner msg={error} />}
 
       {teams.length === 0 ? (
-        <div className="card empty-state">
-          <UsersRound size={18} color="var(--color-text-tertiary)" strokeWidth={1.5} style={{ marginBottom: 10 }} />
-          <p>No teams yet. Create one to start grouping members.</p>
+        <div className="card">
+          <div className="empty-state">
+            <span className="empty-state-icon" aria-hidden="true"><UsersRound /></span>
+            <p className="empty-state-title">No teams yet</p>
+            <p className="empty-state-body">Create one to start grouping members.</p>
+          </div>
         </div>
       ) : (
         teams.map((team: any) => {
           const tms: any[] = teamMembersMap[team.id] ?? [];
           return (
-            <div key={team.id} className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <div key={team.id} className="card card-flush">
               <div className="panel-header">
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <UsersRound size={13} color="var(--color-text-accent)" />
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-primary)" }}>
-                    {team.name}
-                  </span>
-                  <span style={{
-                    fontFamily: "var(--font-mono)", fontSize: "0.67rem", color: "var(--color-text-tertiary)",
-                    background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-                    borderRadius: 3, padding: "1px 6px",
-                  }}>
+                <div className="row">
+                  <h3 className="panel-title"><UsersRound /> <span className="truncate">{team.name}</span></h3>
+                  <span className="badge badge-neutral">
                     {tms.length} member{tms.length !== 1 ? "s" : ""}
                   </span>
                 </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <button className="btn btn-ghost" style={{ fontSize: "0.73rem", padding: "4px 9px" }}
-                    onClick={() => setAddToTeam(team.id)}>
-                    <UserPlus size={11} /> Add
+                <div className="row">
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setAddToTeam(team.id)}>
+                    <UserPlus /> Add
                   </button>
-                  <button className="btn btn-ghost" style={{ padding: "4px 6px", color: "var(--color-red)" }}
-                    onClick={() => handleRemoveTeam(team.id, team.name)} title="Delete team">
-                    <Trash2 size={12} />
+                  <button type="button" className="btn btn-danger btn-sm btn-icon"
+                    onClick={() => handleRemoveTeam(team.id, team.name)} title="Delete team" aria-label={`Delete team ${team.name}`}>
+                    <Trash2 />
                   </button>
                 </div>
               </div>
               {tms.length === 0 ? (
-                <div style={{ padding: "14px 18px", fontFamily: "var(--font-mono)", fontSize: "0.73rem", color: "var(--color-text-tertiary)" }}>
-                  No members yet.
+                <div className="panel-body">
+                  <p className="text-secondary">No members yet.</p>
                 </div>
               ) : (
-                tms.map((tm: any, i: number) => (
-                  <div key={tm.id} style={{
-                    display: "flex", alignItems: "center", gap: 12, padding: "10px 18px",
-                    borderTop: i === 0 ? "1px solid var(--color-border)" : undefined,
-                    borderBottom: i < tms.length - 1 ? "1px solid var(--color-border)" : undefined,
-                    transition: "background 0.1s",
-                  }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-hover)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "")}
-                  >
-                    <UserAvatar src={(tm.user as any)?.image ?? null} name={tm.user?.name ?? tm.userId} size={28} style={{ flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.82rem", fontWeight: 500, color: "var(--color-text-primary)" }}>{tm.user?.name ?? "—"}</p>
-                      <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.69rem", color: "var(--color-text-tertiary)" }}>{tm.user?.email ?? tm.userId}</p>
+                tms.map((tm: any) => (
+                  <div key={tm.id} className="list-row">
+                    <UserAvatar src={(tm.user as any)?.image ?? null} name={tm.user?.name ?? tm.userId} size={32} />
+                    <div className="list-row-main">
+                      <p className="list-row-title truncate">{tm.user?.name ?? "—"}</p>
+                      <p className="text-mono text-sm text-tertiary truncate">{tm.user?.email ?? tm.userId}</p>
                     </div>
-                    <button className="btn btn-ghost" style={{ padding: "4px 6px", color: "var(--color-red)" }}
-                      onClick={() => handleRemoveTeamMember(team.id, tm.userId, tm.user?.name ?? tm.userId)}
-                      title="Remove from team">
-                      <UserMinus size={12} />
-                    </button>
+                    <div className="list-row-actions">
+                      <button type="button" className="btn btn-danger btn-sm btn-icon"
+                        onClick={() => handleRemoveTeamMember(team.id, tm.userId, tm.user?.name ?? tm.userId)}
+                        title="Remove from team" aria-label={`Remove ${tm.user?.name ?? tm.userId} from team`}>
+                        <UserMinus />
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
@@ -735,14 +675,10 @@ function TeamsTab({ orgId, members }: { orgId: string; members: any[] }) {
 function PermBadge({ resource, actions }: { resource: string; actions: string[] }) {
   if (!actions.length) return null;
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 3, marginRight: 6, marginBottom: 4 }}>
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>{resource}:</span>
+    <span className="row" style={{ gap: 4 }}>
+      <span className="text-sm text-tertiary">{sentenceCase(resource)}:</span>
       {actions.map(a => (
-        <span key={a} style={{
-          fontFamily: "var(--font-mono)", fontSize: "0.66rem", fontWeight: 600,
-          background: "var(--color-accent-dim)", color: "var(--color-text-accent)",
-          border: "1px solid rgba(59,130,246,0.18)", borderRadius: 3, padding: "1px 5px",
-        }}>{a}</span>
+        <span key={a} className="badge badge-info">{sentenceCase(a)}</span>
       ))}
     </span>
   );
@@ -790,10 +726,16 @@ function RolesTab({ orgId }: { orgId: string }) {
     });
   };
 
-  if (loading) return <div className="loading empty-state" style={{ fontSize: "0.78rem" }}>Loading roles…</div>;
+  if (loading) return (
+    <div className="card card-flush">
+      <div className="skeleton-rows" role="status" aria-label="Loading roles">
+        <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
+      </div>
+    </div>
+  );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="stack">
       {confirmState && (
         <ConfirmModal
           title={confirmState.title}
@@ -807,57 +749,52 @@ function RolesTab({ orgId }: { orgId: string }) {
         <CreateRoleModal orgId={orgId} onClose={() => setShowCreate(false)} onCreated={fetchRoles} />
       )}
 
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-tertiary)", maxWidth: 420 }}>
+      <div className="row-between" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+        <p className="text-secondary" style={{ maxWidth: 480 }}>
           Custom roles let you define fine-grained permissions for org members beyond the built-in owner / admin / member hierarchy.
         </p>
-        <button className="btn btn-primary" style={{ fontSize: "0.76rem", padding: "5px 11px", flexShrink: 0 }} onClick={() => setShowCreate(true)}>
-          <Shield size={12} /> New role
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>
+          <Shield /> New role
         </button>
       </div>
 
       {error && <ErrBanner msg={error} />}
 
       {roles.length === 0 ? (
-        <div className="card empty-state">
-          <Shield size={18} color="var(--color-text-tertiary)" strokeWidth={1.5} style={{ marginBottom: 10 }} />
-          <p>No custom roles yet. Create one to define granular permissions.</p>
+        <div className="card">
+          <div className="empty-state">
+            <span className="empty-state-icon" aria-hidden="true"><Shield /></span>
+            <p className="empty-state-title">No custom roles yet</p>
+            <p className="empty-state-body">Create one to define granular permissions.</p>
+          </div>
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          {roles.map((role: any, i: number) => {
-            const permsObj: PermMap = (() => {
-              try { return typeof role.permissions === "string" ? JSON.parse(role.permissions) : role.permissions ?? {}; }
+        <div className="card card-flush">
+          {roles.map((role: any) => {
+            const rolePerms: Record<string, unknown> = (() => {
+              try { return typeof role.permission === "string" ? JSON.parse(role.permission) : role.permission ?? {}; }
               catch { return {}; }
             })();
+            const permEntries = Object.entries(rolePerms);
             return (
-              <div key={role.id} style={{
-                padding: "13px 18px",
-                borderBottom: i < roles.length - 1 ? "1px solid var(--color-border)" : undefined,
-                transition: "background 0.1s",
-              }}
-                onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-hover)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "")}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Shield size={12} color="var(--color-text-accent)" />
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-primary)" }}>
-                      {role.role}
-                    </span>
+              <div key={role.id} className="list-row" style={{ alignItems: "flex-start" }}>
+                <span className="icon-tile icon-tile-sm" aria-hidden="true"><Shield /></span>
+                <div className="list-row-main">
+                  <p className="list-row-title truncate">{role.role}</p>
+                  <div className="row" style={{ flexWrap: "wrap", columnGap: 12, rowGap: 6, marginTop: 6 }}>
+                    {permEntries.map(([resource, actions]) => (
+                      <PermBadge key={resource} resource={resource} actions={actions as string[]} />
+                    ))}
+                    {permEntries.length === 0 && (
+                      <span className="text-sm text-tertiary">No permissions assigned</span>
+                    )}
                   </div>
-                  <button className="btn btn-ghost" style={{ padding: "4px 6px", color: "var(--color-red)" }}
-                    onClick={() => handleDeleteRole(role.id, role.role)} title="Delete role">
-                    <Trash2 size={12} />
-                  </button>
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap" }}>
-                  {Object.entries((() => { try { return typeof role.permission === "string" ? JSON.parse(role.permission) : role.permission ?? {}; } catch { return {}; } })()).map(([resource, actions]) => (
-                    <PermBadge key={resource} resource={resource} actions={actions as string[]} />
-                  ))}
-                  {Object.keys((() => { try { return typeof role.permission === "string" ? JSON.parse(role.permission) : role.permission ?? {}; } catch { return {}; } })()).length === 0 && (
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>No permissions assigned</span>
-                  )}
+                <div className="list-row-actions">
+                  <button type="button" className="btn btn-danger btn-sm btn-icon"
+                    onClick={() => handleDeleteRole(role.id, role.role)} title="Delete role" aria-label={`Delete role ${role.role}`}>
+                    <Trash2 />
+                  </button>
                 </div>
               </div>
             );
@@ -925,14 +862,14 @@ function LogoCard({ orgId, logo, name, onLogoChange }: LogoCardProps) {
   };
 
   return (
-    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+    <div className="card card-flush">
       <div className="panel-header">
-        <p className="section-label">Logo</p>
+        <h2 className="panel-title">Logo</h2>
       </div>
 
-      <div style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="panel-body stack">
         {/* Single interactive element — hover to reveal camera icon, click to crop & upload */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div className="row" style={{ gap: 16 }}>
           <AvatarUpload
             src={logo}
             name={name}
@@ -942,7 +879,7 @@ function LogoCard({ orgId, logo, name, onLogoChange }: LogoCardProps) {
             onSuccess={handleUploadSuccess}
             onError={handleUploadError}
           />
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)", lineHeight: 1.6 }}>
+          <p className="text-sm text-tertiary">
             Hover the logo to change it.<br />
             JPEG, PNG or WebP · Max 10 MB<br />
             Recommended 256 × 256 px
@@ -952,23 +889,22 @@ function LogoCard({ orgId, logo, name, onLogoChange }: LogoCardProps) {
         {/* Feedback banners — scoped to this card only */}
         {logoMsg && <OkBanner msg={logoMsg} />}
         {logoErr && <ErrBanner msg={logoErr} />}
-
-        {/* Remove action — only visible when a logo URL is set */}
-        {logo && (
-          <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 12 }}>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              disabled={logoRemoving}
-              onClick={handleRemoveLogo}
-              style={{ fontSize: "0.77rem", color: "var(--color-red)", display: "flex", alignItems: "center", gap: 6 }}
-            >
-              <Trash2 size={12} />
-              {logoRemoving ? "Removing…" : "Remove logo"}
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* Remove action — only visible when a logo URL is set */}
+      {logo && (
+        <div className="panel-footer">
+          <button
+            type="button"
+            className="btn btn-danger btn-sm"
+            disabled={logoRemoving}
+            onClick={handleRemoveLogo}
+          >
+            <Trash2 />
+            {logoRemoving ? "Removing…" : "Remove logo"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1083,27 +1019,39 @@ function OrgDetailPage() {
   };
 
   if (loading) return (
-    <div className="loading" style={{ padding: "40px 0", textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>Loading…</div>
+    <div role="status" aria-label="Loading organization">
+      <span className="skeleton" style={{ height: 14, width: 140, marginBottom: 16 }} />
+      <div className="row" style={{ gap: 14, marginBottom: 24 }}>
+        <span className="skeleton" style={{ height: 48, width: 48, flexShrink: 0 }} />
+        <span className="skeleton" style={{ height: 28, width: 220 }} />
+      </div>
+      <div className="card card-flush">
+        <div className="skeleton-rows">
+          <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
+        </div>
+      </div>
+    </div>
   );
 
   if (!org) return (
-    <div style={{ padding: 24 }}>
-      <p style={{ fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.82rem" }}>Organization not found.</p>
+    <div>
+      <Link className="back-link" to={"/organizations" as any}><ArrowLeft /> Back to organizations</Link>
+      <p className="alert alert-danger" role="alert"><AlertCircle /> Organization not found.</p>
     </div>
   );
 
   const pendingTeamCount = teams.length;
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: "members", label: `Members (${members.length})`, icon: <Users size={13} /> },
-    { key: "invitations", label: `Invitations (${invitations.filter(i => i.status === "pending").length})`, icon: <Mail size={13} /> },
-    { key: "teams", label: `Teams (${pendingTeamCount})`, icon: <UsersRound size={13} /> },
-    { key: "roles", label: "Roles", icon: <Shield size={13} /> },
-    { key: "activity", label: "Activity", icon: <ClipboardList size={13} /> },
-    { key: "settings", label: "Settings", icon: <Settings size={13} /> },
+    { key: "members", label: `Members (${members.length})`, icon: <Users size={14} /> },
+    { key: "invitations", label: `Invitations (${invitations.filter(i => i.status === "pending").length})`, icon: <Mail size={14} /> },
+    { key: "teams", label: `Teams (${pendingTeamCount})`, icon: <UsersRound size={14} /> },
+    { key: "roles", label: "Roles", icon: <Shield size={14} /> },
+    { key: "activity", label: "Activity", icon: <ClipboardList size={14} /> },
+    { key: "settings", label: "Settings", icon: <Settings size={14} /> },
   ];
 
   return (
-    <div className="animate-in" style={{ maxWidth: 760 }}>
+    <div>
       {showInvite && (
         <InviteModal orgId={orgId} teams={teams} onClose={() => setShowInvite(false)} onInvited={fetchOrg} />
       )}
@@ -1117,40 +1065,36 @@ function OrgDetailPage() {
         />
       )}
 
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <button className="btn btn-ghost" style={{ fontSize: "0.76rem", marginBottom: 14 }}
-          onClick={() => navigate({ to: "/organizations" as any })}>
-          <ArrowLeft size={12} /> Organizations
-        </button>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          {/* Read-only logo in the header — upload lives in Settings tab */}
-          <OrgAvatar
-            name={org.name ?? "O"}
-            logo={(org as any).logo ?? null}
-            size={44}
-          />
-          <div>
-            <h1 className="page-title">{org.name}</h1>
-            {org.slug && <p className="page-subtitle" style={{ fontFamily: "var(--font-mono)" }}>{org.slug}</p>}
+      <Link className="back-link" to={"/organizations" as any}><ArrowLeft /> Back to organizations</Link>
+
+      <header className="page-header">
+        <div className="page-header-main">
+          <div className="row" style={{ gap: 14 }}>
+            {/* Read-only logo in the header — upload lives in Settings tab */}
+            <OrgAvatar
+              name={org.name ?? "O"}
+              logo={(org as any).logo ?? null}
+              size={48}
+            />
+            <div className="min-w-0">
+              <p className="section-label">Organization</p>
+              <h1 className="page-title">{org.name}</h1>
+              {org.slug && <p className="page-subtitle"><span className="text-mono">{org.slug}</span></p>}
+            </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Tab bar */}
-      <div style={{ display: "flex", gap: 0, marginBottom: 20, borderBottom: "1px solid var(--color-border)" }}>
+      <div className="tabs" role="tablist" aria-label="Organization sections" style={{ marginBottom: 20 }}>
         {TABS.map(t => (
           <button
             key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === t.key}
+            className="tab"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
             onClick={() => setActiveTab(t.key)}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: "0.76rem", fontWeight: 500,
-              background: "none", border: "none", cursor: "pointer",
-              color: activeTab === t.key ? "var(--color-text-accent)" : "var(--color-text-tertiary)",
-              borderBottom: activeTab === t.key ? "2px solid var(--color-accent)" : "2px solid transparent",
-              marginBottom: -1, transition: "color 0.15s",
-            }}
           >
             {t.icon} {t.label}
           </button>
@@ -1159,52 +1103,43 @@ function OrgDetailPage() {
 
       {/* Members tab */}
       {activeTab === "members" && (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="card card-flush">
           <div className="panel-header">
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-secondary)" }}>
-              {members.length} member{members.length !== 1 ? "s" : ""}
-            </span>
-            <button className="btn btn-primary" style={{ fontSize: "0.76rem", padding: "5px 11px" }} onClick={() => setShowInvite(true)}>
-              <UserPlus size={12} /> Invite
+            <h2 className="panel-title tabular">
+              <Users /> {members.length} member{members.length !== 1 ? "s" : ""}
+            </h2>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowInvite(true)}>
+              <UserPlus /> Invite
             </button>
           </div>
-          {members.map((m: any, i: number) => (
-            <div key={m.id} style={{
-              display: "flex", alignItems: "center", gap: 12, padding: "11px 18px",
-              borderBottom: i < members.length - 1 ? "1px solid var(--color-border)" : "none",
-              transition: "background 0.1s",
-            }}
-              onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-hover)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "")}
-            >
-              <UserAvatar src={(m.user as any)?.image ?? null} name={m.user?.name} size={30} style={{ flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.84rem", fontWeight: 500, color: "var(--color-text-primary)" }}>{m.user?.name ?? "—"}</p>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>{m.user?.email ?? "—"}</p>
+          {members.map((m: any) => (
+            <div key={m.id} className="list-row">
+              <UserAvatar src={(m.user as any)?.image ?? null} name={m.user?.name} size={40} />
+              <div className="list-row-main">
+                <p className="list-row-title truncate">{m.user?.name ?? "—"}</p>
+                <p className="text-mono text-sm text-tertiary truncate">{m.user?.email ?? "—"}</p>
               </div>
-              <select
-                value={m.role}
-                onChange={e => handleChangeRole(m.id, e.target.value)}
-                disabled={m.role === "owner"}
-                style={{
-                  ...roleBadgeStyle(m.role),
-                  borderRadius: 3, padding: "3px 8px",
-                  fontFamily: "var(--font-mono)", fontSize: "0.7rem", fontWeight: 600,
-                  cursor: m.role === "owner" ? "default" : "pointer",
-                  textTransform: "capitalize", appearance: "none",
-                  background: roleBadgeStyle(m.role).background,
-                }}
-              >
-                <option value="owner">owner</option>
-                <option value="admin">admin</option>
-                <option value="member">member</option>
-              </select>
-              {m.role !== "owner" && (
-                <button className="btn btn-ghost" style={{ padding: "4px 6px", color: "var(--color-red)" }}
-                  onClick={() => handleRemoveMember(m.id, m.user?.email ?? m.email ?? m.id)} title="Remove member">
-                  <UserMinus size={12} />
-                </button>
-              )}
+              <div className="list-row-actions">
+                <select
+                  className="select"
+                  aria-label={`Role for ${m.user?.name ?? m.user?.email ?? "member"}`}
+                  value={m.role}
+                  onChange={e => handleChangeRole(m.id, e.target.value)}
+                  disabled={m.role === "owner"}
+                  style={{ width: "auto", height: 32 }}
+                >
+                  <option value="owner">Owner</option>
+                  <option value="admin">Admin</option>
+                  <option value="member">Member</option>
+                </select>
+                {m.role !== "owner" && (
+                  <button type="button" className="btn btn-danger btn-sm btn-icon"
+                    onClick={() => handleRemoveMember(m.id, m.user?.email ?? m.email ?? m.id)}
+                    title="Remove member" aria-label={`Remove ${m.user?.name ?? m.user?.email ?? "member"}`}>
+                    <UserMinus />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -1212,36 +1147,40 @@ function OrgDetailPage() {
 
       {/* Invitations tab */}
       {activeTab === "invitations" && (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="card card-flush">
           <div className="panel-header">
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-secondary)" }}>Pending invitations</span>
-            <button className="btn btn-primary" style={{ fontSize: "0.76rem", padding: "5px 11px" }} onClick={() => setShowInvite(true)}>
-              <Mail size={12} /> Invite
+            <h2 className="panel-title"><Mail /> Pending invitations</h2>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowInvite(true)}>
+              <Mail /> Invite
             </button>
           </div>
           {invitations.length === 0 ? (
-            <div className="empty-state">No pending invitations</div>
-          ) : invitations.map((inv: any, i: number) => (
-            <div key={inv.id} style={{
-              display: "flex", alignItems: "center", gap: 12, padding: "11px 18px",
-              borderBottom: i < invitations.length - 1 ? "1px solid var(--color-border)" : "none",
-              opacity: inv.status !== "pending" ? 0.5 : 1,
-            }}>
-              <Mail size={13} color="var(--color-text-tertiary)" style={{ flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.83rem", color: "var(--color-text-primary)" }}>{inv.email}</p>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
-                  Invited as <span style={{ color: "var(--color-text-accent)", fontWeight: 600 }}>{inv.role}</span>
-                  {inv.teamId && <span> · team <span style={{ color: "var(--color-text-accent)" }}>{teams.find(t => t.id === inv.teamId)?.name ?? inv.teamId}</span></span>}
-                  {" · "}{inv.status}
+            <div className="empty-state">
+              <span className="empty-state-icon" aria-hidden="true"><Mail /></span>
+              <p className="empty-state-title">No pending invitations</p>
+              <p className="empty-state-body">Invite someone to give them access to this organization.</p>
+            </div>
+          ) : invitations.map((inv: any) => (
+            <div key={inv.id} className="list-row">
+              <span className="icon-tile tone-neutral" aria-hidden="true"><Mail /></span>
+              <div className="list-row-main">
+                <p className="list-row-title truncate">{inv.email}</p>
+                <p className="text-sm text-secondary">
+                  Invited as <span className="text-strong">{sentenceCase(inv.role)}</span>
+                  {inv.teamId && <span> · Team <span className="text-strong">{teams.find(t => t.id === inv.teamId)?.name ?? inv.teamId}</span></span>}
                 </p>
               </div>
-              {inv.status === "pending" && (
-                <button className="btn btn-ghost" style={{ padding: "4px 8px", fontSize: "0.74rem", color: "var(--color-red)" }}
-                  onClick={() => handleCancelInvite(inv.id, inv.email)}>
-                  <Trash2 size={12} /> Cancel
-                </button>
-              )}
+              <div className="list-row-actions">
+                <span className={`badge ${inv.status === "pending" ? "badge-warning" : inv.status === "accepted" ? "badge-success" : "badge-neutral"}`}>
+                  {sentenceCase(inv.status)}
+                </span>
+                {inv.status === "pending" && (
+                  <button type="button" className="btn btn-danger btn-sm"
+                    onClick={() => handleCancelInvite(inv.id, inv.email)}>
+                    <Trash2 /> Cancel
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -1258,7 +1197,7 @@ function OrgDetailPage() {
 
       {/* Settings tab */}
       {activeTab === "settings" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="stack">
           <LogoCard
             orgId={orgId}
             logo={(org as any).logo ?? null}
@@ -1266,22 +1205,26 @@ function OrgDetailPage() {
             onLogoChange={(newLogo) => setOrg((o: any) => ({ ...o, logo: newLogo }))}
           />
 
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="card card-flush">
             <div className="panel-header">
-              <p className="section-label">General</p>
+              <h2 className="panel-title"><Settings /> General</h2>
             </div>
-            <form onSubmit={handleSaveSettings} style={{ display: "flex", flexDirection: "column", gap: 14, padding: 18 }}>
-              <div className="form-group">
-                <label className="form-label">Name</label>
-                <input className="input" value={editName} onChange={e => setEditName(e.target.value)} />
+            <form onSubmit={handleSaveSettings}>
+              <div className="panel-body stack">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="org-edit-name">Name</label>
+                    <input id="org-edit-name" className="input" value={editName} onChange={e => setEditName(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="org-edit-slug">Slug</label>
+                    <input id="org-edit-slug" className="input input-mono" value={editSlug} onChange={e => setEditSlug(e.target.value)} />
+                  </div>
+                </div>
+                {saveMsg && <OkBanner msg={saveMsg} />}
+                {saveErr && <ErrBanner msg={saveErr} />}
               </div>
-              <div className="form-group">
-                <label className="form-label">Slug</label>
-                <input className="input" value={editSlug} onChange={e => setEditSlug(e.target.value)} />
-              </div>
-              {saveMsg && <OkBanner msg={saveMsg} />}
-              {saveErr && <ErrBanner msg={saveErr} />}
-              <div>
+              <div className="panel-footer">
                 <button type="submit" className="btn btn-primary" disabled={saveLoading}>
                   {saveLoading ? "Saving…" : "Save changes"}
                 </button>
@@ -1289,16 +1232,20 @@ function OrgDetailPage() {
             </form>
           </div>
 
-          <div className="card" style={{ padding: 0, overflow: "hidden", borderColor: "rgba(248,113,113,0.18)" }}>
-            <div className="panel-header" style={{ borderBottomColor: "rgba(248,113,113,0.14)" }}>
-              <p className="section-label" style={{ color: "var(--color-red)" }}>Danger zone</p>
+          <div className="card card-flush">
+            <div className="panel-header">
+              <h2 className="panel-title" style={{ color: "var(--color-danger-text)" }}>
+                <AlertCircle /> Danger zone
+              </h2>
             </div>
-            <div style={{ padding: 18 }}>
-              <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-tertiary)", marginBottom: 14 }}>
+            <div className="panel-body">
+              <p className="text-secondary">
                 Deleting an organization is permanent and cannot be undone. All members and invitations will be removed.
               </p>
-              <button className="btn btn-danger" onClick={handleDeleteOrg}>
-                <Trash2 size={13} /> Delete organization
+            </div>
+            <div className="panel-footer">
+              <button type="button" className="btn btn-danger" onClick={handleDeleteOrg}>
+                <Trash2 /> Delete organization
               </button>
             </div>
           </div>

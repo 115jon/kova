@@ -12,7 +12,7 @@ import {
   sortAccountsLastUsedFirst,
 } from "../../worker/lib/oidc-account-picker";
 import { createFileRoute } from "@tanstack/react-router";
-import { PlusCircle } from "lucide-react";
+import { AlertCircle, PlusCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type DeviceSession = {
@@ -135,75 +135,30 @@ function OauthContinuePage() {
   };
 
   return (
-    <div className="public-auth-shell">
-      <div className="coast-paint" aria-hidden="true" />
-      <div className="auth-window">
-        <div className="auth-dots" aria-hidden="true">
-          <span className="auth-dot auth-dot-red" />
-          <span className="auth-dot auth-dot-amber" />
-          <span className="auth-dot auth-dot-green" />
-        </div>
-        <div className="auth-window-spacer" />
-        <div className="auth-glass animate-in">
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <KovaLogo size={36} variant="full" />
-          <h1
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "1.05rem",
-              fontWeight: 700,
-              color: "var(--color-text-primary)",
-              margin: "18px 0 6px",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Continue to 1:15
-          </h1>
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "0.76rem",
-              color: "var(--color-text-secondary)",
-            }}
-          >
-            Choose which Kova account signs into git
-          </p>
+    <main className="center-screen">
+      <div className="card public-card stack">
+        <div className="stack-sm" style={{ alignItems: "center", textAlign: "center" }}>
+          <KovaLogo size={48} />
+          <h1 className="text-h2" style={{ marginTop: "var(--space-2)" }}>Continue to 1:15</h1>
+          <p className="text-secondary">Choose which Kova account signs into git</p>
         </div>
 
-        {error && (
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "0.77rem",
-              color: "var(--color-red)",
-              marginBottom: 16,
-            }}
-          >
-            {error}
-          </p>
-        )}
+        {error && <p className="alert alert-danger" role="alert"><AlertCircle /> {error}</p>}
 
         {isPending || (session?.user && loadingSessions && accounts.length === 0) ? (
-          <p
-            style={{
-              fontFamily: "var(--font-mono)",
-              color: "var(--color-text-tertiary)",
-              fontSize: "0.8rem",
-              textAlign: "center",
-            }}
-          >
-            Loading accounts…
-          </p>
+          <div className="skeleton-rows" role="status" aria-label="Loading accounts">
+            <span className="skeleton" />
+            <span className="skeleton" />
+          </div>
         ) : !session?.user ? (
           <a
-            className="btn btn-primary"
+            className="btn btn-primary btn-block"
             href={signInToContinue()}
-            style={{ width: "100%", justifyContent: "center" }}
           >
             Sign in with Kova
           </a>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="stack-sm">
             {accounts.map((item) => {
               const isCurrent = item.user.id === session.user.id;
               const isLastUsed = item.user.id === lastUsedUserId;
@@ -212,51 +167,30 @@ function OauthContinuePage() {
                 <button
                   key={`${item.user.id}-${item.session.token || "current"}`}
                   type="button"
+                  className="btn btn-secondary btn-block"
+                  aria-current={isCurrent || undefined}
                   disabled={busy}
                   onClick={() => finishWithAccount(item)}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
+                    height: "auto",
+                    justifyContent: "flex-start",
                     gap: 12,
-                    width: "100%",
-                    textAlign: "left",
-                    background: isCurrent ? "var(--color-accent-dim)" : "var(--color-surface-raised)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: 6,
                     padding: "10px 12px",
-                    cursor: busy ? "wait" : "pointer",
-                    fontFamily: "var(--font-mono)",
+                    textAlign: "start",
+                    borderColor: isCurrent ? "var(--color-accent)" : undefined,
+                    cursor: busy ? "wait" : undefined,
                   }}
                 >
                   <UserAvatar src={item.user.image} name={item.user.name ?? item.user.email} size={36} />
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span
-                      style={{
-                        display: "block",
-                        color: "var(--color-text-primary)",
-                        fontSize: "0.82rem",
-                        fontWeight: 600,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                  <span className="min-w-0" style={{ flex: 1 }}>
+                    <span className="text-strong truncate" style={{ display: "block" }}>
                       {item.user.name || item.user.email}
                     </span>
-                    <span
-                      style={{
-                        display: "block",
-                        color: "var(--color-text-secondary)",
-                        fontSize: "0.72rem",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                    <span className="text-sm text-secondary text-mono truncate" style={{ display: "block" }}>
                       {item.user.email}
                     </span>
                   </span>
-                  <span style={{ color: "var(--color-text-tertiary)", fontSize: "0.7rem" }}>
+                  <span className="text-sm text-tertiary">
                     {switching === (item.session.token || "current")
                       ? "Signing in…"
                       : isLastUsed
@@ -269,28 +203,18 @@ function OauthContinuePage() {
               );
             })}
             <a
+              className="btn btn-subtle btn-block"
               href={signInForAnotherAccount()}
               onClick={(event) => {
                 event.preventDefault();
                 window.location.assign(signInForAnotherAccount());
               }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                marginTop: 8,
-                color: "var(--color-text-secondary)",
-                fontFamily: "var(--font-mono)",
-                fontSize: "0.76rem",
-              }}
             >
-              <PlusCircle size={14} /> Add another account
+              <PlusCircle /> Add another account
             </a>
           </div>
         )}
-        </div>
       </div>
-    </div>
+    </main>
   );
 }

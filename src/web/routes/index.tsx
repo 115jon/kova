@@ -1,8 +1,8 @@
 import { UserAvatar } from "@/components/UserAvatar";
 import { useOverviewStats } from "@/hooks/use-overview";
-import { relativeTime } from "@/lib/utils";
+import { relativeTime, sentenceCase } from "@/lib/utils";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Activity, Globe, Shield, TrendingUp, Users } from "lucide-react";
+import { Activity, Globe, Shield, Users } from "lucide-react";
 import { useSession } from "@/lib/auth-client";
 import { LandingPage } from "@/components/LandingPage";
 
@@ -20,19 +20,12 @@ function IndexRouteComponent() {
   return <OverviewPage />;
 }
 
-function StatCard({ label, value, icon: Icon, color }: {
-  label: string; value: number | string; icon: React.ElementType; color: string;
+function StatCard({ label, value, icon: Icon, tone = "" }: {
+  label: string; value: number | string; icon: React.ElementType; tone?: string;
 }) {
   return (
-    <div className="card" style={{ padding: "18px 20px", display: "flex", alignItems: "flex-start", gap: 14, cursor: "default" }}>
-      <div style={{
-        width: 36, height: 36, borderRadius: 5, flexShrink: 0,
-        background: `${color}18`,
-        border: `1px solid ${color}28`,
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <Icon size={16} color={color} strokeWidth={1.75} />
-      </div>
+    <div className="card stat-card">
+      <span className={`icon-tile ${tone}`} aria-hidden="true"><Icon strokeWidth={1.75} /></span>
       <div>
         <p className="stat-label">{label}</p>
         <p className="stat-value">{value}</p>
@@ -44,58 +37,60 @@ function StatCard({ label, value, icon: Icon, color }: {
 function OverviewPage() {
   const navigate = useNavigate();
   const { data: stats, isLoading, isError } = useOverviewStats();
+  const recentUsers = stats?.recentUsers ?? [];
 
   return (
-    <div className="animate-in">
-      {/* Page header */}
-      <div style={{ marginBottom: 22, display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
-        <div>
-          <p className="section-label" style={{ marginBottom: 4 }}>Platform</p>
+    <div>
+      <header className="page-header">
+        <div className="page-header-main">
+          <p className="section-label">Platform</p>
           <h1 className="page-title">Overview</h1>
           <p className="page-subtitle">System health at a glance</p>
         </div>
-      </div>
+      </header>
 
-      {/* Stat cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12, marginBottom: 24 }}>
-        {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="card loading" style={{ padding: "18px 20px", height: 74 }} />
-          ))
-        ) : isError ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="card" style={{ padding: "18px 20px", height: 74, opacity: 0.4 }} />
+      <div className="stat-grid">
+        {isLoading || isError || !stats ? (
+          [0, 1, 2, 3].map(i => (
+            <div key={i} className="card stat-card" aria-hidden="true">
+              <span className="skeleton" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)" }} />
+              <div className="stack-sm" style={{ flex: 1 }}>
+                <span className="skeleton" style={{ width: "60%", height: 13 }} />
+                <span className="skeleton" style={{ width: "40%", height: 24 }} />
+              </div>
+            </div>
           ))
         ) : (
           <>
-            <StatCard label="Total Users" value={stats!.totalUsers} icon={Users} color="var(--color-text-accent)" />
-            <StatCard label="Active Sessions" value={stats!.activeSessions} icon={Activity} color="var(--color-green)" />
-            <StatCard label="Banned Users" value={stats!.bannedUsers} icon={Shield} color="var(--color-red)" />
-            <StatCard label="Providers" value="2 active" icon={Globe} color="var(--color-amber)" />
+            <StatCard label="Total users" value={stats.totalUsers} icon={Users} />
+            <StatCard label="Active sessions" value={stats.activeSessions} icon={Activity} tone="tone-success" />
+            <StatCard label="Banned users" value={stats.bannedUsers} icon={Shield} tone="tone-danger" />
+            <StatCard label="Providers" value="2 active" icon={Globe} />
           </>
         )}
       </div>
+      {isError && (
+        <p className="alert alert-danger" role="alert" style={{ marginTop: -8, marginBottom: 24 }}>
+          Couldn't load platform stats. Refresh to try again.
+        </p>
+      )}
 
-      {/* Recent signups */}
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{
-          padding: "13px 18px",
-          borderBottom: "1px solid var(--color-border)",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-        }}>
-          <div>
-            <h2 style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "0.82rem", fontWeight: 600,
-              color: "var(--color-text-primary)", letterSpacing: "-0.01em",
-            }}>Recent Signups</h2>
-          </div>
-          <TrendingUp size={13} color="var(--color-text-tertiary)" />
+      <section className="card card-flush" aria-labelledby="recent-signups">
+        <div className="panel-header">
+          <h2 className="panel-title" id="recent-signups">Recent signups</h2>
         </div>
         {isLoading ? (
-          <div className="loading" style={{ padding: 24, textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>Loading…</div>
+          <div className="skeleton-rows" aria-label="Loading recent signups" role="status">
+            <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
+          </div>
+        ) : recentUsers.length === 0 ? (
+          <div className="empty-state">
+            <span className="empty-state-icon" aria-hidden="true"><Users /></span>
+            <p className="empty-state-title">No users yet</p>
+            <p className="empty-state-body">New sign-ups across your apps show up here.</p>
+          </div>
         ) : (
-          <table className="data-table">
+          <table className="data-table is-stackable">
             <thead>
               <tr>
                 <th>User</th>
@@ -105,35 +100,37 @@ function OverviewPage() {
               </tr>
             </thead>
             <tbody>
-              {(stats?.recentUsers ?? []).map(u => (
-                <tr
-                  key={u.id}
-                  onClick={() => navigate({ to: "/users/$userId", params: { userId: u.id } })}
-                  style={{ cursor: "pointer" }}
-                  title="View user details"
-                >
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                      <UserAvatar src={u.image ?? null} name={u.name} size={28} />
-                      <span style={{ fontFamily: "var(--font-sans)", fontWeight: 500, color: "var(--color-text-primary)", fontSize: "0.84rem" }}>{u.name}</span>
-                    </div>
-                  </td>
-                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.78rem", color: "var(--color-text-secondary)" }}>{u.email}</td>
-                  <td>
-                    <span className={`badge ${u.role === "admin" ? "badge-blue" : "badge-gray"}`}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>{relativeTime(u.createdAt)}</td>
-                </tr>
-              ))}
-              {!isLoading && (stats?.recentUsers ?? []).length === 0 && (
-                <tr><td colSpan={4} style={{ textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", padding: 24, fontSize: "0.78rem" }}>No users yet</td></tr>
-              )}
+              {recentUsers.map(u => {
+                const open = () => navigate({ to: "/users/$userId", params: { userId: u.id } });
+                return (
+                  <tr
+                    key={u.id}
+                    className="is-clickable"
+                    tabIndex={0}
+                    onClick={open}
+                    onKeyDown={e => { if (e.key === "Enter") open(); }}
+                    title="View user details"
+                  >
+                    <td>
+                      <div className="row" style={{ gap: 10 }}>
+                        <UserAvatar src={u.image ?? null} name={u.name} size={28} />
+                        <span className="text-strong truncate">{u.name}</span>
+                      </div>
+                    </td>
+                    <td><span className="text-mono">{u.email}</span></td>
+                    <td className="cell-inline">
+                      <span className={`badge ${u.role === "admin" ? "badge-info" : "badge-neutral"}`}>
+                        {sentenceCase(u.role)}
+                      </span>
+                    </td>
+                    <td className="cell-meta cell-inline"><span className="cell-prefix">Joined </span>{relativeTime(u.createdAt)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
-      </div>
+      </section>
     </div>
   );
 }

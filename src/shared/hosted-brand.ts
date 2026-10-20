@@ -21,7 +21,7 @@ export function resolveHostedAppearance(publishableKey: string, input: HostedApp
   if (publishableKey !== RALPH_PUBLISHABLE_KEY) return input;
   return {
     ...input,
-    primaryColor: ["#3b82f6", ""].includes(input.primaryColor.toLowerCase()) ? "#5865f2" : input.primaryColor,
+    primaryColor: ["#026f8e", "#3b82f6", ""].includes(input.primaryColor.toLowerCase()) ? "#5865f2" : input.primaryColor,
     backgroundColor: ["#3b82f6", "#0f172a", "#0a0a0a", ""].includes(input.backgroundColor.toLowerCase())
       ? (input.theme === "light" ? "#f8f8f8" : "#070709") : input.backgroundColor,
     ...!input.logoUrl ? { brandMark: "ralph-radio" as const } : {},

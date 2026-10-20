@@ -1,11 +1,11 @@
 import { ConfirmModal } from "@/components/ConfirmModal";
-import { Modal } from "@/components/Modal";
+import { Modal, ModalHeader } from "@/components/Modal";
 import { useApiKeys, useDeleteApiKey } from "@/hooks/use-api-keys";
 import { apiKey, useActiveOrganization } from "@/lib/auth-client";
 import { queryClient } from "@/lib/query-client";
 import { apiKeyKeys } from "@/lib/query-keys";
 import { createFileRoute } from "@tanstack/react-router";
-import { AlertCircle, Building2, Check, Copy, Key, Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { AlertCircle, Building2, Check, Copy, Key, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/api-keys")({
@@ -54,45 +54,23 @@ function KeyRevealModal({ keyValue, onClose }: { keyValue: string; onClose: () =
 
   return (
     <Modal onClose={onClose} maxWidth={520}>
-      <div className="modal-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 5, flexShrink: 0,
-            background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Key size={15} color="var(--color-text-accent)" />
-          </div>
-          <div>
-            <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.88rem" }}>Save your API key</p>
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>
-              This won't be shown again after you close this dialog.
-            </p>
-          </div>
-        </div>
-        <button className="btn btn-ghost" style={{ marginLeft: "auto", padding: 6 }} onClick={onClose}>
-          <X size={13} />
-        </button>
-      </div>
+      <ModalHeader
+        title="Save your API key"
+        subtitle="This won't be shown again after you close this dialog."
+        icon={<span className="icon-tile" aria-hidden="true"><Key /></span>}
+      />
 
       <div className="modal-body">
-        <div style={{
-          background: "var(--color-surface-raised)", borderRadius: 4, padding: "11px 14px",
-          fontFamily: "var(--font-mono)", fontSize: "0.77rem", color: "var(--color-text-accent)",
-          wordBreak: "break-all", border: "1px solid var(--color-border)",
-          letterSpacing: "0.03em",
-        }}>
-          {keyValue}
-        </div>
+        <div className="code-block">{keyValue}</div>
+      </div>
 
-        <div className="modal-footer" style={{ border: "none", padding: 0 }}>
-          <button className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={copy}>
-            {copied ? <><Check size={13} /> Copied!</> : <><Copy size={13} /> Copy key</>}
-          </button>
-          <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>
-            Done — I've saved it
-          </button>
-        </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-secondary" onClick={onClose}>
+          Done — I've saved it
+        </button>
+        <button type="button" className="btn btn-primary" onClick={copy}>
+          {copied ? <><Check /> Copied</> : <><Copy /> Copy key</>}
+        </button>
       </div>
     </Modal>
   );
@@ -103,11 +81,12 @@ function KeyRevealModal({ keyValue, onClose }: { keyValue: string; onClose: () =
 function CreateKeyForm({
   organizationId,
   onCreated,
+  onClose,
 }: {
   organizationId: string | null;
   onCreated: (key: string) => void;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [expiry, setExpiry] = useState("never");
   const [loading, setLoading] = useState(false);
@@ -141,9 +120,7 @@ function CreateKeyForm({
         queryKey: apiKeyKeys.list({ organizationId }),
       });
       onCreated(rawKey);
-      setName("");
-      setExpiry("never");
-      setOpen(false);
+      onClose();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to create API key";
       setError(msg);
@@ -153,40 +130,22 @@ function CreateKeyForm({
   };
 
   useEffect(() => {
-    if (open) setTimeout(() => nameRef.current?.focus(), 50);
-  }, [open]);
-
-  if (!open) {
-    return (
-      <div style={{ marginBottom: 16 }}>
-        <button className="btn btn-primary" onClick={() => setOpen(true)}>
-          <Plus size={14} /> Create API key
-        </button>
-      </div>
-    );
-  }
+    setTimeout(() => nameRef.current?.focus(), 50);
+  }, []);
 
   return (
-    <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-      <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 14, fontSize: "0.88rem", letterSpacing: "-0.02em" }}>
-        New API key
-      </p>
+    <section className="card card-flush" style={{ marginBottom: 20 }} aria-labelledby="new-api-key-title">
+      <div className="panel-header">
+        <h2 className="panel-title" id="new-api-key-title"><Key /> New API key</h2>
+      </div>
+      <div className="panel-body stack">
+      {error && <p className="alert alert-danger" role="alert"><AlertCircle /> {error}</p>}
 
-      {error && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-          borderRadius: 4, padding: "8px 12px",
-          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
-        }}>
-          <AlertCircle size={13} /> {error}
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-        <div style={{ flex: 1 }}>
-          <label className="form-label">Name</label>
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label" htmlFor="api-key-name">Name</label>
           <input
+            id="api-key-name"
             ref={nameRef}
             className="input"
             placeholder="e.g. kova-meet backend"
@@ -195,13 +154,13 @@ function CreateKeyForm({
             onKeyDown={e => e.key === "Enter" && handleCreate()}
           />
         </div>
-        <div style={{ width: 140 }}>
-          <label className="form-label">Expires</label>
+        <div className="form-group">
+          <label className="form-label" htmlFor="api-key-expiry">Expires</label>
           <select
-            className="input"
+            id="api-key-expiry"
+            className="select"
             value={expiry}
             onChange={e => setExpiry(e.target.value)}
-            style={{ cursor: "pointer" }}
           >
             {EXPIRY_OPTIONS.map(o => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -210,15 +169,16 @@ function CreateKeyForm({
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <button className="btn btn-primary" disabled={loading} onClick={handleCreate}>
-          {loading ? "Creating…" : <><Plus size={13} /> Create</>}
-        </button>
-        <button className="btn btn-ghost" onClick={() => { setOpen(false); setError(""); }}>
+      <div className="row" style={{ justifyContent: "flex-end" }}>
+        <button type="button" className="btn btn-secondary" onClick={onClose}>
           Cancel
         </button>
+        <button type="button" className="btn btn-primary" disabled={loading} onClick={handleCreate}>
+          {loading ? "Creating…" : <><Plus /> Create</>}
+        </button>
       </div>
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -230,6 +190,7 @@ function ApiKeysPage() {
 
   const [revealKey, setRevealKey] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null);
+  const [creating, setCreating] = useState(false);
 
   // ── Data ─────────────────────────────────────────────────────────────────────
   const { data: keys = [], isLoading, error } = useApiKeys({ organizationId: activeOrgId });
@@ -244,7 +205,7 @@ function ApiKeysPage() {
   }, [activeOrgId, deleteKey]);
 
   return (
-    <div className="animate-in">
+    <div>
       {revealKey && (
         <KeyRevealModal keyValue={revealKey} onClose={() => setRevealKey(null)} />
       )}
@@ -259,152 +220,138 @@ function ApiKeysPage() {
         />
       )}
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-        <div>
-          <p className="section-label" style={{ marginBottom: 4 }}>Security</p>
-          <h1 className="page-title">API Keys</h1>
-          <p className="page-subtitle" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <header className="page-header">
+        <div className="page-header-main">
+          <p className="section-label">Security</p>
+          <h1 className="page-title">API keys</h1>
+          <p className="page-subtitle">
             {activeOrg
-              ? (<><Building2 size={11} /><span>Keys for <strong style={{ color: "var(--color-text-primary)" }}>{activeOrg.name}</strong></span></>)
+              ? (<span className="row" style={{ gap: 6 }}><Building2 size={14} aria-hidden="true" /><span>Keys for <strong className="text-strong">{activeOrg.name}</strong></span></span>)
               : "Server-to-server access tokens — shown once on creation"
             }
           </p>
         </div>
-        <button
-          className="btn btn-ghost"
-          onClick={() => void queryClient.invalidateQueries({ queryKey: apiKeyKeys.list({ organizationId: activeOrgId }) })}
-          disabled={isLoading}
-          title="Refresh"
-        >
-          <RotateCcw size={14} className={isLoading ? "spin" : ""} />
-        </button>
-      </div>
-
-      <CreateKeyForm organizationId={activeOrgId} onCreated={(key) => setRevealKey(key)} />
-
-      {(error || deleteKey.error) && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 16,
-          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-          borderRadius: 4, padding: "9px 13px",
-          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
-        }}>
-          <AlertCircle size={13} /> {error?.message ?? deleteKey.error?.message}
+        <div className="page-header-actions">
+          <button
+            type="button"
+            className="btn btn-secondary btn-icon"
+            onClick={() => void queryClient.invalidateQueries({ queryKey: apiKeyKeys.list({ organizationId: activeOrgId }) })}
+            disabled={isLoading}
+            title="Refresh"
+            aria-label="Refresh API keys"
+          >
+            <RotateCcw className={isLoading ? "spin" : ""} />
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => setCreating(true)} disabled={creating}>
+            <Plus /> Create API key
+          </button>
         </div>
+      </header>
+
+      {creating && (
+        <CreateKeyForm
+          organizationId={activeOrgId}
+          onCreated={(key) => setRevealKey(key)}
+          onClose={() => setCreating(false)}
+        />
       )}
 
-      {isLoading ? (
-        <div style={{ textAlign: "center", padding: 48 }}>
-          <div className="loading" style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>Loading…</div>
-        </div>
-      ) : keys.length === 0 ? (
-        <div className="card empty-state">
-          <div style={{
-            width: 36, height: 36, borderRadius: 5, margin: "0 auto 12px",
-            background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Key size={16} color="var(--color-text-accent)" />
+      {(error || deleteKey.error) && (
+        <p className="alert alert-danger" role="alert" style={{ marginBottom: 16 }}>
+          <AlertCircle /> {error?.message ?? deleteKey.error?.message}
+        </p>
+      )}
+
+      <div className="card card-flush">
+        {isLoading ? (
+          <div className="skeleton-rows" role="status" aria-label="Loading API keys">
+            <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
           </div>
-          <p style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 5, letterSpacing: "-0.02em" }}>No API keys yet</p>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)" }}>
-            API keys allow your backend services to authenticate against this platform without a browser session.
-          </p>
-        </div>
-      ) : (
-        <div className="card" style={{ overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        ) : keys.length === 0 ? (
+          <div className="empty-state">
+            <span className="empty-state-icon" aria-hidden="true"><Key /></span>
+            <p className="empty-state-title">No API keys yet</p>
+            <p className="empty-state-body">
+              API keys allow your backend services to authenticate against this platform without a browser session.
+            </p>
+          </div>
+        ) : (
+          <table className="data-table is-stackable">
             <thead>
-              <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
-                {["Name", "Key prefix", "Created", "Expires", "Last used", ""].map(h => (
-                  <th key={h} style={{
-                    padding: "9px 16px", textAlign: "left",
-                    fontFamily: "var(--font-mono)", fontSize: "0.62rem", fontWeight: 600,
-                    color: "var(--color-text-tertiary)",
-                    textTransform: "uppercase", letterSpacing: "0.08em",
-                  }}>{h}</th>
-                ))}
+              <tr>
+                <th>Name</th>
+                <th>Key prefix</th>
+                <th>Created</th>
+                <th>Expires</th>
+                <th>Last used</th>
+                <th><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
-              {keys.map((k, i) => (
-                <tr
-                  key={k.id}
-                  style={{
-                    borderBottom: i < keys.length - 1 ? "1px solid var(--color-border)" : "none",
-                    transition: "background 0.1s",
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-hover)")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "")}
-                >
-                  <td style={{ padding: "12px 16px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{
-                        width: 6, height: 6, borderRadius: 2,
-                        background: k.enabled ? "var(--color-green)" : "var(--color-text-tertiary)", flexShrink: 0,
-                      }} />
-                      <span style={{ fontFamily: "var(--font-sans)", color: "var(--color-text-primary)", fontWeight: 500, fontSize: "0.84rem" }}>
-                        {k.name ?? "Unnamed key"}
+              {keys.map(k => {
+                const expired = k.expiresAt ? new Date(k.expiresAt) < new Date() : false;
+                const revoking = deleteKey.isPending && deleteKey.variables?.id === k.id;
+                return (
+                  <tr key={k.id}>
+                    <td data-label="Name">
+                      <div className="row">
+                        <span className="cell-primary truncate">{k.name ?? "Unnamed key"}</span>
+                        {!k.enabled && <span className="badge badge-neutral">Disabled</span>}
+                      </div>
+                    </td>
+                    <td data-label="Key prefix">
+                      <span className="mono-chip">
+                        {k.prefix ? `${k.prefix}_` : ""}{k.start ?? "••••••••"}…
                       </span>
-                    </div>
-                  </td>
-                  <td style={{ padding: "12px 16px" }}>
-                    <code style={{
-                      fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)",
-                      background: "var(--color-surface-raised)", padding: "2px 6px", borderRadius: 3,
-                      border: "1px solid var(--color-border)",
-                    }}>
-                      {k.prefix ? `${k.prefix}_` : ""}{k.start ?? "••••••••"}…
-                    </code>
-                  </td>
-                  <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-tertiary)" }}>
-                    {fmt(String(k.createdAt))}
-                  </td>
-                  <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-tertiary)" }}>
-                    {k.expiresAt
-                      ? <span style={{ color: new Date(k.expiresAt) < new Date() ? "var(--color-red)" : "var(--color-text-tertiary)" }}>{fmt(String(k.expiresAt))}</span>
-                      : <span className="badge badge-gray">Never</span>
-                    }
-                  </td>
-                  <td style={{ padding: "12px 16px", fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-tertiary)" }}>
-                    {relativeTime(k.lastRequest ? String(k.lastRequest) : null)}
-                    {k.requestCount > 0 && (
-                      <span style={{ marginLeft: 6, fontSize: "0.68rem", color: "var(--color-text-tertiary)", opacity: 0.7 }}>
-                        ({k.requestCount.toLocaleString()} reqs)
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                    <button
-                      className="btn btn-danger"
-                      style={{ padding: "4px 10px", fontSize: "0.75rem" }}
-                      disabled={deleteKey.isPending && deleteKey.variables?.id === k.id}
-                      onClick={() => setRevokeTarget(k as ApiKey)}
-                      title="Revoke key"
-                    >
-                      <Trash2 size={12} />
-                      {deleteKey.isPending && deleteKey.variables?.id === k.id ? "Revoking…" : "Revoke"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td data-label="Created" className="cell-meta">{fmt(String(k.createdAt))}</td>
+                    <td data-label="Expires" className="cell-meta">
+                      {k.expiresAt
+                        ? expired
+                          ? <span className="text-danger">{fmt(String(k.expiresAt))} (expired)</span>
+                          : <span>{fmt(String(k.expiresAt))}</span>
+                        : <span className="badge badge-neutral">Never</span>
+                      }
+                    </td>
+                    <td data-label="Last used" className="cell-meta">
+                      {relativeTime(k.lastRequest ? String(k.lastRequest) : null)}
+                      {k.requestCount > 0 && (
+                        <span className="text-sm" style={{ marginInlineStart: 6 }}>
+                          ({k.requestCount.toLocaleString()} reqs)
+                        </span>
+                      )}
+                    </td>
+                    <td className="cell-actions">
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        disabled={revoking}
+                        onClick={() => setRevokeTarget(k as ApiKey)}
+                        title="Revoke key"
+                      >
+                        <Trash2 />
+                        {revoking ? "Revoking…" : "Revoke"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Usage info */}
-      <div className="card" style={{ marginTop: 20, padding: 20 }}>
-        <p className="section-label" style={{ marginBottom: 8 }}>Using an API key</p>
-        <code style={{
-          display: "block", background: "var(--color-surface-raised)", borderRadius: 4,
-          border: "1px solid var(--color-border)",
-          padding: "12px 14px", fontFamily: "var(--font-mono)", fontSize: "0.75rem",
-          color: "var(--color-text-secondary)", lineHeight: 1.8,
-        }}>
+      <section className="card card-flush" style={{ marginTop: 20 }} aria-labelledby="api-key-usage-title">
+        <div className="panel-header">
+          <h2 className="panel-title" id="api-key-usage-title">Using an API key</h2>
+        </div>
+        <div className="panel-body">
+        <pre className="code-block" style={{ overflowX: "auto" }}>
           {`// In your backend service:\nconst res = await fetch("${window.location.origin}/api/auth/api-key/verify", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({ key: "your_api_key_here" }),\n});\nconst { valid, key } = await res.json();`}
-        </code>
-      </div>
+        </pre>
+        </div>
+      </section>
     </div>
   );
 }

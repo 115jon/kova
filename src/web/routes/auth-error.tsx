@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { KovaLogo } from "@/components/KovaLogo";
-import { AlertCircle, ArrowLeft, Shield } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 export const Route = createFileRoute("/auth-error")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -41,106 +41,26 @@ function AuthErrorPage() {
     };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--color-surface-900)",
-        padding: 24,
-      }}
-    >
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          background:
-            "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(239,68,68,0.08), transparent)",
-        }}
-      />
-
-      <div
-        className="card animate-in"
-        style={{ width: "100%", maxWidth: 380, padding: 36 }}
-      >
-        {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 28, display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <KovaLogo size={36} variant="full" />
+    <main className="center-screen">
+      <div className="card public-card stack">
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <KovaLogo size={48} />
         </div>
 
-        {/* Error card */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 16,
-            textAlign: "center",
-            marginBottom: 24,
-          }}
-        >
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 12,
-              background: "rgba(239,68,68,0.1)",
-              border: "1px solid rgba(239,68,68,0.25)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <AlertCircle size={22} color="#f87171" />
-          </div>
-          <div>
-            <h2
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "1rem",
-                fontWeight: 700,
-                color: "var(--color-text-primary)",
-                marginBottom: 8,
-              }}
-            >
-              {info.title}
-            </h2>
-            <p
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "0.78rem",
-                color: "var(--color-text-secondary)",
-                lineHeight: 1.6,
-              }}
-            >
-              {info.description}
+        <div className="stack-sm" style={{ textAlign: "center" }}>
+          <h1 className="text-h2">{info.title}</h1>
+          <p className="text-secondary">{info.description}</p>
+          {error !== "unknown_error" && (
+            <p className="text-sm text-tertiary">
+              Error code: <code>{error}</code>
             </p>
-            {error !== "unknown_error" && (
-              <p
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.72rem",
-                  color: "var(--color-text-tertiary)",
-                  marginTop: 8,
-                }}
-              >
-                Error code: <code>{error}</code>
-              </p>
-            )}
-          </div>
+          )}
         </div>
 
-        <Link to="/sign-in">
-          <button
-            className="btn btn-ghost"
-            style={{ width: "100%", justifyContent: "center" }}
-          >
-            <ArrowLeft size={14} /> Back to sign in
-          </button>
+        <Link className="btn btn-secondary btn-block" to="/sign-in">
+          <ArrowLeft /> Back to sign in
         </Link>
       </div>
-    </div>
+    </main>
   );
 }

@@ -51,35 +51,29 @@ const PROVIDER_LABELS: Record<string, string> = {
 };
 
 function actionLabel(action: string): { label: string; color: string } {
-  if (action.startsWith("user.signIn")) return { label: "Signed in", color: "var(--color-green)" };
+  if (action.startsWith("user.signIn")) return { label: "Signed in", color: "var(--color-success-text)" };
   if (action.startsWith("user.signOut")) return { label: "Signed out", color: "var(--color-text-tertiary)" };
-  if (action.startsWith("user.signUp")) return { label: "Account created", color: "var(--color-text-accent)" };
-  if (action.startsWith("user.password")) return { label: "Password changed", color: "var(--color-amber)" };
-  if (action.startsWith("admin.userBanned")) return { label: "Banned", color: "var(--color-red)" };
-  if (action.startsWith("admin.userUnbanned")) return { label: "Unbanned", color: "var(--color-green)" };
-  if (action.startsWith("admin.userLocked")) return { label: "Locked", color: "var(--color-amber)" };
-  if (action.startsWith("admin.userUnlocked")) return { label: "Unlocked", color: "var(--color-green)" };
-  if (action.startsWith("admin.userImpersonated")) return { label: "Impersonated", color: "var(--color-text-accent)" };
+  if (action.startsWith("user.signUp")) return { label: "Account created", color: "var(--color-accent-text)" };
+  if (action.startsWith("user.password")) return { label: "Password changed", color: "var(--color-warning-text)" };
+  if (action.startsWith("admin.userBanned")) return { label: "Banned", color: "var(--color-danger-text)" };
+  if (action.startsWith("admin.userUnbanned")) return { label: "Unbanned", color: "var(--color-success-text)" };
+  if (action.startsWith("admin.userLocked")) return { label: "Locked", color: "var(--color-warning-text)" };
+  if (action.startsWith("admin.userUnlocked")) return { label: "Unlocked", color: "var(--color-success-text)" };
+  if (action.startsWith("admin.userImpersonated")) return { label: "Impersonated", color: "var(--color-accent-text)" };
   return { label: action, color: "var(--color-text-secondary)" };
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function StatCard({ icon, label, value, color }: {
-  icon: React.ReactNode; label: string; value: string | number; color: string;
+function StatCard({ icon, label, value, tone = "" }: {
+  icon: React.ReactNode; label: string; value: string | number; tone?: string;
 }) {
   return (
-    <div className="card" style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12 }}>
-      <div style={{
-        width: 34, height: 34, borderRadius: 5,
-        background: `${color}18`, border: `1px solid ${color}30`,
-        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-      }}>
-        <span style={{ color }}>{icon}</span>
-      </div>
+    <div className="card stat-card">
+      <span className={`icon-tile ${tone}`} aria-hidden="true">{icon}</span>
       <div>
-        <p className="stat-value" style={{ fontSize: "1.15rem" }}>{value}</p>
-        <p className="stat-label" style={{ marginBottom: 0, marginTop: 2 }}>{label}</p>
+        <p className="stat-label">{label}</p>
+        <p className="stat-value">{value}</p>
       </div>
     </div>
   );
@@ -91,8 +85,9 @@ function AdminAction({ label, icon, danger = false, disabled = false, onClick }:
 }) {
   return (
     <button
-      className={danger ? "btn btn-danger" : "btn btn-ghost"}
-      style={{ width: "100%", justifyContent: "flex-start", fontSize: "0.8rem" }}
+      type="button"
+      className={`btn btn-block ${danger ? "btn-danger" : "btn-secondary"}`}
+      style={{ justifyContent: "flex-start" }}
       disabled={disabled}
       onClick={onClick}
     >
@@ -121,14 +116,16 @@ function ActivityHeatmap({ hist }: { hist: Record<string, number> }) {
   const cellColor = (count: number) => {
     if (count === 0) return "var(--color-surface-raised)";
     const intensity = Math.ceil((count / max) * 4);
-    const alpha = [0.2, 0.4, 0.65, 0.9][intensity - 1];
-    return `rgba(59,130,246,${alpha})`;
+    const pct = [25, 45, 70, 100][intensity - 1];
+    return `color-mix(in oklab, var(--color-accent) ${pct}%, var(--color-surface-raised))`;
   };
 
   return (
-    <div className="card" style={{ padding: "16px 20px", overflow: "hidden" }}>
-      <p className="panel-title" style={{ marginBottom: 12 }}>Activity — past 52 weeks</p>
-      <div style={{ display: "flex", gap: 3, overflowX: "auto" }}>
+    <section className="card card-flush" aria-labelledby="member-activity-heat">
+      <div className="panel-header">
+        <h2 className="panel-title" id="member-activity-heat"><Activity /> Activity — past 52 weeks</h2>
+      </div>
+      <div className="panel-body" style={{ display: "flex", gap: 3, overflowX: "auto" }}>
         {weeks.map((week, wi) => (
           <div key={wi} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {week.map(day => (
@@ -138,7 +135,6 @@ function ActivityHeatmap({ hist }: { hist: Record<string, number> }) {
                 style={{
                   width: 11, height: 11, borderRadius: 2,
                   background: cellColor(day.count),
-                  border: "1px solid rgba(255,255,255,0.04)",
                   flexShrink: 0,
                 }}
               />
@@ -146,7 +142,7 @@ function ActivityHeatmap({ hist }: { hist: Record<string, number> }) {
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -200,22 +196,23 @@ function AppMemberDetailPage() {
   // Loading / error
   if (isLoading) {
     return (
-      <div className="animate-in loading" style={{ display: "flex", alignItems: "center", gap: 10, padding: 40, fontFamily: "var(--font-mono)", fontSize: "0.78rem", color: "var(--color-text-tertiary)" }}>
-        <RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} /> Loading member…
+      <div className="stack" style={{ maxWidth: 900 }} role="status" aria-label="Loading member">
+        <span className="skeleton" style={{ height: 14, width: 100 }} />
+        <span className="skeleton" style={{ height: 116, borderRadius: "var(--radius-lg)" }} />
+        <span className="skeleton" style={{ height: 220, borderRadius: "var(--radius-lg)" }} />
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="animate-in">
-        <Link to="/applications/$appId" params={{ appId }}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem", textDecoration: "none", marginBottom: 20 }}>
-          <ArrowLeft size={13} /> Back to app
+      <div>
+        <Link to="/applications/$appId" params={{ appId }} className="back-link">
+          <ArrowLeft /> Back to app
         </Link>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 4, fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.78rem" }}>
-          <AlertCircle size={14} /> {error?.message ?? "Member not found"}
-        </div>
+        <p className="alert alert-danger" role="alert">
+          <AlertCircle /> {error?.message ?? "Member not found"}
+        </p>
       </div>
     );
   }
@@ -224,7 +221,7 @@ function AppMemberDetailPage() {
   const isLocked = member.banned && member.banReason === "__locked__";
 
   return (
-    <div className="animate-in" style={{ maxWidth: 900 }}>
+    <div style={{ maxWidth: 900 }}>
       {confirmState && (
         <ConfirmModal
           title={confirmState.title}
@@ -236,17 +233,12 @@ function AppMemberDetailPage() {
         />
       )}
 
-      {/* Back nav */}
-      <Link
-        to="/applications/$appId"
-        params={{ appId }}
-        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.76rem", textDecoration: "none", marginBottom: 20 }}
-      >
-        <ArrowLeft size={12} /> Back to app
+      <Link to="/applications/$appId" params={{ appId }} className="back-link">
+        <ArrowLeft /> Back to app
       </Link>
 
       {/* ── Hero header ───────────────────────────────────── */}
-      <div className="card" style={{ padding: 24, marginBottom: 20, display: "flex", alignItems: "flex-start", gap: 20 }}>
+      <div className="card" style={{ marginBottom: 20, display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 20 }}>
         <AvatarUpload
           src={localImage ?? member.image}
           name={member.name ?? member.email ?? "?"}
@@ -256,201 +248,184 @@ function AppMemberDetailPage() {
           onError={(msg) => console.error("Avatar upload error:", msg)}
         />
 
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div className="min-w-0" style={{ flex: "1 1 160px" }}>
+          <div className="row" style={{ flexWrap: "wrap" }}>
             <h1 className="page-title">{member.name ?? "—"}</h1>
             {member.role === "owner" && (
-              <span className="badge badge-blue"><ShieldCheck size={9} /> owner</span>
+              <span className="badge badge-info"><ShieldCheck /> Owner</span>
             )}
             {member.role === "admin" && (
-              <span className="badge badge-blue"><Shield size={9} /> admin</span>
+              <span className="badge badge-info"><Shield /> Admin</span>
             )}
             {isLocked && (
-              <span className="badge badge-yellow"><Lock size={9} /> locked</span>
+              <span className="badge badge-warning"><Lock /> Locked</span>
             )}
             {member.banned && !isLocked && (
-              <span className="badge badge-red"><Ban size={9} /> banned</span>
+              <span className="badge badge-danger"><Ban /> Banned</span>
             )}
             {!member.emailVerified && (
-              <span className="badge badge-yellow">unverified</span>
+              <span className="badge badge-warning">Unverified</span>
             )}
           </div>
 
-          <p className="page-subtitle" style={{ marginTop: 3 }}>{member.email}</p>
+          <p className="page-subtitle text-mono">{member.email}</p>
 
           {member.username && (
-            <p style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.72rem", marginTop: 3 }}>
+            <p className="text-mono text-tertiary" style={{ marginTop: 4 }}>
               @{member.username}
             </p>
           )}
 
-          <div style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
-              <span style={{ color: "var(--color-text-secondary)" }}>ID: </span>
-              <code>{member.userId}</code>
+          <div className="row" style={{ flexWrap: "wrap", gap: "4px 16px", marginTop: 12 }}>
+            <span className="text-sm text-tertiary">
+              ID <code>{member.userId}</code>
             </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
+            <span className="text-sm text-tertiary">
               Joined {relativeTime(new Date(member.joinedAt).toISOString())}
             </span>
           </div>
         </div>
 
         <button
-          className="btn btn-ghost"
-          style={{ padding: "5px 9px", fontSize: "0.76rem", flexShrink: 0 }}
+          type="button"
+          className="btn btn-secondary btn-sm btn-icon"
           onClick={() => void refetch()}
           title="Refresh"
+          aria-label="Refresh member"
         >
-          <RefreshCw size={12} />
+          <RefreshCw />
         </button>
       </div>
 
       {/* ── Two-column layout ─────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 20, alignItems: "start" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 20, alignItems: "flex-start" }}>
 
         {/* Left column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <div className="stack min-w-0" style={{ flex: "999 1 420px", gap: 20 }}>
 
-          {/* Stats row */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <StatCard icon={<Activity size={15} />} label="Active sessions" value={activeSessionCount} color="var(--color-green)" />
-            <StatCard icon={<Clock size={15} />} label="Last updated" value={relativeTime(new Date(member.updatedAt).toISOString())} color="var(--color-text-accent)" />
+          <div className="stat-grid" style={{ marginBottom: 0 }}>
+            <StatCard icon={<Activity />} label="Active sessions" value={activeSessionCount} tone="tone-success" />
+            <StatCard icon={<Clock />} label="Last updated" value={relativeTime(new Date(member.updatedAt).toISOString())} />
           </div>
 
-          {/* Activity heatmap */}
           <ActivityHeatmap hist={activityHist} />
 
           {/* Identity providers */}
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <div className="panel-header">
-              <div>
-                <p className="panel-title">Identity providers</p>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 2 }}>
-                  Authentication methods linked to this account
-                </p>
+          <section className="card card-flush" aria-labelledby="member-providers">
+            <div className="panel-header" style={{ paddingBlock: 8 }}>
+              <div className="min-w-0">
+                <h2 className="panel-title" id="member-providers">Identity providers</h2>
+                <p className="text-sm text-tertiary">Authentication methods linked to this account</p>
               </div>
             </div>
             {accounts.length === 0 ? (
-              <div style={{ padding: "16px 20px", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.76rem", textAlign: "center" }}>No linked providers</div>
+              <p className="panel-body text-sm text-tertiary" style={{ textAlign: "center" }}>No linked providers</p>
             ) : (
-              <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
-                {accounts.map(acc => {
-                  const label = PROVIDER_LABELS[acc.providerId] ?? acc.providerId;
-                  return (
-                    <div key={acc.id} style={{
-                      display: "flex", alignItems: "center", gap: 12, padding: "9px 12px", borderRadius: 4,
-                      background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-                    }}>
-                      <div style={{ width: 26, height: 26, borderRadius: 4, background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        {acc.providerId === "credential"
-                          ? <KeyRound size={12} color="var(--color-text-accent)" />
-                          : <ProviderIcon id={acc.providerId as ProviderId} size={13} />}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.82rem", fontWeight: 600, color: "var(--color-text-primary)" }}>{label}</p>
-                        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.66rem", color: "var(--color-text-tertiary)" }}>
-                          Linked {new Date(acc.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <span className="badge badge-green">connected</span>
+              accounts.map(acc => {
+                const label = PROVIDER_LABELS[acc.providerId] ?? acc.providerId;
+                return (
+                  <div key={acc.id} className="list-row">
+                    <span className="icon-tile icon-tile-sm tone-neutral" aria-hidden="true">
+                      {acc.providerId === "credential"
+                        ? <KeyRound />
+                        : <ProviderIcon id={acc.providerId as ProviderId} size={16} />}
+                    </span>
+                    <div className="list-row-main">
+                      <p className="list-row-title">{label}</p>
+                      <p className="text-sm text-tertiary">
+                        Linked {new Date(acc.createdAt).toLocaleDateString()}
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
+                    <span className="badge badge-success">Connected</span>
+                  </div>
+                );
+              })
             )}
-          </div>
+          </section>
 
           {/* Recent activity */}
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <div className="panel-header">
-              <div>
-                <p className="panel-title">Recent activity</p>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 2 }}>Last 15 audit entries</p>
+          <section className="card card-flush" aria-labelledby="member-recent">
+            <div className="panel-header" style={{ paddingBlock: 8 }}>
+              <div className="min-w-0">
+                <h2 className="panel-title" id="member-recent">Recent activity</h2>
+                <p className="text-sm text-tertiary">Last 15 audit entries</p>
               </div>
             </div>
             {recentActivity.length === 0 ? (
-              <div style={{ padding: 20, fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.76rem", textAlign: "center" }}>No activity recorded</div>
+              <p className="panel-body text-sm text-tertiary" style={{ textAlign: "center" }}>No activity recorded</p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                {recentActivity.map((entry, i) => {
-                  const { label, color } = actionLabel(entry.action);
-                  return (
-                    <div key={entry.id} style={{
-                      display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 20px",
-                      borderBottom: i < recentActivity.length - 1 ? "1px solid var(--color-border)" : "none",
-                    }}>
-                      <div style={{ width: 6, height: 6, borderRadius: 2, background: color, flexShrink: 0, marginTop: 5 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.81rem", color: "var(--color-text-primary)", fontWeight: 500 }}>{label}</p>
-                        {entry.ipAddress && (
-                          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.66rem", color: "var(--color-text-tertiary)", marginTop: 2 }}>{entry.ipAddress}</p>
-                        )}
-                      </div>
-                      <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.66rem", color: "var(--color-text-tertiary)", flexShrink: 0, marginTop: 2 }}>
-                        {relativeTime(new Date(entry.createdAt).toISOString())}
-                      </p>
+              recentActivity.map(entry => {
+                const { label, color } = actionLabel(entry.action);
+                return (
+                  <div key={entry.id} className="list-row" style={{ alignItems: "flex-start" }}>
+                    <span
+                      aria-hidden="true"
+                      style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 6 }}
+                    />
+                    <div className="list-row-main">
+                      <p className="text-strong">{label}</p>
+                      {entry.ipAddress && (
+                        <p className="text-mono text-tertiary">{entry.ipAddress}</p>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
+                    <p className="text-sm text-tertiary tabular" style={{ flexShrink: 0 }}>
+                      {relativeTime(new Date(entry.createdAt).toISOString())}
+                    </p>
+                  </div>
+                );
+              })
             )}
-          </div>
+          </section>
         </div>
 
         {/* Right column — Admin actions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="stack" style={{ flex: "1 1 260px", gap: 16 }}>
 
           {actionError && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 4, fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem" }}>
-              <AlertCircle size={13} /> {actionError}
-            </div>
+            <p className="alert alert-danger" role="alert"><AlertCircle /> {actionError}</p>
           )}
           {actionSuccess && !anyMutPending && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)", borderRadius: 4, fontFamily: "var(--font-mono)", color: "var(--color-green)", fontSize: "0.76rem" }}>
-              <CheckCircle size={13} /> Done!
-            </div>
+            <p className="alert alert-success" role="status"><CheckCircle /> Done</p>
           )}
 
           {/* Role */}
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <div className="panel-header"><p className="section-label">App role</p></div>
-            <div style={{ padding: "12px 14px" }}>
+          <section className="card card-flush" aria-labelledby="member-role">
+            <div className="panel-header"><h2 className="panel-title" id="member-role">App role</h2></div>
+            <div className="panel-body">
               <select
-                className="input"
-                style={{ width: "100%", fontSize: "0.78rem", padding: "5px 8px", appearance: "none" }}
+                className="select"
+                aria-labelledby="member-role"
                 value={member.role}
                 disabled={anyMutPending}
                 onChange={e => roleChange.mutate({ appId, userId, role: e.target.value })}
               >
-                <option value="owner">owner</option>
-                <option value="admin">admin</option>
-                <option value="member">member</option>
+                <option value="owner">Owner</option>
+                <option value="admin">Admin</option>
+                <option value="member">Member</option>
               </select>
             </div>
-          </div>
+          </section>
 
           {/* Impersonate */}
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <section className="card card-flush" aria-labelledby="member-impersonate">
             <div className="panel-header">
-              <p className="section-label">Impersonate</p>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", color: "var(--color-amber)", background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 3, padding: "1px 6px" }}>Pro</span>
+              <h2 className="panel-title" id="member-impersonate">Impersonate</h2>
+              <span className="badge badge-warning">Pro</span>
             </div>
-            <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="panel-body stack-sm">
               {impersonateResult ? (
-                <div>
-                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginBottom: 6 }}>
+                <>
+                  <p className="form-hint">
                     Token (expires {relativeTime(new Date(impersonateResult.expiresAt).toISOString())})
                   </p>
-                  <code style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "var(--color-text-accent)", wordBreak: "break-all", display: "block", background: "var(--color-surface-raised)", padding: "6px 8px", borderRadius: 4, border: "1px solid var(--color-border)" }}>
-                    {impersonateResult.token}
-                  </code>
-                  <button className="btn btn-ghost" style={{ marginTop: 6, fontSize: "0.72rem", width: "100%" }}
+                  <div className="code-block">{impersonateResult.token}</div>
+                  <button type="button" className="btn btn-secondary btn-sm btn-block"
                     onClick={() => setImpersonateResult(null)}>Clear</button>
-                </div>
+                </>
               ) : (
                 <AdminAction
                   label={impersonate.isPending ? "Generating…" : "Generate token"}
-                  icon={<Sparkles size={13} />}
+                  icon={<Sparkles />}
                   disabled={anyMutPending || impersonate.isPending}
                   onClick={() => impersonate.mutate({ appId, userId }, {
                     onSuccess: r => setImpersonateResult({ token: r.token, expiresAt: r.expiresAt }),
@@ -458,23 +433,23 @@ function AppMemberDetailPage() {
                 />
               )}
             </div>
-          </div>
+          </section>
 
           {/* Lock / Ban */}
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <div className="panel-header"><p className="section-label">Account status</p></div>
-            <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <section className="card card-flush" aria-labelledby="member-status">
+            <div className="panel-header"><h2 className="panel-title" id="member-status">Account status</h2></div>
+            <div className="panel-body stack-sm">
               {isLocked ? (
                 <AdminAction
                   label="Unlock account"
-                  icon={<CheckCircle size={13} />}
+                  icon={<CheckCircle />}
                   disabled={anyMutPending}
                   onClick={() => unlock.mutate({ appId, userId })}
                 />
               ) : (
                 <AdminAction
                   label="Lock account"
-                  icon={<Lock size={13} />}
+                  icon={<Lock />}
                   disabled={anyMutPending}
                   onClick={() => withConfirm(
                     "Lock this account?",
@@ -487,14 +462,14 @@ function AppMemberDetailPage() {
               {member.banned && !isLocked ? (
                 <AdminAction
                   label="Unban user"
-                  icon={<CheckCircle size={13} />}
+                  icon={<CheckCircle />}
                   disabled={anyMutPending}
                   onClick={() => unban.mutate({ appId, userId })}
                 />
               ) : !isLocked ? (
                 <AdminAction
                   label="Ban user"
-                  icon={<Ban size={13} />}
+                  icon={<Ban />}
                   danger
                   disabled={anyMutPending}
                   onClick={() => withConfirm(
@@ -506,17 +481,21 @@ function AppMemberDetailPage() {
                 />
               ) : null}
             </div>
-          </div>
+          </section>
 
           {/* Danger zone */}
-          <div className="card" style={{ padding: 0, overflow: "hidden", borderColor: "rgba(248,113,113,0.18)" }}>
-            <div className="panel-header" style={{ borderBottomColor: "rgba(248,113,113,0.14)" }}>
-              <p className="section-label" style={{ color: "var(--color-red)" }}>Danger zone</p>
+          <section
+            className="card card-flush"
+            aria-labelledby="member-danger"
+            style={{ borderColor: "color-mix(in oklab, var(--color-danger-text) 30%, transparent)" }}
+          >
+            <div className="panel-header">
+              <h2 className="panel-title" id="member-danger" style={{ color: "var(--color-danger-text)" }}>Danger zone</h2>
             </div>
-            <div style={{ padding: "12px 14px" }}>
+            <div className="panel-body stack-sm">
               <AdminAction
                 label="Remove from app"
-                icon={<Trash2 size={13} />}
+                icon={<Trash2 />}
                 danger
                 disabled={anyMutPending}
                 onClick={() => withConfirm(
@@ -531,7 +510,7 @@ function AppMemberDetailPage() {
               />
               <AdminAction
                 label="Remove & ban globally"
-                icon={<UserX size={13} />}
+                icon={<UserX />}
                 danger
                 disabled={anyMutPending}
                 onClick={() => withConfirm(
@@ -547,7 +526,7 @@ function AppMemberDetailPage() {
                 )}
               />
             </div>
-          </div>
+          </section>
 
         </div>
       </div>

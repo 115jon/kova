@@ -1,5 +1,5 @@
 import { ConfirmModal } from "@/components/ConfirmModal";
-import { Modal } from "@/components/Modal";
+import { Modal, ModalHeader, ModalScrollBody } from "@/components/Modal";
 import {
   useCreateWebhook,
   useDeleteWebhook,
@@ -8,6 +8,7 @@ import {
   type WebhookEndpoint,
 } from "@/hooks/use-webhooks";
 import { webhookKeys } from "@/lib/query-keys";
+import { sentenceCase } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
@@ -29,10 +30,9 @@ import {
   ToggleRight,
   Trash2,
   Webhook,
-  X,
   Zap,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/webhooks")({
   component: WebhooksPage,
@@ -97,13 +97,14 @@ const EVENT_CATALOG: EventDef[] = [
   { action: "admin.passwordReset", label: "Password reset sent", description: "Admin forced a password reset email.", category: "admin" },
 ];
 
+// The dot is decoration only: the category label always sits next to it.
 const CATEGORY_META: Record<EventCategory, { label: string; color: string }> = {
-  auth: { label: "Auth", color: "var(--color-text-accent)" },
-  "2fa": { label: "2FA", color: "var(--color-green)" },
-  key: { label: "API Key", color: "var(--color-amber)" },
-  session: { label: "Session", color: "#a78bfa" },
-  org: { label: "Org", color: "#f472b6" },
-  admin: { label: "Admin", color: "var(--color-red)" },
+  auth: { label: "Auth", color: "var(--color-accent-text)" },
+  "2fa": { label: "2FA", color: "var(--color-success-text)" },
+  key: { label: "API key", color: "var(--color-warning-text)" },
+  session: { label: "Session", color: "var(--color-text-secondary)" },
+  org: { label: "Org", color: "var(--color-text-tertiary)" },
+  admin: { label: "Admin", color: "var(--color-danger-text)" },
 };
 
 const CATEGORIES_BY_EVENT = Object.fromEntries(
@@ -156,74 +157,51 @@ function SecretRevealModal({ secret, endpointUrl, onClose }: {
 
   return (
     <Modal onClose={onClose} maxWidth={560} scrollableBody>
-      <div className="modal-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 34, height: 34, borderRadius: 6, flexShrink: 0,
-            background: "var(--color-green-dim)", border: "1px solid rgba(52,211,153,0.2)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Shield size={16} color="var(--color-green)" />
+      <ModalHeader
+        title="Endpoint created — save your secret"
+        subtitle="This secret will never be shown again after you close this dialog."
+        icon={<span className="icon-tile tone-success" aria-hidden="true"><Shield /></span>}
+      />
+
+      <ModalScrollBody>
+        <div className="modal-body">
+          <div className="form-group">
+            <p className="form-label">Endpoint</p>
+            <div className="code-block">{endpointUrl}</div>
           </div>
-          <div>
-            <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.9rem" }}>
-              Endpoint created — save your secret
+
+          <div className="form-group">
+            <p className="form-label">Signing secret (HMAC-SHA256)</p>
+            <div className="code-block row" style={{ alignItems: "flex-start" }}>
+              <span
+                className="min-w-0"
+                style={{
+                  flex: 1,
+                  filter: visible ? "none" : "blur(5px)",
+                  userSelect: visible ? "text" : "none",
+                }}
+              >
+                {secret}
+              </span>
+              <button
+                type="button"
+                className="btn btn-subtle btn-icon btn-sm"
+                onClick={() => setVisible(v => !v)}
+                title={visible ? "Hide secret" : "Reveal secret"}
+                aria-label={visible ? "Hide secret" : "Reveal secret"}
+                aria-pressed={visible}
+              >
+                {visible ? <EyeOff /> : <Eye />}
+              </button>
+            </div>
+            <p className="form-hint">
+              Verify payloads: <code>X-Webhook-Signature</code> = <code>sha256=HMAC(secret, body)</code>
             </p>
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>
-              This secret will never be shown again after you close this dialog.
-            </p>
           </div>
-        </div>
-        <button className="btn btn-ghost" style={{ marginLeft: "auto", padding: 5 }} onClick={onClose}>
-          <X size={13} />
-        </button>
-      </div>
 
-      <div className="modal-body" style={{ gap: 14 }}>
-        <div>
-          <p className="form-label" style={{ marginBottom: 6 }}>Endpoint</p>
-          <div style={{
-            background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-            borderRadius: 4, padding: "8px 12px", fontFamily: "var(--font-mono)",
-            fontSize: "0.76rem", color: "var(--color-text-secondary)", wordBreak: "break-all",
-          }}>
-            {endpointUrl}
-          </div>
-        </div>
-
-        <div>
-          <p className="form-label" style={{ marginBottom: 6 }}>Signing secret (HMAC-SHA256)</p>
-          <div style={{
-            background: "var(--color-surface-raised)", border: "1px solid rgba(52,211,153,0.25)",
-            borderRadius: 4, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10,
-          }}>
-            <span style={{
-              flex: 1, fontFamily: "var(--font-mono)", fontSize: "0.76rem",
-              color: "var(--color-green)", wordBreak: "break-all",
-              filter: visible ? "none" : "blur(5px)",
-              transition: "filter 0.15s",
-              userSelect: visible ? "text" : "none",
-            }}>
-              {secret}
-            </span>
-            <button className="btn btn-ghost" style={{ padding: "4px 6px", flexShrink: 0 }}
-              onClick={() => setVisible(v => !v)} title={visible ? "Hide" : "Reveal"}>
-              {visible ? <EyeOff size={13} /> : <Eye size={13} />}
-            </button>
-          </div>
-          <p className="form-hint" style={{ marginTop: 5 }}>
-            Verify payloads: <code>X-Webhook-Signature</code> = <code>sha256=HMAC(secret, body)</code>
-          </p>
-        </div>
-
-        <div>
-          <p className="form-label" style={{ marginBottom: 6 }}>Verification example (Node.js)</p>
-          <pre style={{
-            background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-            borderRadius: 4, padding: "10px 12px", fontFamily: "var(--font-mono)",
-            fontSize: "0.72rem", color: "var(--color-text-secondary)", lineHeight: 1.7,
-            overflow: "auto", whiteSpace: "pre",
-          }}>{`import { createHmac } from "crypto";
+          <div className="form-group">
+            <p className="form-label">Verification example (Node.js)</p>
+            <pre className="code-block" style={{ overflow: "auto", whiteSpace: "pre" }}>{`import { createHmac } from "crypto";
 
 function verify(rawBody, sigHeader) {
   const expected = "sha256=" +
@@ -231,15 +209,16 @@ function verify(rawBody, sigHeader) {
       .update(rawBody).digest("hex");
   return expected === sigHeader;
 }`}</pre>
+          </div>
         </div>
-      </div>
+      </ModalScrollBody>
 
       <div className="modal-footer">
-        <button className="btn btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={() => void copy()}>
-          {copied ? <><Check size={13} /> Copied!</> : <><Copy size={13} /> Copy secret</>}
-        </button>
-        <button className="btn btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={onClose}>
+        <button type="button" className="btn btn-secondary" onClick={onClose}>
           Done — I&apos;ve saved it
+        </button>
+        <button type="button" className="btn btn-primary" onClick={() => void copy()}>
+          {copied ? <><Check /> Copied</> : <><Copy /> Copy secret</>}
         </button>
       </div>
     </Modal>
@@ -304,110 +283,82 @@ function CreateEndpointModal({ onClose, onCreated }: {
 
   return (
     <Modal onClose={onClose} maxWidth={600} scrollableBody>
-      <div className="modal-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 6, flexShrink: 0,
-            background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Webhook size={15} color="var(--color-text-accent)" />
-          </div>
-          <div>
-            <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.9rem" }}>
-              Create webhook endpoint
-            </p>
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>
-              Subscribe to platform events via HTTPS POST.
-            </p>
-          </div>
-        </div>
-        <button className="btn btn-ghost" style={{ marginLeft: "auto", padding: 5 }} onClick={onClose}>
-          <X size={13} />
-        </button>
-      </div>
+      <ModalHeader
+        title="Create webhook endpoint"
+        subtitle="Subscribe to platform events via HTTPS POST."
+        icon={<span className="icon-tile" aria-hidden="true"><Webhook /></span>}
+      />
 
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        <div className="modal-body" style={{ gap: 18 }}>
-          {error && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-              background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-              borderRadius: 4, padding: "8px 12px",
-              fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
-            }}>
-              <AlertTriangle size={13} /> {error}
-            </div>
-          )}
+      <ModalScrollBody>
+        <div className="modal-body">
+          {error && <p className="alert alert-danger" role="alert"><AlertTriangle /> {error}</p>}
 
           <div className="form-group">
-            <label className="form-label">Endpoint URL</label>
-            <input ref={urlRef} className="input"
+            <label className="form-label" htmlFor="webhook-url">Endpoint URL</label>
+            <input
+              id="webhook-url"
+              ref={urlRef}
+              className="input input-mono"
               placeholder="https://your-app.com/webhooks/kova-auth"
-              value={url} onChange={e => setUrl(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && void createEndpoint()} />
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && void createEndpoint()}
+            />
             <p className="form-hint">Must be HTTPS (HTTP is allowed for localhost).</p>
           </div>
 
-          <div>
-            <p className="form-label" style={{ marginBottom: 8 }}>Event subscriptions</p>
-            <button onClick={() => setAllEvents(v => !v)} style={{
-              display: "flex", alignItems: "center", gap: 10,
-              width: "100%", padding: "10px 12px",
-              background: allEvents ? "var(--color-accent-glow)" : "var(--color-surface-raised)",
-              border: `1px solid ${allEvents ? "rgba(59,130,246,0.25)" : "var(--color-border)"}`,
-              borderRadius: 4, cursor: "pointer", marginBottom: 8,
-              transition: "background 0.12s, border-color 0.12s",
-            }}>
-              <Zap size={14} color={allEvents ? "var(--color-text-accent)" : "var(--color-text-tertiary)"} />
-              <span style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: allEvents ? "var(--color-text-accent)" : "var(--color-text-primary)", textAlign: "left", fontWeight: 500 }}>
-                All events (wildcard)
-              </span>
-              {allEvents && <Check size={13} color="var(--color-text-accent)" />}
-            </button>
+          <div className="form-group">
+            <p className="form-label" id="webhook-events-label">Event subscriptions</p>
+            <div className="segmented" role="group" aria-labelledby="webhook-events-label">
+              <button type="button" className="segmented-option" aria-pressed={allEvents} onClick={() => setAllEvents(true)}>
+                All events
+              </button>
+              <button type="button" className="segmented-option" aria-pressed={!allEvents} onClick={() => setAllEvents(false)}>
+                Select events
+              </button>
+            </div>
 
             {!allEvents && (
-              <div style={{ border: "1px solid var(--color-border)", borderRadius: 4, overflow: "hidden" }}>
-                {categorized.map(([cat, evs]) => {
+              <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", marginTop: 8, overflow: "hidden" }}>
+                {categorized.map(([cat, evs], ci) => {
                   const meta = CATEGORY_META[cat];
                   const expanded = expandedCategories.has(cat);
                   const checkedCount = evs.filter(e => selectedEvents.has(e.action)).length;
                   return (
-                    <div key={cat}>
-                      <button onClick={() => toggleCategory(cat)} style={{
-                        display: "flex", alignItems: "center", gap: 9,
-                        width: "100%", padding: "8px 12px",
-                        background: "transparent", border: "none",
-                        borderBottom: expanded ? "1px solid var(--color-border)" : "none",
-                        cursor: "pointer",
-                      }}
-                        onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-hover)")}
-                        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                        <span style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0, background: meta.color }} />
-                        <span style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: "0.76rem", fontWeight: 600, color: "var(--color-text-primary)", textAlign: "left" }}>
-                          {meta.label}
-                        </span>
+                    <div
+                      key={cat}
+                      style={{ borderBlockEnd: ci < categorized.length - 1 ? "1px solid var(--color-border)" : "none", padding: 4 }}
+                    >
+                      <button
+                        type="button"
+                        className="menu-item"
+                        aria-expanded={expanded}
+                        onClick={() => toggleCategory(cat)}
+                      >
+                        <span style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0, background: meta.color }} aria-hidden="true" />
+                        <span className="text-strong" style={{ flex: 1 }}>{meta.label}</span>
                         {checkedCount > 0 && (
-                          <span className="badge badge-blue" style={{ fontSize: "0.58rem" }}>{checkedCount}/{evs.length}</span>
+                          <span className="badge badge-info tabular">{checkedCount}/{evs.length}</span>
                         )}
-                        {expanded ? <ChevronDown size={11} color="var(--color-text-tertiary)" /> : <ChevronRight size={11} color="var(--color-text-tertiary)" />}
+                        {expanded ? <ChevronDown /> : <ChevronRight />}
                       </button>
 
-                      {expanded && evs.map((ev, i) => (
-                        <label key={ev.action} style={{
-                          display: "flex", alignItems: "flex-start", gap: 10,
-                          padding: "8px 12px 8px 28px", cursor: "pointer",
-                          borderBottom: i < evs.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none",
-                        }}
-                          onMouseEnter={e => (e.currentTarget.style.background = "var(--color-surface-hover)")}
-                          onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                          <input type="checkbox" checked={selectedEvents.has(ev.action)}
+                      {expanded && evs.map(ev => (
+                        <label
+                          key={ev.action}
+                          className="row"
+                          style={{ alignItems: "flex-start", gap: 10, padding: "8px 10px 8px 28px", cursor: "pointer" }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedEvents.has(ev.action)}
                             onChange={e => toggleEvent(ev.action, e.target.checked)}
-                            style={{ marginTop: 2, accentColor: "var(--color-accent)", flexShrink: 0 }} />
-                          <div>
-                            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", fontWeight: 500, color: "var(--color-text-primary)" }}>{ev.label}</p>
-                            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 1 }}>{ev.action}</p>
-                          </div>
+                            style={{ marginTop: 2, flexShrink: 0 }}
+                          />
+                          <span className="min-w-0">
+                            <span className="text-strong" style={{ display: "block" }}>{ev.label}</span>
+                            <span className="text-mono text-sm text-tertiary" style={{ display: "block" }}>{ev.action}</span>
+                          </span>
                         </label>
                       ))}
                     </div>
@@ -417,20 +368,31 @@ function CreateEndpointModal({ onClose, onCreated }: {
             )}
           </div>
         </div>
-      </div>
+      </ModalScrollBody>
 
       <div className="modal-footer">
-        <button className="btn btn-primary" disabled={loading || (!allEvents && selectedEvents.size === 0)}
-          onClick={() => void createEndpoint()}>
-          {loading ? "Creating…" : <><Plus size={13} /> Create endpoint</>}
+        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={loading || (!allEvents && selectedEvents.size === 0)}
+          onClick={() => void createEndpoint()}
+        >
+          {loading ? "Creating…" : <><Plus /> Create endpoint</>}
         </button>
-        <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
       </div>
     </Modal>
   );
 }
 
 // ── Delivery log / details modal ─────────────────────────────────────────────
+
+const HEALTH_BADGE: Record<ReturnType<typeof healthStatus>, string> = {
+  healthy: "badge-success",
+  degraded: "badge-warning",
+  down: "badge-danger",
+  idle: "badge-neutral",
+};
 
 function DeliveryLogModal({ endpoint, onClose }: {
   endpoint: WebhookEndpoint;
@@ -454,70 +416,42 @@ function DeliveryLogModal({ endpoint, onClose }: {
   };
 
   const status = healthStatus(endpoint);
-  const statusColors: Record<typeof status, string> = {
-    healthy: "var(--color-green)",
-    degraded: "var(--color-amber)",
-    down: "var(--color-red)",
-    idle: "var(--color-text-tertiary)",
-  };
+  const failing = endpoint.failureCount > 3;
 
   return (
     <Modal onClose={onClose} maxWidth={580} scrollableBody>
-      <div className="modal-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 5, flexShrink: 0,
-            background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Activity size={14} color="var(--color-text-secondary)" />
-          </div>
-          <div>
-            <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.86rem" }}>
-              Delivery status
-            </p>
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.66rem", color: "var(--color-text-tertiary)", maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {endpoint.url}
-            </p>
-          </div>
-        </div>
-        <button className="btn btn-ghost" style={{ marginLeft: "auto", padding: 5 }} onClick={onClose}>
-          <X size={13} />
-        </button>
-      </div>
+      <ModalHeader
+        title="Delivery status"
+        subtitle={<span className="text-mono truncate" style={{ display: "block" }}>{endpoint.url}</span>}
+        icon={<span className="icon-tile tone-neutral" aria-hidden="true"><Activity /></span>}
+      />
 
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        <div className="modal-body" style={{ gap: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-            {[
-              { label: "Health", value: status.charAt(0).toUpperCase() + status.slice(1), color: statusColors[status] },
-              { label: "Last success", value: relativeTime(endpoint.lastSuccess), color: "var(--color-text-primary)" },
-              { label: "Last failure", value: relativeTime(endpoint.lastFailure), color: endpoint.lastFailure ? "var(--color-red)" : "var(--color-text-tertiary)" },
-            ].map(s => (
-              <div key={s.label} style={{
-                background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-                borderRadius: 4, padding: "12px 14px",
-              }}>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>{s.label}</p>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem", fontWeight: 700, color: s.color }}>{s.value}</p>
-              </div>
-            ))}
+      <ModalScrollBody>
+        <div className="modal-body">
+          <div className="card card-flush">
+            <div className="kv-row">
+              <span className="kv-label">Health</span>
+              <span className="kv-value"><span className={`badge ${HEALTH_BADGE[status]}`}>{sentenceCase(status)}</span></span>
+            </div>
+            <div className="kv-row">
+              <span className="kv-label">Last success</span>
+              <span className="kv-value">{relativeTime(endpoint.lastSuccess)}</span>
+            </div>
+            <div className="kv-row">
+              <span className="kv-label">Last failure</span>
+              <span className={`kv-value ${endpoint.lastFailure ? "text-danger" : "text-tertiary"}`}>{relativeTime(endpoint.lastFailure)}</span>
+            </div>
           </div>
 
           {endpoint.failureCount > 0 && (
-            <div style={{
-              display: "flex", alignItems: "flex-start", gap: 10,
-              background: endpoint.failureCount > 3 ? "var(--color-red-dim)" : "var(--color-amber-dim)",
-              border: `1px solid ${endpoint.failureCount > 3 ? "rgba(248,113,113,0.2)" : "rgba(251,191,36,0.2)"}`,
-              borderRadius: 4, padding: "10px 12px",
-            }}>
-              <AlertTriangle size={14} color={endpoint.failureCount > 3 ? "var(--color-red)" : "var(--color-amber)"} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div className={`alert ${failing ? "alert-danger" : "alert-warning"}`} role="alert">
+              <AlertTriangle />
               <div>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.78rem", fontWeight: 600, color: endpoint.failureCount > 3 ? "var(--color-red)" : "var(--color-amber)" }}>
+                <p className="text-strong">
                   {endpoint.failureCount} consecutive failure{endpoint.failureCount !== 1 ? "s" : ""}
                 </p>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 2 }}>
-                  {endpoint.failureCount > 3
+                <p className="text-sm text-secondary">
+                  {failing
                     ? "Endpoint is returning errors. Check your server and ensure it responds 2xx."
                     : "Recent delivery failed. Verify the endpoint responds within 15 seconds."}
                 </p>
@@ -525,31 +459,31 @@ function DeliveryLogModal({ endpoint, onClose }: {
             </div>
           )}
 
-          <div>
-            <p className="form-label" style={{ marginBottom: 8 }}>Subscribed events</p>
+          <div className="form-group">
+            <p className="form-label">Subscribed events</p>
             {(endpoint.eventList as string[]).includes("*") ? (
-              <div style={{
-                display: "flex", alignItems: "center", gap: 8,
-                background: "var(--color-accent-glow)", border: "1px solid rgba(59,130,246,0.15)",
-                borderRadius: 4, padding: "8px 12px",
-              }}>
-                <Zap size={13} color="var(--color-text-accent)" />
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-accent)", fontWeight: 500 }}>All events (wildcard)</span>
+              <div>
+                <span className="badge badge-info"><Zap /> All events</span>
               </div>
             ) : (
-              <div style={{ border: "1px solid var(--color-border)", borderRadius: 4, maxHeight: 180, overflowY: "auto" }}>
+              <div style={{ border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)", maxHeight: 180, overflowY: "auto" }}>
                 {(endpoint.eventList as AuditAction[]).map((action, i) => {
                   const cat = CATEGORIES_BY_EVENT[action];
                   const meta = cat ? CATEGORY_META[cat] : null;
                   const def = EVENT_CATALOG.find(e => e.action === action);
                   return (
-                    <div key={action} style={{
-                      display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
-                      borderBottom: i < endpoint.eventList.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
-                    }}>
-                      {meta && <span style={{ width: 6, height: 6, borderRadius: 2, background: meta.color, flexShrink: 0 }} />}
-                      <span style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-primary)" }}>{def?.label ?? action}</span>
-                      <code style={{ fontSize: "0.66rem" }}>{action}</code>
+                    <div
+                      key={action}
+                      className="row"
+                      style={{
+                        gap: 10,
+                        padding: "8px 12px",
+                        borderBlockEnd: i < endpoint.eventList.length - 1 ? "1px solid var(--color-border)" : "none",
+                      }}
+                    >
+                      {meta && <span style={{ width: 6, height: 6, borderRadius: 2, background: meta.color, flexShrink: 0 }} aria-hidden="true" />}
+                      <span className="text-strong min-w-0" style={{ flex: 1 }}>{def?.label ?? action}</span>
+                      <code>{action}</code>
                     </div>
                   );
                 })}
@@ -557,43 +491,29 @@ function DeliveryLogModal({ endpoint, onClose }: {
             )}
           </div>
 
-          <div style={{
-            background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-            borderRadius: 4, padding: "14px 16px",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.78rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Send test ping</p>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 2 }}>
+          <div className="card stack-sm">
+            <div className="row-between" style={{ flexWrap: "wrap" }}>
+              <div className="min-w-0">
+                <p className="text-h3">Send test ping</p>
+                <p className="text-sm text-secondary">
                   Fires a signed <code>test.ping</code> payload to verify delivery.
                 </p>
               </div>
-              <button className="btn btn-ghost" disabled={sendingTest} onClick={() => void sendTest()} style={{ gap: 6 }}>
-                <Send size={13} /> {sendingTest ? "Sending…" : "Send ping"}
+              <button type="button" className="btn btn-secondary btn-sm" disabled={sendingTest} onClick={() => void sendTest()}>
+                <Send /> {sendingTest ? "Sending…" : "Send ping"}
               </button>
             </div>
             {testResult && (
-              <div style={{
-                display: "flex", alignItems: "center", gap: 8,
-                background: testResult.ok ? "var(--color-green-dim)" : "var(--color-red-dim)",
-                border: `1px solid ${testResult.ok ? "rgba(52,211,153,0.2)" : "rgba(248,113,113,0.2)"}`,
-                borderRadius: 3, padding: "6px 10px", marginTop: 8,
-              }}>
-                {testResult.ok ? <Check size={12} color="var(--color-green)" /> : <AlertTriangle size={12} color="var(--color-red)" />}
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: testResult.ok ? "var(--color-green)" : "var(--color-red)" }}>
-                  {testResult.ok ? `Success — HTTP ${testResult.status}` : testResult.status === 0 ? "Network error — endpoint unreachable" : `Failed — HTTP ${testResult.status}`}
-                </span>
-              </div>
+              <p className={`alert ${testResult.ok ? "alert-success" : "alert-danger"}`} role={testResult.ok ? "status" : "alert"}>
+                {testResult.ok ? <Check /> : <AlertTriangle />}
+                {testResult.ok ? `Success — HTTP ${testResult.status}` : testResult.status === 0 ? "Network error — endpoint unreachable" : `Failed — HTTP ${testResult.status}`}
+              </p>
             )}
           </div>
 
-          <div>
-            <p className="form-label" style={{ marginBottom: 6 }}>Payload headers</p>
-            <div style={{
-              background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-              borderRadius: 4, padding: "10px 14px", fontFamily: "var(--font-mono)",
-              fontSize: "0.72rem", color: "var(--color-text-secondary)", lineHeight: 1.9,
-            }}>
+          <div className="form-group">
+            <p className="form-label">Payload headers</p>
+            <div className="code-block" style={{ display: "grid", gridTemplateColumns: "max-content minmax(0, 1fr)", columnGap: 16 }}>
               {[
                 ["Content-Type", "application/json"],
                 ["X-Webhook-Signature", "sha256=<hmac-hex>"],
@@ -601,24 +521,24 @@ function DeliveryLogModal({ endpoint, onClose }: {
                 ["X-Webhook-Delivery", "<delivery-id>"],
                 ["User-Agent", "kova-auth-webhooks/1.0"],
               ].map(([k, v]) => (
-                <div key={k} style={{ display: "flex", gap: 16 }}>
-                  <span style={{ color: "var(--color-text-tertiary)", minWidth: 190 }}>{k}</span>
-                  <span style={{ color: "var(--color-text-primary)" }}>{v}</span>
-                </div>
+                <Fragment key={k}>
+                  <span className="text-tertiary">{k}</span>
+                  <span>{v}</span>
+                </Fragment>
               ))}
             </div>
           </div>
         </div>
-      </div>
+      </ModalScrollBody>
 
       <div className="modal-footer">
-        <button className="btn btn-ghost" onClick={onClose}>Close</button>
+        <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
       </div>
     </Modal>
   );
 }
 
-// ── Endpoint card ────────────────────────────────────────────────────────────
+// ── Endpoint row ─────────────────────────────────────────────────────────────
 
 function EndpointCard({ ep, onDelete, onToggle, onViewLog }: {
   ep: WebhookEndpoint;
@@ -633,13 +553,6 @@ function EndpointCard({ ep, onDelete, onToggle, onViewLog }: {
   const toggling = false;
   const status = healthStatus(ep);
 
-  const statusDot: Record<typeof status, string> = {
-    healthy: "var(--color-green)",
-    degraded: "var(--color-amber)",
-    down: "var(--color-red)",
-    idle: "var(--color-text-tertiary)",
-  };
-
   const handleDelete = () => {
     setDeleteConfirm(false);
     onDelete(ep.id);
@@ -650,7 +563,7 @@ function EndpointCard({ ep, onDelete, onToggle, onViewLog }: {
   };
 
   return (
-    <div className="card" style={{ padding: "16px 18px" }}>
+    <div className="list-row" style={{ alignItems: "flex-start" }}>
       {deleteConfirm && (
         <ConfirmModal
           title="Delete webhook endpoint?"
@@ -661,76 +574,72 @@ function EndpointCard({ ep, onDelete, onToggle, onViewLog }: {
           onClose={() => setDeleteConfirm(false)}
         />
       )}
-      {ep.failureCount > 3 && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-          borderRadius: 4, padding: "7px 10px",
-        }}>
-          <AlertTriangle size={12} color="var(--color-red)" />
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-red)", fontWeight: 600 }}>
-            {ep.failureCount} consecutive delivery failures — check your endpoint
+
+      <button
+        type="button"
+        className="btn btn-subtle btn-icon"
+        onClick={() => void handleToggle()}
+        disabled={toggling}
+        title={ep.enabled ? "Disable endpoint" : "Enable endpoint"}
+        aria-label={ep.enabled ? "Disable endpoint" : "Enable endpoint"}
+        aria-pressed={!!ep.enabled}
+      >
+        {ep.enabled ? <ToggleRight className="text-accent" /> : <ToggleLeft />}
+      </button>
+
+      <div className="list-row-main stack-sm">
+        <div className="row">
+          <Globe className="text-tertiary" size={14} aria-hidden="true" style={{ flexShrink: 0 }} />
+          <span className="text-mono text-strong truncate" title={ep.url}>{ep.url}</span>
+          <a
+            href={ep.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-subtle btn-icon btn-sm"
+            aria-label="Open endpoint URL in a new tab"
+            onClick={e => e.stopPropagation()}
+          >
+            <ExternalLink />
+          </a>
+        </div>
+        <div className="row" style={{ flexWrap: "wrap" }}>
+          <span className={`badge ${(ep.eventList as string[]).includes("*") ? "badge-info" : "badge-neutral"}`}>
+            {(ep.eventList as string[]).includes("*") ? "All events" : `${ep.eventList.length} event${ep.eventList.length !== 1 ? "s" : ""}`}
+          </span>
+          {ep.enabled ? (
+            <span className={`badge ${HEALTH_BADGE[status]}`}>{sentenceCase(status)}</span>
+          ) : (
+            <span className="badge badge-neutral">Disabled</span>
+          )}
+          {ep.failureCount > 0 && ep.failureCount <= 3 && (
+            <span className="badge badge-warning">{ep.failureCount} fail{ep.failureCount !== 1 ? "s" : ""}</span>
+          )}
+          <span className="text-sm text-tertiary">
+            Last delivery: {relativeTime(ep.lastSuccess ?? ep.lastFailure)}
           </span>
         </div>
-      )}
+        {ep.failureCount > 3 && (
+          <p className="alert alert-danger" role="alert">
+            <AlertTriangle />
+            {ep.failureCount} consecutive delivery failures — check your endpoint
+          </p>
+        )}
+      </div>
 
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, paddingTop: 2 }}>
-          <div style={{
-            width: 8, height: 8, borderRadius: "50%",
-            background: ep.enabled ? statusDot[status] : "var(--color-text-tertiary)",
-            boxShadow: ep.enabled && status !== "idle" ? `0 0 6px ${statusDot[status]}` : "none",
-            transition: "background 0.2s",
-          }} />
-          <button onClick={() => void handleToggle()} disabled={toggling}
-            title={ep.enabled ? "Disable" : "Enable"}
-            style={{ background: "none", border: "none", cursor: "pointer", padding: 0, opacity: toggling ? 0.5 : 1 }}>
-            {ep.enabled
-              ? <ToggleRight size={22} color="var(--color-text-accent)" />
-              : <ToggleLeft size={22} color="var(--color-text-tertiary)" />
-            }
-          </button>
-        </div>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-            <Globe size={13} color="var(--color-text-tertiary)" />
-            <span style={{
-              fontFamily: "var(--font-mono)", fontSize: "0.8rem", fontWeight: 600,
-              color: "var(--color-text-primary)", overflow: "hidden",
-              textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }} title={ep.url}>
-              {ep.url.length > 52 ? ep.url.slice(0, 51) + "…" : ep.url}
-            </span>
-            <a href={ep.url} target="_blank" rel="noopener noreferrer"
-              style={{ color: "var(--color-text-tertiary)", flexShrink: 0 }}
-              onClick={e => e.stopPropagation()}>
-              <ExternalLink size={11} />
-            </a>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span className={`badge ${(ep.eventList as string[]).includes("*") ? "badge-blue" : "badge-gray"}`}>
-              {(ep.eventList as string[]).includes("*") ? "All events" : `${ep.eventList.length} event${ep.eventList.length !== 1 ? "s" : ""}`}
-            </span>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>
-              Last delivery: {relativeTime(ep.lastSuccess ?? ep.lastFailure)}
-            </span>
-            {ep.failureCount > 0 && ep.failureCount <= 3 && (
-              <span className="badge badge-yellow">{ep.failureCount} fail{ep.failureCount !== 1 ? "s" : ""}</span>
-            )}
-            {!ep.enabled && <span className="badge badge-gray">disabled</span>}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          <button className="btn btn-ghost" style={{ padding: "5px 9px", fontSize: "0.74rem" }} onClick={() => onViewLog(ep)}>
-            <Activity size={12} /> Details
-          </button>
-          <button className="btn btn-danger" style={{ padding: "5px 9px", fontSize: "0.74rem" }}
-            disabled={deleting} onClick={() => setDeleteConfirm(true)} title="Delete endpoint">
-            <Trash2 size={12} />
-          </button>
-        </div>
+      <div className="list-row-actions">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => onViewLog(ep)}>
+          <Activity /> Details
+        </button>
+        <button
+          type="button"
+          className="btn btn-danger btn-sm btn-icon"
+          disabled={deleting}
+          onClick={() => setDeleteConfirm(true)}
+          title="Delete endpoint"
+          aria-label="Delete endpoint"
+        >
+          <Trash2 />
+        </button>
       </div>
     </div>
   );
@@ -753,44 +662,48 @@ function EventCatalogPanel() {
   ) as [EventCategory, EventDef[]][];
 
   return (
-    <div className="card" style={{ marginTop: 20 }}>
-      <button onClick={() => setOpen(v => !v)} className="panel-header"
-        style={{ width: "100%", cursor: "pointer", background: "none", border: "none", textAlign: "left" }}
-        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = "var(--color-surface-hover)")}
-        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = "")}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Zap size={13} color="var(--color-text-secondary)" />
-          <span className="panel-title">Event catalog</span>
-          <span className="badge badge-gray">{EVENT_CATALOG.length} events</span>
-        </div>
-        {open ? <ChevronDown size={13} color="var(--color-text-tertiary)" /> : <ChevronRight size={13} color="var(--color-text-tertiary)" />}
-      </button>
+    <div className="card card-flush" style={{ marginTop: 20 }}>
+      <div className="panel-header" style={open ? undefined : { borderBlockEnd: "none" }}>
+        <h2 className="panel-title">
+          <Zap />
+          Event catalog
+          <span className="badge badge-neutral tabular">{EVENT_CATALOG.length} events</span>
+        </h2>
+        <button
+          type="button"
+          className="btn btn-subtle btn-sm"
+          aria-expanded={open}
+          aria-controls="webhook-event-catalog"
+          onClick={() => setOpen(v => !v)}
+        >
+          {open ? "Hide" : "Show"} {open ? <ChevronDown /> : <ChevronRight />}
+        </button>
+      </div>
 
       {open && (
-        <div style={{ padding: "4px 0 12px" }}>
+        <div id="webhook-event-catalog" style={{ padding: 8 }}>
           {categorized.map(([cat, evs]) => {
             const meta = CATEGORY_META[cat];
             const expanded = expandedCats.has(cat);
             return (
               <div key={cat}>
-                <button onClick={() => toggleCat(cat)} style={{
-                  display: "flex", alignItems: "center", gap: 9,
-                  width: "100%", padding: "7px 18px",
-                  background: "none", border: "none", cursor: "pointer",
-                }}
-                  onMouseEnter={e => ((e.currentTarget as HTMLElement).style.background = "var(--color-surface-hover)")}
-                  onMouseLeave={e => ((e.currentTarget as HTMLElement).style.background = "")}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: meta.color, flexShrink: 0 }} />
-                  <span style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: "0.77rem", fontWeight: 600, color: "var(--color-text-primary)", textAlign: "left" }}>{meta.label}</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "var(--color-text-tertiary)" }}>{evs.length} event{evs.length !== 1 ? "s" : ""}</span>
-                  {expanded ? <ChevronDown size={11} color="var(--color-text-tertiary)" /> : <ChevronRight size={11} color="var(--color-text-tertiary)" />}
+                <button
+                  type="button"
+                  className="menu-item"
+                  aria-expanded={expanded}
+                  onClick={() => toggleCat(cat)}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: meta.color, flexShrink: 0 }} aria-hidden="true" />
+                  <span className="text-strong" style={{ flex: 1 }}>{meta.label}</span>
+                  <span className="text-sm text-tertiary tabular">{evs.length} event{evs.length !== 1 ? "s" : ""}</span>
+                  {expanded ? <ChevronDown /> : <ChevronRight />}
                 </button>
                 {expanded && (
-                  <div style={{ paddingLeft: 36, paddingRight: 18 }}>
+                  <div className="stack-sm" style={{ padding: "4px 10px 10px 38px" }}>
                     {evs.map(ev => (
-                      <div key={ev.action} style={{ display: "flex", alignItems: "baseline", gap: 12, padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
-                        <code style={{ fontSize: "0.72rem", color: meta.color, minWidth: 190, flexShrink: 0 }}>{ev.action}</code>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)", lineHeight: 1.5 }}>{ev.description}</span>
+                      <div key={ev.action} className="row" style={{ alignItems: "baseline", flexWrap: "wrap", columnGap: 12, rowGap: 2 }}>
+                        <code style={{ flex: "0 1 220px" }}>{ev.action}</code>
+                        <span className="text-sm text-secondary" style={{ flex: "1 1 200px" }}>{ev.description}</span>
                       </div>
                     ))}
                   </div>
@@ -830,84 +743,82 @@ function WebhooksPage() {
   const failingCount = endpoints.filter((ep: WebhookEndpoint) => ep.failureCount > 3).length;
 
   return (
-    <div className="animate-in">
+    <div>
       {showCreate && <CreateEndpointModal onClose={() => setShowCreate(false)} onCreated={handleCreated} />}
       {revealSecret && <SecretRevealModal secret={revealSecret.secret} endpointUrl={revealSecret.url} onClose={() => setRevealSecret(null)} />}
       {viewLogEp && <DeliveryLogModal endpoint={viewLogEp} onClose={() => setViewLogEp(null)} />}
 
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
-        <div>
-          <p className="section-label" style={{ marginBottom: 4 }}>Integrations</p>
+      <header className="page-header">
+        <div className="page-header-main">
+          <p className="section-label">Integrations</p>
           <h1 className="page-title">Webhooks</h1>
           <p className="page-subtitle">
             Receive signed HTTP POST payloads on platform events — Stripe/GitHub webhook format.
           </p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button className="btn btn-ghost" onClick={() => void qc.invalidateQueries({ queryKey: webhookKeys.all })} disabled={loading} title="Refresh">
-            <RotateCcw size={14} className={loading ? "spin" : ""} />
+        <div className="page-header-actions">
+          <button
+            type="button"
+            className="btn btn-secondary btn-icon"
+            onClick={() => void qc.invalidateQueries({ queryKey: webhookKeys.all })}
+            disabled={loading}
+            title="Refresh"
+            aria-label="Refresh webhooks"
+          >
+            <RotateCcw className={loading ? "spin" : ""} />
           </button>
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-            <Plus size={14} /> New endpoint
+          <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>
+            <Plus /> New endpoint
           </button>
         </div>
-      </div>
+      </header>
 
       {endpoints.length > 0 && (
-        <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+        <div className="stat-grid">
           {[
-            { label: "Total", value: endpoints.length, color: "var(--color-text-primary)" },
-            { label: "Active", value: activeCount, color: "var(--color-green)" },
-            { label: "Failing", value: failingCount, color: failingCount > 0 ? "var(--color-red)" : "var(--color-text-tertiary)" },
+            { label: "Total", value: endpoints.length, icon: Webhook, tone: "" },
+            { label: "Active", value: activeCount, icon: Check, tone: "tone-success" },
+            { label: "Failing", value: failingCount, icon: AlertTriangle, tone: failingCount > 0 ? "tone-danger" : "tone-neutral" },
           ].map(s => (
-            <div key={s.label} style={{
-              background: "var(--color-surface)", border: "1px solid var(--color-border)",
-              borderRadius: 5, padding: "10px 16px", display: "flex", gap: 10, alignItems: "center",
-            }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "1.1rem", fontWeight: 700, color: s.color }}>{s.value}</span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.label}</span>
+            <div key={s.label} className="card stat-card">
+              <span className={`icon-tile ${s.tone}`} aria-hidden="true"><s.icon strokeWidth={1.75} /></span>
+              <div>
+                <p className="stat-label">{s.label}</p>
+                <p className="stat-value">{s.value}</p>
+              </div>
             </div>
           ))}
         </div>
       )}
 
       {error && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 16,
-          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-          borderRadius: 4, padding: "9px 13px",
-          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
-        }}>
-          <AlertTriangle size={13} /> {error instanceof Error ? error.message : error}
-        </div>
+        <p className="alert alert-danger" role="alert" style={{ marginBottom: 16 }}>
+          <AlertTriangle /> {error instanceof Error ? error.message : String(error)}
+        </p>
       )}
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 56 }}>
-          <div className="loading" style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>Loading…</div>
+        <div className="card card-flush">
+          <div className="skeleton-rows" role="status" aria-label="Loading webhook endpoints">
+            <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
+          </div>
         </div>
       ) : endpoints.length === 0 ? (
-        <div className="card empty-state">
-          <div style={{
-            width: 40, height: 40, borderRadius: 6, margin: "0 auto 14px",
-            background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Webhook size={18} color="var(--color-text-accent)" />
+        <div className="card card-flush">
+          <div className="empty-state">
+            <span className="empty-state-icon" aria-hidden="true"><Webhook /></span>
+            <p className="empty-state-title">No webhook endpoints yet</p>
+            <p className="empty-state-body">
+              Webhook endpoints receive signed HTTP POST payloads whenever platform events occur.
+              Use them to sync your database, send Slack alerts, or trigger CI pipelines.
+            </p>
+            <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(true)}>
+              <Plus /> Create first endpoint
+            </button>
           </div>
-          <p style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 6, letterSpacing: "-0.02em" }}>
-            No webhook endpoints yet
-          </p>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)", maxWidth: 380, margin: "0 auto 18px" }}>
-            Webhook endpoints receive signed HTTP POST payloads whenever platform events occur.
-            Use them to sync your database, send Slack alerts, or trigger CI pipelines.
-          </p>
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-            <Plus size={14} /> Create first endpoint
-          </button>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="card card-flush">
           {endpoints.map(ep => (
             <EndpointCard key={ep.id} ep={ep} onDelete={handleDelete} onToggle={handleToggle} onViewLog={setViewLogEp} />
           ))}
@@ -916,9 +827,12 @@ function WebhooksPage() {
 
       <EventCatalogPanel />
 
-      <div className="card" style={{ marginTop: 16, padding: 18 }}>
-        <p className="section-label" style={{ marginBottom: 8 }}>Retry policy</p>
-        <ul style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)", lineHeight: 2, paddingLeft: 18 }}>
+      <section className="card card-flush" style={{ marginTop: 16 }} aria-labelledby="retry-policy-title">
+        <div className="panel-header">
+          <h2 className="panel-title" id="retry-policy-title">Retry policy</h2>
+        </div>
+        <div className="panel-body">
+        <ul className="text-sm text-secondary" style={{ lineHeight: 1.8, paddingInlineStart: 18 }}>
           <li>3 delivery attempts with exponential back-off: 1 s → 2 s → 4 s</li>
           <li><code>4xx</code> responses are permanent errors — no retry</li>
           <li><code>5xx</code> and network errors trigger the next attempt</li>
@@ -926,7 +840,8 @@ function WebhooksPage() {
           <li>Delivery is fire-and-forget — it never delays the auth response</li>
           <li><code>failureCount</code> resets to 0 on any successful delivery</li>
         </ul>
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

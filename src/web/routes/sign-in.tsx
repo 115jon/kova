@@ -2,9 +2,11 @@ import { KovaAuthProvider, SignIn, useSession } from "@115jon/kova-react";
 import {
   appSignInLook,
   appSignInProviders,
+  kovaSignInLook,
   type AppAppearance,
 } from "@/lib/app-sign-in";
 import { CONFIGURED_PROVIDERS } from "@/lib/providers";
+import { useTheme } from "@/lib/theme";
 import {
   buildNativeHandoffPath,
   buildSignInReturnPath,
@@ -15,7 +17,7 @@ import {
 } from "@/lib/sign-in-redirect";
 import { createFileRoute, useHydrated, useNavigate } from "@tanstack/react-router";
 import { AlertCircle } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 export const Route = createFileRoute("/sign-in")({
   validateSearch: (search: Record<string, unknown>): SignInRouteSearch => ({
@@ -62,53 +64,31 @@ function currentOrigin() {
 
 // ── Kova's own sign-in (/sign-in without pk) ─────────────────────────────────
 
-const KOVA_APPEARANCE = {
-  variables: {
-    colorPrimary: "oklch(0.51 0.095 176)",
-    colorPrimaryHover: "oklch(0.47 0.085 176)",
-    colorBackground: "oklch(0.16 0.02 255)",
-    colorSurface: "oklch(0.20 0.03 245 / 0.78)",
-    colorSurfaceRaised: "oklch(0.24 0.03 245 / 0.55)",
-    colorText: "oklch(0.97 0.01 210)",
-    colorTextSecondary: "oklch(0.84 0.018 210)",
-    colorTextTertiary: "oklch(0.78 0.02 215)",
-    colorBorder: "oklch(0.955 0.01 95 / 0.18)",
-    colorBorderStrong: "oklch(0.955 0.01 95 / 0.32)",
-    colorError: "oklch(0.72 0.14 25)",
-    colorSuccess: "oklch(0.78 0.12 155)",
-    borderRadius: "18px",
-    borderRadiusSm: "999px",
-    fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
-    fontFamilyMono: '"IBM Plex Mono", ui-monospace, monospace',
-    fontSize: "14px",
-  },
-};
-
 // SDK social-buttons adds the "Continue with " prefix.
 const KOVA_PROVIDERS = CONFIGURED_PROVIDERS.map((p) => ({ id: p.id, label: p.name }));
 
-function AuthFrame({ children }: { children: ReactNode }) {
-  return (
-    <div className="public-auth-shell">
-      <div className="coast-paint" aria-hidden="true" />
-      <div className="auth-window">
-        <div className="auth-dots" aria-hidden="true">
-          <span className="auth-dot auth-dot-red" />
-          <span className="auth-dot auth-dot-amber" />
-          <span className="auth-dot auth-dot-green" />
-        </div>
-        <div className="auth-window-spacer" />
-        <div className="auth-glass">{children}</div>
-      </div>
-    </div>
-  );
-}
+// Gives the card its title ("Sign in to Kova") and mark, like an app's page.
+const KOVA_APP_APPEARANCE: AppAppearance = {
+  displayName: "Kova",
+  logoUrl: "/favicon.svg",
+  faviconUrl: null,
+  primaryColor: null,
+  backgroundColor: null,
+  theme: "auto",
+  homeUrl: null,
+  termsUrl: null,
+  privacyUrl: null,
+  hideBranding: true,
+  enabledProviders: KOVA_PROVIDERS.map((p) => p.id),
+};
 
 function KovaSignInPage({ search }: { search: SignInRouteSearch }) {
   const navigate = useNavigate();
   // The SDK needs this page's origin, which the server render doesn't have.
   const hydrated = useHydrated();
   const signInReturnPath = buildSignInReturnPath(search);
+  const { resolved } = useTheme();
+  const look = useMemo(() => kovaSignInLook(resolved), [resolved]);
 
   const completeSignIn = useCallback(() => {
     const returnPath = safeSignInReturnPath(search.redirect_url);
@@ -119,20 +99,27 @@ function KovaSignInPage({ search }: { search: SignInRouteSearch }) {
     navigate({ to: "/" });
   }, [navigate, search.redirect_url]);
 
+  // Page colours come from the dashboard tokens (set before hydration by the
+  // theme script), so the shell never flashes the wrong scheme.
   return (
-    <AuthFrame>
-      {hydrated && (
-        <KovaAuthProvider
-          authUrl={currentOrigin()}
-          oauthProviders={KOVA_PROVIDERS}
-          afterSignInUrl={signInReturnPath}
-          appearance={KOVA_APPEARANCE}
-        >
-          <CompleteOnSession enabled={!isAddAccount(search.add_account)} onComplete={completeSignIn} />
-          <SignIn afterSignInUrl={signInReturnPath} />
-        </KovaAuthProvider>
-      )}
-    </AuthFrame>
+    <div className="app-auth-shell is-kova">
+      <main className="app-auth-stage">
+        {hydrated ? (
+          <KovaAuthProvider
+            authUrl={currentOrigin()}
+            appAppearance={KOVA_APP_APPEARANCE}
+            oauthProviders={KOVA_PROVIDERS}
+            afterSignInUrl={signInReturnPath}
+            appearance={{ variables: look.variables }}
+          >
+            <CompleteOnSession enabled={!isAddAccount(search.add_account)} onComplete={completeSignIn} />
+            <SignIn afterSignInUrl={signInReturnPath} />
+          </KovaAuthProvider>
+        ) : (
+          <div className="app-auth-placeholder" role="status" aria-label="Loading sign-in" />
+        )}
+      </main>
+    </div>
   );
 }
 

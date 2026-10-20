@@ -7,14 +7,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Activity,
+  Ban,
   Building2,
-  ChevronDown,
   ClipboardList,
   Download,
   Key,
   LogIn,
   LogOut,
   RefreshCw,
+  Search,
   Shield,
   User,
   UserPlus,
@@ -48,43 +49,43 @@ interface AuditLogRow {
 
 // ── Action metadata ───────────────────────────────────────────────────────────
 
+type BadgeTone = "success" | "danger" | "warning" | "info" | "neutral";
+
 interface ActionMeta {
   label: string;
   icon: React.ReactNode;
-  color: string;     // badge background (rgba)
-  textColor: string;
+  tone: BadgeTone;
   category: "auth" | "security" | "keys" | "org" | "admin";
 }
 
 const ACTION_MAP: Record<string, ActionMeta> = {
-  "user.signIn": { label: "Signed in", icon: <LogIn size={11} />, color: "rgba(99,102,241,0.15)", textColor: "#818cf8", category: "auth" },
-  "user.signOut": { label: "Signed out", icon: <LogOut size={11} />, color: "rgba(71,85,105,0.2)", textColor: "#94a3b8", category: "auth" },
-  "user.signUp": { label: "Account created", icon: <UserPlus size={11} />, color: "rgba(52,211,153,0.15)", textColor: "#34d399", category: "auth" },
-  "user.passwordChanged": { label: "Password changed", icon: <Shield size={11} />, color: "rgba(234,179,8,0.15)", textColor: "#facc15", category: "security" },
-  "user.passwordSet": { label: "Password set", icon: <Shield size={11} />, color: "rgba(234,179,8,0.15)", textColor: "#facc15", category: "security" },
-  "twoFactor.enabled": { label: "2FA enabled", icon: <Shield size={11} />, color: "rgba(52,211,153,0.15)", textColor: "#34d399", category: "security" },
-  "twoFactor.disabled": { label: "2FA disabled", icon: <Shield size={11} />, color: "rgba(239,68,68,0.12)", textColor: "#f87171", category: "security" },
-  "apiKey.created": { label: "API key created", icon: <Key size={11} />, color: "rgba(245,158,11,0.15)", textColor: "#f59e0b", category: "keys" },
-  "apiKey.revoked": { label: "API key revoked", icon: <Key size={11} />, color: "rgba(239,68,68,0.12)", textColor: "#f87171", category: "keys" },
-  "org.created": { label: "Org created", icon: <Building2 size={11} />, color: "rgba(139,92,246,0.15)", textColor: "#a78bfa", category: "org" },
-  "member.invited": { label: "Member invited", icon: <UserPlus size={11} />, color: "rgba(139,92,246,0.15)", textColor: "#a78bfa", category: "org" },
-  "member.joined": { label: "Member joined", icon: <User size={11} />, color: "rgba(139,92,246,0.15)", textColor: "#a78bfa", category: "org" },
-  "member.removed": { label: "Member removed", icon: <User size={11} />, color: "rgba(239,68,68,0.12)", textColor: "#f87171", category: "org" },
-  "member.roleChanged": { label: "Role changed", icon: <Shield size={11} />, color: "rgba(139,92,246,0.12)", textColor: "#a78bfa", category: "org" },
-  "session.revoked": { label: "Session revoked", icon: <Activity size={11} />, color: "rgba(239,68,68,0.12)", textColor: "#f87171", category: "admin" },
-  "admin.userBanned": { label: "User banned", icon: <Shield size={11} />, color: "rgba(239,68,68,0.15)", textColor: "#f87171", category: "admin" },
-  "admin.userUnbanned": { label: "User unbanned", icon: <Shield size={11} />, color: "rgba(52,211,153,0.12)", textColor: "#34d399", category: "admin" },
-  "admin.userDeleted": { label: "User deleted", icon: <User size={11} />, color: "rgba(239,68,68,0.15)", textColor: "#f87171", category: "admin" },
-  "admin.roleChanged": { label: "Role changed", icon: <Shield size={11} />, color: "rgba(239,68,68,0.12)", textColor: "#f87171", category: "admin" },
-  "device.approved": { label: "Machine approved", icon: <Shield size={11} />, color: "rgba(52,211,153,0.15)", textColor: "#34d399", category: "security" },
+  "user.signIn": { label: "Signed in", icon: <LogIn />, tone: "info", category: "auth" },
+  "user.signOut": { label: "Signed out", icon: <LogOut />, tone: "neutral", category: "auth" },
+  "user.signUp": { label: "Account created", icon: <UserPlus />, tone: "success", category: "auth" },
+  "user.passwordChanged": { label: "Password changed", icon: <Shield />, tone: "warning", category: "security" },
+  "user.passwordSet": { label: "Password set", icon: <Shield />, tone: "warning", category: "security" },
+  "twoFactor.enabled": { label: "2FA enabled", icon: <Shield />, tone: "success", category: "security" },
+  "twoFactor.disabled": { label: "2FA disabled", icon: <Shield />, tone: "warning", category: "security" },
+  "apiKey.created": { label: "API key created", icon: <Key />, tone: "success", category: "keys" },
+  "apiKey.revoked": { label: "API key revoked", icon: <Key />, tone: "danger", category: "keys" },
+  "org.created": { label: "Org created", icon: <Building2 />, tone: "success", category: "org" },
+  "member.invited": { label: "Member invited", icon: <UserPlus />, tone: "info", category: "org" },
+  "member.joined": { label: "Member joined", icon: <User />, tone: "success", category: "org" },
+  "member.removed": { label: "Member removed", icon: <User />, tone: "danger", category: "org" },
+  "member.roleChanged": { label: "Role changed", icon: <Shield />, tone: "warning", category: "org" },
+  "session.revoked": { label: "Session revoked", icon: <Activity />, tone: "danger", category: "admin" },
+  "admin.userBanned": { label: "User banned", icon: <Ban />, tone: "danger", category: "admin" },
+  "admin.userUnbanned": { label: "User unbanned", icon: <Shield />, tone: "success", category: "admin" },
+  "admin.userDeleted": { label: "User deleted", icon: <User />, tone: "danger", category: "admin" },
+  "admin.roleChanged": { label: "Role changed", icon: <Shield />, tone: "warning", category: "admin" },
+  "device.approved": { label: "Machine approved", icon: <Shield />, tone: "success", category: "security" },
 };
 
 function actionMeta(action: string): ActionMeta {
   return ACTION_MAP[action] ?? {
     label: action,
-    icon: <Activity size={11} />,
-    color: "rgba(71,85,105,0.2)",
-    textColor: "#94a3b8",
+    icon: <Activity />,
+    tone: "neutral",
     category: "auth",
   };
 }
@@ -95,7 +96,7 @@ const CATEGORIES = [
   { value: "", label: "All categories" },
   { value: "user.*", label: "Auth (sign-in/out)" },
   { value: "twoFactor.*", label: "Two-factor" },
-  { value: "apiKey.*", label: "API Keys" },
+  { value: "apiKey.*", label: "API keys" },
   { value: "org.*", label: "Organizations" },
   { value: "member.*", label: "Members" },
   { value: "admin.*", label: "Admin actions" },
@@ -119,15 +120,8 @@ function parseUA(ua: string | null): string {
 function ActionBadge({ action }: { action: string }) {
   const meta = actionMeta(action);
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 4,
-      background: meta.color, color: meta.textColor,
-      borderRadius: 3, padding: "2px 7px",
-      fontFamily: "var(--font-mono)",
-      fontSize: "0.65rem", fontWeight: 500,
-      letterSpacing: "0.04em",
-    }}>
-      {meta.icon}
+    <span className={`badge badge-${meta.tone}`}>
+      <span aria-hidden="true" style={{ display: "inline-flex" }}>{meta.icon}</span>
       {meta.label}
     </span>
   );
@@ -137,20 +131,16 @@ function ActorCell({ row }: { row: AuditLogRow }) {
   const name = row.actorName ?? "Unknown";
   const email = row.actorEmail ?? row.actor;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div className="row">
       <UserAvatar
         src={(row as any).actorImage ?? null}
         name={name}
         size={24}
         style={{ flexShrink: 0 }}
       />
-      <div style={{ minWidth: 0 }}>
-        <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.8rem", fontWeight: 500, color: "var(--color-text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {name}
-        </p>
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {email}
-        </p>
+      <div className="min-w-0">
+        <p className="cell-primary truncate">{name}</p>
+        <p className="text-sm text-tertiary text-mono truncate">{email}</p>
       </div>
     </div>
   );
@@ -175,17 +165,14 @@ function FilterDropdown({
   onChange: (v: string) => void;
 }) {
   return (
-    <div style={{ position: "relative" }}>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="input"
-        style={{ paddingRight: 28, appearance: "none", cursor: "pointer", fontSize: "0.8rem" }}
-      >
-        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      <ChevronDown size={12} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#475569" }} />
-    </div>
+    <select
+      aria-label="Filter by category"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="select"
+    >
+      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
   );
 }
 
@@ -220,24 +207,25 @@ function AuditLogsPage() {
   const logs = flattenAuditPages(data) as AuditLogRow[];
 
   return (
-    <div className="animate-in">
+    <div>
       {/* Header */}
-      <div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <div>
-          <p className="section-label" style={{ marginBottom: 4 }}>Security</p>
-          <h1 className="page-title">Audit Logs</h1>
+      <header className="page-header">
+        <div className="page-header-main">
+          <p className="section-label">Security</p>
+          <h1 className="page-title">Audit logs</h1>
           <p className="page-subtitle">
             {activeOrg ? (
-              <><Building2 size={11} style={{ display: "inline", verticalAlign: "middle", marginRight: 4 }} />
-                Events for <strong style={{ color: "var(--color-text-primary)" }}>{activeOrg.name}</strong></>
-            ) : "All platform events — sign-ins, key operations, org changes, admin actions"}
+              <>Events for <strong className="text-strong">{activeOrg.name}</strong></>
+            ) : "All platform events: sign-ins, key operations, org changes, admin actions"}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div className="page-header-actions">
           {logs.length > 0 && !isLoading && (
             <button
-              className="btn btn-ghost"
+              type="button"
+              className="btn btn-secondary btn-icon"
               title="Download CSV"
+              aria-label="Download CSV"
               onClick={() => {
                 const headers = ["Timestamp", "Action", "Actor", "Actor Email", "Target", "IP Address", "User Agent"];
                 const rows = logs.map(r => [
@@ -259,128 +247,124 @@ function AuditLogsPage() {
                 URL.revokeObjectURL(url);
               }}
             >
-              <Download size={14} />
+              <Download />
             </button>
           )}
           <button
-            className="btn btn-ghost"
+            type="button"
+            className="btn btn-secondary btn-icon"
             onClick={() => void qc.invalidateQueries({ queryKey: auditKeys.list(filters) })}
             disabled={isFetching}
             title="Refresh"
+            aria-label="Refresh"
           >
-            <RefreshCw size={14} className={isFetching ? "spin" : ""} />
+            <RefreshCw className={isFetching ? "spin" : undefined} />
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <FilterDropdown value={actionFilter} options={CATEGORIES} onChange={v => setActionFilter(v)} />
+      <div className="row" style={{ marginBottom: "var(--space-4)", flexWrap: "wrap" }}>
+        <div style={{ flex: "0 1 220px" }}>
+          <FilterDropdown value={actionFilter} options={CATEGORIES} onChange={v => setActionFilter(v)} />
+        </div>
 
         {/* User ID / email filter */}
-        <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
+        <div className="input-icon" style={{ flex: "1 1 220px" }}>
+          <Search aria-hidden="true" />
           <input
+            aria-label="Filter by user ID"
             className="input"
             placeholder="Filter by user ID…"
             value={userIdFilter}
             onChange={e => setUserIdFilter(e.target.value)}
-            style={{ width: "100%", fontSize: "0.8rem", paddingRight: 32 }}
+            style={{ paddingInlineEnd: 40 }}
           />
           {userIdFilter && (
             <button
+              type="button"
+              aria-label="Clear user filter"
+              className="btn btn-subtle btn-icon btn-sm"
               onClick={() => setUserIdFilter("")}
-              style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#475569", padding: 2 }}
+              style={{ position: "absolute", insetInlineEnd: 4, top: "50%", transform: "translateY(-50%)" }}
             >
-              <X size={12} />
+              <X />
             </button>
           )}
         </div>
       </div>
 
       {/* Error */}
-      {error && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
-          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-          borderRadius: 4, padding: "9px 13px",
-          fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.78rem",
-        }}>
-          {error.message}
-        </div>
-      )}
+      {error && <p className="alert alert-danger" role="alert" style={{ marginBottom: "var(--space-3)" }}><Ban /> {error.message}</p>}
 
       {/* Table */}
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="card card-flush">
         {isLoading ? (
-          <div className="loading" style={{ padding: 48, textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>
-            Loading audit logs…
+          <div className="skeleton-rows" role="status" aria-label="Loading audit logs">
+            <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
           </div>
         ) : logs.length === 0 ? (
           <div className="empty-state">
-            <div style={{
-              width: 40, height: 40, borderRadius: 5, margin: "0 auto 14px",
-              background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <ClipboardList size={18} color="var(--color-text-accent)" strokeWidth={1.5} />
-            </div>
-            <p style={{ color: "var(--color-text-secondary)", marginBottom: 6, fontFamily: "var(--font-mono)" }}>No audit events found</p>
-            <p style={{ color: "var(--color-text-tertiary)", fontSize: "0.72rem" }}>
+            <span className="empty-state-icon" aria-hidden="true"><ClipboardList /></span>
+            <p className="empty-state-title">No audit events found</p>
+            <p className="empty-state-body">
               Events are written automatically as users sign in and perform actions.
             </p>
           </div>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Event</th>
-                <th>Actor</th>
-                <th>Target</th>
-                <th>IP / Client</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map(row => (
-                <tr key={row.id}>
-                  <td style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.74rem", whiteSpace: "nowrap" }}>
-                    <TimestampCell ts={row.createdAt} />
-                  </td>
-                  <td>
-                    <ActionBadge action={row.action} />
-                  </td>
-                  <td>
-                    <ActorCell row={row} />
-                  </td>
-                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-secondary)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {row.targetLabel
-                      ? <span title={row.targetLabel}>{row.targetLabel}</span>
-                      : row.targetId
-                        ? <code style={{ color: "var(--color-text-accent)" }}>{row.targetId.slice(0, 12)}…</code>
-                        : <span style={{ color: "var(--color-text-tertiary)" }}>—</span>
-                    }
-                  </td>
-                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                      {row.ipAddress && (
-                        <code style={{ color: "var(--color-text-secondary)" }}>{row.ipAddress}</code>
-                      )}
-                      {row.userAgent && (
-                        <span>{parseUA(row.userAgent)}</span>
-                      )}
-                      {!row.ipAddress && !row.userAgent && <span>—</span>}
-                    </div>
-                  </td>
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Event</th>
+                  <th>Actor</th>
+                  <th>Target</th>
+                  <th>IP / client</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {logs.map(row => (
+                  <tr key={row.id}>
+                    <td className="cell-meta">
+                      <TimestampCell ts={row.createdAt} />
+                    </td>
+                    <td>
+                      <ActionBadge action={row.action} />
+                    </td>
+                    <td>
+                      <ActorCell row={row} />
+                    </td>
+                    <td className="truncate" style={{ maxWidth: 200 }}>
+                      {row.targetLabel
+                        ? <span title={row.targetLabel}>{row.targetLabel}</span>
+                        : row.targetId
+                          ? <code>{row.targetId.slice(0, 12)}…</code>
+                          : <span className="text-tertiary">—</span>
+                      }
+                    </td>
+                    <td>
+                      <div className="stack-sm" style={{ gap: 2 }}>
+                        {row.ipAddress && (
+                          <code>{row.ipAddress}</code>
+                        )}
+                        {row.userAgent && (
+                          <span className="text-sm text-tertiary">{parseUA(row.userAgent)}</span>
+                        )}
+                        {!row.ipAddress && !row.userAgent && <span className="text-tertiary">—</span>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* Load more */}
         {hasNextPage && !isLoading && (
-          <div style={{ padding: "12px 16px", borderTop: "1px solid var(--color-border)", display: "flex", justifyContent: "center" }}>
-            <button className="btn btn-ghost" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>
+          <div className="panel-footer" style={{ justifyContent: "center" }}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void fetchNextPage()} disabled={isFetchingNextPage}>
               {isFetchingNextPage ? "Loading…" : "Load more"}
             </button>
           </div>
@@ -389,7 +373,7 @@ function AuditLogsPage() {
 
       {/* Row count */}
       {!isLoading && logs.length > 0 && (
-        <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginTop: 10, textAlign: "right" }}>
+        <p className="text-sm text-tertiary" style={{ marginTop: 10, textAlign: "end" }}>
           Showing {logs.length} event{logs.length !== 1 ? "s" : ""}
           {hasNextPage ? " — more available" : ""}
         </p>

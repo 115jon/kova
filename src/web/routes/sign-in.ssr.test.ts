@@ -27,7 +27,8 @@ async function renderSignIn(search: string) {
 describe("sign-in server render", () => {
   it("renders Kova's own sign-in frame without an errored boundary", async () => {
     const html = await renderSignIn("");
-    expect(html).toContain("auth-glass");
+    expect(html).toContain("app-auth-shell is-kova");
+    expect(html).toContain("app-auth-placeholder");
     expect(html).not.toContain("<!--$!-->");
   });
 

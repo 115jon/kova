@@ -38,3 +38,9 @@ export function relativeTime(date: string | Date) {
     return `in ${days}d`;
   }
 }
+
+/** "production" → "Production". Badges and labels are sentence case. */
+export function sentenceCase(value: string | null | undefined) {
+  if (!value) return "";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}

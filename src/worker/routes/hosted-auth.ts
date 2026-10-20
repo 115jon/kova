@@ -159,7 +159,7 @@ async function buildHostedPage(opts: {
   <title>${title}</title>
   <meta name="robots" content="noindex" />
   ${app.favicon_url ? `<link rel="icon" href="${esc(app.favicon_url)}" />` : ""}
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&display=swap" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -168,11 +168,12 @@ async function buildHostedPage(opts: {
       background: ${esc(appearance.backgroundColor)};
       font-family: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
     }
-    #root { width: 100%; max-width: 420px; padding: 24px; }
+    #root { width: 100%; max-width: 400px; padding: 24px 16px; }
     .ra-skeleton {
-      background: rgba(255,255,255,0.04); border-radius: 10px;
-      padding: 32px 28px; border: 1px solid rgba(255,255,255,0.07);
-      text-align: center; color: rgba(255,255,255,0.3); font-size: 0.8rem;
+      background: rgba(255,255,255,0.05); border-radius: 20px; min-height: 420px;
+      border: 1px solid rgba(255,255,255,0.10);
+      display: flex; align-items: center; justify-content: center;
+      text-align: center; color: #8a9090; font-size: 13px;
     }
   </style>
 </head>
@@ -181,7 +182,7 @@ async function buildHostedPage(opts: {
   <script>window.__KOVA_AUTH_HOSTED__ = ${bootstrap};</script>
   <script type="module" src="/assets/hosted-auth.js" onerror="
     document.getElementById('root').innerHTML =
-      '<div class=ra-skeleton style=color:rgba(248,113,113,0.8)>Failed to load. Please try again.</div>';
+      '<div class=ra-skeleton style=color:#ff6b6b>Couldn\u2019t load sign-in. Refresh to try again.</div>';
   "></script>
 </body>
 </html>`;
@@ -500,23 +501,28 @@ function deviceShell(app: Application, body: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex" />
   <title>${name}</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" />
   <style>
     body { margin: 0; min-height: 100svh; display: flex; align-items: center; justify-content: center;
-      background: ${bg}; color: rgba(255,255,255,0.86);
-      font-family: 'JetBrains Mono', 'Fira Code', monospace; }
-    main { width: 100%; max-width: 420px; padding: 24px; }
-    section { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 10px; padding: 32px 28px; text-align: center; }
-    h1 { font-size: 1.15rem; font-weight: 600; color: #fff; margin: 0; }
-    p { color: rgba(255,255,255,0.55); font-size: 0.8rem; }
-    .code { font-size: 1.6rem; letter-spacing: 0.12em; color: #fff; margin: 18px 0; }
-    .actions { display: flex; gap: 10px; }
-    button { flex: 1; font: inherit; border: 0; border-radius: 8px; padding: 11px 14px;
-      cursor: pointer; font-size: 0.8rem; }
-    button.approve { background: ${primary}; color: #fff; font-weight: 600; }
-    button.deny { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.16); }
-    button:disabled { opacity: 0.55; cursor: progress; }
-    #device-result { min-height: 1.2em; }
+      background: ${bg}; color: #ffffff; -webkit-font-smoothing: antialiased;
+      font-family: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5; }
+    main { width: 100%; max-width: 400px; padding: 24px 16px; }
+    section { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.35); padding: 32px 28px 28px; text-align: center; }
+    h1 { font-size: 20px; font-weight: 600; line-height: 1.25; letter-spacing: -0.015em; color: #ffffff; margin: 0; }
+    p { color: #b8b8b8; font-size: 15px; margin: 6px 0 0; }
+    .code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 28px; font-weight: 500;
+      letter-spacing: 0.08em; color: #ffffff; margin: 20px 0; }
+    .actions { display: flex; gap: 10px; margin-top: 8px; }
+    button { flex: 1; height: 44px; font: inherit; font-size: 15px; border: 0; border-radius: 12px; padding: 0 16px;
+      cursor: pointer; transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1); }
+    button:active:not(:disabled) { transform: scale(0.98); }
+    button:focus-visible { outline: 2px solid ${primary}; outline-offset: 2px; }
+    button.approve { background: ${primary}; color: #ffffff; font-weight: 600; }
+    button.deny { background: transparent; color: #ffffff; font-weight: 500; border: 1px solid rgba(255,255,255,0.18); }
+    button:disabled { opacity: 0.5; cursor: progress; }
+    #device-result { min-height: 1.5em; }
+    @media (prefers-reduced-motion: reduce) { button:active:not(:disabled) { transform: none; } }
   </style>
 </head>
 <body>

@@ -1,11 +1,12 @@
-import { Modal } from "@/components/Modal";
+import { Modal, ModalHeader } from "@/components/Modal";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import {
   useCreateOrganization,
   useOrganizations,
 } from "@/hooks/use-organizations";
+import { sentenceCase } from "@/lib/utils";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Building2, ChevronRight, Crown, Plus, Shield } from "lucide-react";
+import { AlertCircle, Building2, ChevronRight, Crown, Plus, Shield } from "lucide-react";
 import { useState } from "react";
 
 export const Route = createFileRoute("/organizations")({
@@ -40,47 +41,34 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal onClose={onClose} maxWidth={440}>
-      <div className="modal-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 5,
-            background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Building2 size={15} color="var(--color-text-accent)" />
-          </div>
-          <div>
-            <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "0.88rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>Create organization</h2>
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>You'll be the owner</p>
-          </div>
-        </div>
-      </div>
+      <ModalHeader
+        title="Create organization"
+        subtitle="You'll be the owner"
+        icon={<span className="icon-tile" aria-hidden="true"><Building2 /></span>}
+      />
 
-      <form onSubmit={handleCreate} className="modal-body">
-        <div className="form-group">
-          <label className="form-label">Name</label>
-          <input className="input" placeholder="Acme Inc." value={name}
-            onChange={e => setName(e.target.value)} autoFocus />
+      <form onSubmit={handleCreate}>
+        <div className="modal-body">
+          <div className="form-group">
+            <label className="form-label" htmlFor="org-name">Name</label>
+            <input id="org-name" className="input" placeholder="Acme Inc." value={name}
+              onChange={e => setName(e.target.value)} autoFocus />
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="org-slug">Slug</label>
+            <input id="org-slug" className="input input-mono" placeholder="acme-inc" value={derivedSlug}
+              onChange={e => { setSlug(e.target.value); setSlugTouched(true); }} />
+            <p className="form-hint">Used in URLs. Letters, numbers and hyphens only.</p>
+          </div>
+          {createOrg.error && (
+            <p className="alert alert-danger" role="alert"><AlertCircle /> {createOrg.error.message}</p>
+          )}
         </div>
-        <div className="form-group">
-          <label className="form-label">Slug</label>
-          <input className="input" placeholder="acme-inc" value={derivedSlug}
-            onChange={e => { setSlug(e.target.value); setSlugTouched(true); }}
-            style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem" }} />
-          <p className="form-hint">Used in URLs — letters, numbers and hyphens only</p>
-        </div>
-        {createOrg.error && (
-          <div style={{
-            background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-            borderRadius: 4, padding: "8px 12px",
-            fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.75rem",
-          }}>{createOrg.error.message}</div>
-        )}
-        <div className="modal-footer" style={{ border: "none", padding: 0 }}>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn btn-primary"
             disabled={createOrg.isPending || !name.trim()}>
-            <Building2 size={13} /> {createOrg.isPending ? "Creating…" : "Create"}
+            <Building2 /> {createOrg.isPending ? "Creating…" : "Create"}
           </button>
         </div>
       </form>
@@ -97,90 +85,91 @@ function OrganizationsPage() {
   const { data: orgs = [], isLoading, error } = useOrganizations();
 
   return (
-    <div className="animate-in" style={{ maxWidth: 740 }}>
+    <div>
       {showCreate && <CreateOrgModal onClose={() => setShowCreate(false)} />}
 
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
-        <div>
-          <p className="section-label" style={{ marginBottom: 4 }}>Platform</p>
+      <header className="page-header">
+        <div className="page-header-main">
+          <p className="section-label">Platform</p>
           <h1 className="page-title">Organizations</h1>
           <p className="page-subtitle">Manage your apps and team workspaces</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-          <Plus size={13} /> New organization
-        </button>
-      </div>
+        {/* The empty state carries the create action; one primary per view. */}
+        {(isLoading || orgs.length > 0) && (
+          <div className="page-header-actions">
+            <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>
+              <Plus /> New organization
+            </button>
+          </div>
+        )}
+      </header>
 
       {error && (
-        <div style={{
-          marginBottom: 16, padding: "10px 14px",
-          background: "var(--color-red-dim)", border: "1px solid rgba(248,113,113,0.2)",
-          borderRadius: 4, fontFamily: "var(--font-mono)", color: "var(--color-red)", fontSize: "0.76rem",
-        }}>
-          {error.message}
-        </div>
+        <p className="alert alert-danger" role="alert" style={{ marginBottom: 16 }}>
+          <AlertCircle /> {error.message}
+        </p>
       )}
 
       {isLoading ? (
-        <div style={{ padding: "40px 0", textAlign: "center" }}>
-          <div className="loading" style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.8rem" }}>Loading organizations…</div>
+        <div className="card card-flush">
+          <div className="skeleton-rows" role="status" aria-label="Loading organizations">
+            <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
+          </div>
         </div>
       ) : orgs.length === 0 ? (
-        <div className="card empty-state">
-          <div style={{
-            width: 40, height: 40, borderRadius: 5, margin: "0 auto 14px",
-            background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <Building2 size={18} color="var(--color-text-accent)" strokeWidth={1.5} />
+        <div className="card">
+          <div className="empty-state">
+            <span className="empty-state-icon" aria-hidden="true"><Building2 /></span>
+            <p className="empty-state-title">No organizations yet</p>
+            <p className="empty-state-body">
+              Create your first organization to manage apps, users, and team members.
+            </p>
+            <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>
+              <Plus /> Create your first organization
+            </button>
           </div>
-          <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "0.9rem", fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 6, letterSpacing: "-0.02em" }}>
-            No organizations yet
-          </h2>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--color-text-tertiary)", marginBottom: 18, maxWidth: 300, margin: "0 auto 18px" }}>
-            Create your first organization to manage apps, users, and team members.
-          </p>
-          <button className="btn btn-primary" style={{ margin: "0 auto" }} onClick={() => setShowCreate(true)}>
-            <Plus size={13} /> Create your first organization
-          </button>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {orgs.map((org: any) => (
-            <div
-              key={org.id}
-              className="card"
-              style={{
-                padding: "14px 18px", cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 14,
-              }}
-              onClick={() => navigate({ to: "/organizations/$orgId", params: { orgId: org.id } } as any)}
-            >
-              <OrgAvatar
-                name={org.name ?? "O"}
-                logo={org.logo ?? null}
-                size={36}
-                style={{ flexShrink: 0 }}
-              />
+        <div className="stack-sm">
+          {orgs.map((org: any) => {
+            const open = () => navigate({ to: "/organizations/$orgId", params: { orgId: org.id } } as any);
+            return (
+              <div
+                key={org.id}
+                className="card card-flush card-link"
+                role="link"
+                tabIndex={0}
+                onClick={open}
+                onKeyDown={e => { if (e.key === "Enter" && e.target === e.currentTarget) open(); }}
+              >
+                <div className="list-row">
+                  <OrgAvatar
+                    name={org.name ?? "O"}
+                    logo={org.logo ?? null}
+                    size={40}
+                  />
 
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.88rem", fontWeight: 600, color: "var(--color-text-primary)" }}>{org.name}</p>
-                {org.slug && (
-                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)" }}>{org.slug}</p>
-                )}
+                  <div className="list-row-main">
+                    <div className="row">
+                      <p className="list-row-title truncate">{org.name}</p>
+                      {org.role && (
+                        <span className={`badge ${org.role === "owner" ? "badge-warning" : org.role === "admin" ? "badge-info" : "badge-neutral"}`}>
+                          {org.role === "owner" && <Crown aria-hidden="true" />}
+                          {org.role === "admin" && <Shield aria-hidden="true" />}
+                          {sentenceCase(org.role)}
+                        </span>
+                      )}
+                    </div>
+                    {org.slug && (
+                      <p className="text-mono text-sm text-tertiary truncate">{org.slug}</p>
+                    )}
+                  </div>
+
+                  <ChevronRight className="text-tertiary" size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
+                </div>
               </div>
-
-              {org.role && (
-                <span className={`badge ${org.role === "owner" ? "badge-yellow" : org.role === "admin" ? "badge-blue" : "badge-gray"}`} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  {org.role === "owner" && <Crown size={9} />}
-                  {org.role === "admin" && <Shield size={9} />}
-                  {org.role}
-                </span>
-              )}
-
-              <ChevronRight size={13} color="var(--color-text-tertiary)" />
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

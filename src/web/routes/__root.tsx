@@ -1,17 +1,19 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { UserAvatar } from "@/components/UserAvatar";
+import { OrgAvatar } from "@/components/OrgAvatar";
 import { KovaLogo } from "@/components/KovaLogo";
 import { multiSession, organization, signOut, useActiveOrganization, useListOrganizations, useSession } from "@/lib/auth-client";
 import { queryClient } from "@/lib/query-client";
-import { createRootRoute, HeadContent, Link, Outlet, Scripts, useLocation, useNavigate, useRouter } from "@tanstack/react-router";
+import { THEME_BOOT_SCRIPT, toggleTheme, useTheme } from "@/lib/theme";
+import { createRootRoute, HeadContent, Link, Outlet, Scripts, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
   AlertTriangle,
   BarChart3,
   Building2,
   Check,
-  ChevronDown,
+  ChevronsUpDown,
   ClipboardList,
   Copy,
   Globe,
@@ -19,11 +21,13 @@ import {
   Layers,
   LogOut,
   Menu,
+  Moon,
   PlusCircle,
   RefreshCw,
   Search,
   Settings,
   Shield,
+  Sun,
   UserCircle,
   Users,
   Webhook,
@@ -52,57 +56,26 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, EBSta
   render() {
     if (!this.state.hasError) return this.props.children;
     return (
-      <div style={{
-        height: "100%", minHeight: 400,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 24,
-      }}>
-        <div style={{
-          width: "100%", maxWidth: 460,
-          background: "var(--color-surface)",
-          border: "1px solid rgba(248,113,113,0.2)",
-          borderRadius: 6, padding: 36, textAlign: "center",
-          boxShadow: "0 24px 48px rgba(0,0,0,0.5)",
-        }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: 6, margin: "0 auto 20px",
-            background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <AlertTriangle size={20} color="var(--color-red)" strokeWidth={2} />
-          </div>
-          <h2 style={{
-            fontFamily: "var(--font-mono)", fontSize: "1rem",
-            fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 8,
-            letterSpacing: "-0.02em",
-          }}>
-            Something went wrong
-          </h2>
-          <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)", lineHeight: 1.65, marginBottom: 6 }}>
-            An unexpected error occurred in this view.
-          </p>
+      <div className="center-panel">
+        <div className="card notice-card" role="alert">
+          <span className="icon-tile icon-tile-lg tone-danger" aria-hidden="true"><AlertTriangle /></span>
+          <h2>Something went wrong</h2>
+          <p>This view hit an unexpected error. Reloading it usually helps.</p>
           {import.meta.env.DEV && this.state.message && (
-            <pre style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "0.72rem", color: "var(--color-red)",
-              background: "rgba(248,113,113,0.07)", borderRadius: 4,
-              padding: "10px 12px", textAlign: "left",
-              whiteSpace: "pre-wrap", wordBreak: "break-word",
-              maxHeight: 160, overflow: "auto", marginBottom: 20,
-            }}>{this.state.message}</pre>
+            <pre className="code-block" style={{ marginTop: 16, maxHeight: 160, overflow: "auto", textAlign: "start" }}>
+              {this.state.message}
+            </pre>
           )}
-          <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 20 }}>
-            <button
-              className="btn btn-ghost"
-              onClick={() => this.setState({ hasError: false, message: "" })}
-            >
-              <RefreshCw size={13} /> Reload
+          <div className="notice-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => this.setState({ hasError: false, message: "" })}>
+              <RefreshCw /> Reload view
             </button>
             <button
+              type="button"
               className="btn btn-danger"
               onClick={async () => { await signOut(); window.location.href = "/sign-in"; }}
             >
-              <LogOut size={13} /> Sign out
+              <LogOut /> Sign out
             </button>
           </div>
         </div>
@@ -112,6 +85,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, EBSta
 }
 
 // ── Command Palette (Cmd+K) ───────────────────────────────────────────────────
+// Opens and closes without animation: it is keyboard-driven and used constantly.
 
 interface PaletteItem {
   id: string;
@@ -122,21 +96,20 @@ interface PaletteItem {
 }
 
 const NAV_ITEMS = [
-  { to: "/", label: "Overview", icon: <BarChart3 size={14} /> },
-  { to: "/users", label: "Users", icon: <Users size={14} /> },
-  { to: "/sessions", label: "Sessions", icon: <Activity size={14} /> },
-  { to: "/audit-logs", label: "Audit Logs", icon: <ClipboardList size={14} /> },
-  { to: "/organizations", label: "Organizations", icon: <Building2 size={14} /> },
-  { to: "/oauth-apps", label: "OAuth Apps", icon: <Globe size={14} /> },
-  { to: "/api-keys", label: "API Keys", icon: <Key size={14} /> },
-  { to: "/webhooks", label: "Webhooks", icon: <Webhook size={14} /> },
-  { to: "/applications", label: "Applications", icon: <Layers size={14} /> },
-  { to: "/settings", label: "Settings", icon: <Settings size={14} /> },
+  { to: "/", label: "Overview", icon: <BarChart3 /> },
+  { to: "/users", label: "Users", icon: <Users /> },
+  { to: "/sessions", label: "Sessions", icon: <Activity /> },
+  { to: "/audit-logs", label: "Audit logs", icon: <ClipboardList /> },
+  { to: "/organizations", label: "Organizations", icon: <Building2 /> },
+  { to: "/oauth-apps", label: "OAuth apps", icon: <Globe /> },
+  { to: "/api-keys", label: "API keys", icon: <Key /> },
+  { to: "/webhooks", label: "Webhooks", icon: <Webhook /> },
+  { to: "/applications", label: "Applications", icon: <Layers /> },
+  { to: "/settings", label: "Settings", icon: <Settings /> },
 ];
 
 function CommandPalette({ onClose, currentUserId }: { onClose: () => void; currentUserId?: string }) {
   const navigate = useNavigate();
-  const router = useRouter();
   const [query, setQuery] = React.useState("");
   const [userResults, setUserResults] = React.useState<{ id: string; name: string; email: string; image: string | null }[]>([]);
   const [searching, setSearching] = React.useState(false);
@@ -144,8 +117,13 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
   const [copied, setCopied] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const searchTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { resolved: theme } = useTheme();
 
-  React.useEffect(() => { inputRef.current?.focus(); }, []);
+  React.useEffect(() => {
+    const trigger = document.activeElement as HTMLElement | null;
+    inputRef.current?.focus();
+    return () => { trigger?.focus?.(); };
+  }, []);
 
   React.useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
@@ -165,8 +143,9 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
   }, [query]);
 
   const items = React.useMemo<PaletteItem[]>(() => {
+    const q = query.toLowerCase();
     const navItems: PaletteItem[] = NAV_ITEMS
-      .filter(n => !query || n.label.toLowerCase().includes(query.toLowerCase()))
+      .filter(n => !q || n.label.toLowerCase().includes(q))
       .map(n => ({
         id: `nav:${n.to}`,
         label: `Go to ${n.label}`,
@@ -178,17 +157,26 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
       id: `user:${u.id}`,
       label: u.name,
       sublabel: u.email,
-      icon: <UserAvatar src={u.image} name={u.name} size={18} style={{ flexShrink: 0 }} />,
+      icon: <UserAvatar src={u.image} name={u.name} size={20} />,
       action: () => { window.location.href = `/users/${u.id}`; onClose(); },
     }));
 
     const extras: PaletteItem[] = [];
-    if (currentUserId && (!query || "copy id".includes(query.toLowerCase()))) {
+    if (!q || "toggle theme dark light".includes(q)) {
+      extras.push({
+        id: "toggle-theme",
+        label: "Toggle theme",
+        sublabel: theme === "dark" ? "Switch to light" : "Switch to dark",
+        icon: theme === "dark" ? <Sun /> : <Moon />,
+        action: () => { toggleTheme(); onClose(); },
+      });
+    }
+    if (currentUserId && (!q || "copy id".includes(q))) {
       extras.push({
         id: "copy-id",
-        label: copied ? "Copied!" : "Copy my user ID",
+        label: copied ? "Copied" : "Copy my user ID",
         sublabel: currentUserId,
-        icon: <Copy size={14} />,
+        icon: <Copy />,
         action: () => {
           navigator.clipboard.writeText(currentUserId);
           setCopied(true);
@@ -198,7 +186,7 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
     }
 
     return [...navItems, ...userItems, ...extras];
-  }, [query, userResults, currentUserId, copied, navigate, onClose]);
+  }, [query, userResults, currentUserId, copied, navigate, onClose, theme]);
 
   React.useEffect(() => { setActiveIdx(0); }, [items.length]);
 
@@ -207,122 +195,62 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
     if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, items.length - 1)); }
     if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); }
     if (e.key === "Enter") { e.preventDefault(); items[activeIdx]?.action(); }
+    if (e.key === "Tab") e.preventDefault();
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => { if (e.target === e.currentTarget) onClose(); };
-
-  void router;
+  const activeId = items[activeIdx] ? `palette-${items[activeIdx]!.id}` : undefined;
 
   return (
-    <div
-      onClick={handleBackdropClick}
-      style={{
-        position: "fixed", inset: 0, zIndex: 9999,
-        background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)",
-        display: "flex", alignItems: "flex-start", justifyContent: "center",
-        paddingTop: "12vh",
-      }}
-    >
-      <div style={{
-        width: "100%", maxWidth: 520,
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-border-strong)",
-        borderRadius: 6, overflow: "hidden",
-        boxShadow: "0 32px 64px rgba(0,0,0,0.7)",
-      }}>
-        {/* Search input */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--color-border)" }}>
-          <Search size={14} color="var(--color-text-tertiary)" style={{ flexShrink: 0 }} />
+    <div className="palette-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+        <div className="palette-search">
+          <Search aria-hidden="true" />
           <input
             ref={inputRef}
+            className="palette-input"
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Navigate, search users…"
-            style={{
-              flex: 1, background: "none", border: "none", outline: "none",
-              fontFamily: "var(--font-mono)", color: "var(--color-text-primary)",
-              fontSize: "0.85rem",
-            }}
+            placeholder="Go to a page or search users…"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="palette-list"
+            aria-activedescendant={activeId}
+            aria-autocomplete="list"
           />
-          {searching && <div className="loading" style={{ width: 12, height: 12, borderRadius: 2, background: "var(--color-border-strong)", flexShrink: 0 }} />}
-          <kbd style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "0.62rem", color: "var(--color-text-tertiary)",
-            background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-            borderRadius: 3, padding: "2px 6px", flexShrink: 0,
-          }}>esc</kbd>
+          {searching && <RefreshCw className="spin" aria-label="Searching" />}
+          <kbd>esc</kbd>
         </div>
 
-        {/* Results */}
-        <div style={{ maxHeight: 340, overflowY: "auto", padding: "4px" }}>
+        <div className="palette-list" id="palette-list" role="listbox">
           {items.length === 0 && (
-            <div style={{ padding: "20px", textAlign: "center", fontFamily: "var(--font-mono)", color: "var(--color-text-tertiary)", fontSize: "0.78rem" }}>
-              {query ? "no results" : "type to search or navigate…"}
-            </div>
+            <p className="palette-empty">{query ? `Nothing matches “${query}”.` : "Type to search."}</p>
           )}
           {items.map((item, idx) => (
             <button
               key={item.id}
+              id={`palette-${item.id}`}
+              type="button"
+              role="option"
+              aria-selected={activeIdx === idx}
+              tabIndex={-1}
+              className="palette-item"
               onClick={item.action}
-              onMouseEnter={() => setActiveIdx(idx)}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 10,
-                padding: "8px 10px", borderRadius: 4, marginBottom: 1,
-                background: activeIdx === idx ? "var(--color-accent-glow)" : "transparent",
-                border: activeIdx === idx ? "1px solid rgba(59,130,246,0.15)" : "1px solid transparent",
-                cursor: "pointer", transition: "background 0.1s, border-color 0.1s",
-                textAlign: "left",
-              }}
+              onMouseMove={() => { if (activeIdx !== idx) setActiveIdx(idx); }}
             >
-              <span style={{ color: activeIdx === idx ? "var(--color-text-accent)" : "var(--color-text-tertiary)", flexShrink: 0 }}>
-                {item.icon}
+              <span className="palette-item-icon">{item.icon}</span>
+              <span className="item-text">
+                <span className="palette-item-label">{item.label}</span>
+                {item.sublabel && <span className="palette-item-sub truncate">{item.sublabel}</span>}
               </span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{
-                  display: "block",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.8rem",
-                  color: activeIdx === idx ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-                  fontWeight: 500,
-                }}>
-                  {item.label}
-                </span>
-                {item.sublabel && (
-                  <span style={{
-                    display: "block",
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "0.68rem",
-                    color: "var(--color-text-tertiary)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>
-                    {item.sublabel}
-                  </span>
-                )}
-              </span>
-              {activeIdx === idx && (
-                <kbd style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.62rem", color: "var(--color-text-tertiary)",
-                  background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-                  borderRadius: 3, padding: "2px 5px", flexShrink: 0,
-                }}>↵</kbd>
-              )}
+              {activeIdx === idx && <kbd aria-hidden="true">↵</kbd>}
             </button>
           ))}
         </div>
 
-        {/* Footer */}
-        <div style={{ borderTop: "1px solid var(--color-border)", padding: "7px 14px", display: "flex", gap: 14 }}>
+        <div className="palette-footer" aria-hidden="true">
           {[["↑↓", "navigate"], ["↵", "select"], ["esc", "close"]].map(([key, hint]) => (
-            <span key={key} style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "0.65rem", color: "var(--color-text-tertiary)",
-              display: "flex", alignItems: "center", gap: 4,
-            }}>
-              <kbd style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: 2, padding: "1px 4px" }}>{key}</kbd>
-              {hint}
-            </span>
+            <span key={key}><kbd>{key}</kbd>{hint}</span>
           ))}
         </div>
       </div>
@@ -336,53 +264,31 @@ const NAV = [
   { to: "/", label: "Overview", icon: BarChart3, exact: true },
   { to: "/users", label: "Users", icon: Users, exact: false },
   { to: "/sessions", label: "Sessions", icon: Activity, exact: false },
-  { to: "/audit-logs", label: "Audit Logs", icon: ClipboardList, exact: false },
+  { to: "/audit-logs", label: "Audit logs", icon: ClipboardList, exact: false },
   { to: "/organizations", label: "Organizations", icon: Building2, exact: false },
-  { to: "/oauth-apps", label: "OAuth Apps", icon: Globe, exact: false },
-  { to: "/api-keys", label: "API Keys", icon: Key, exact: false },
+  { to: "/oauth-apps", label: "OAuth apps", icon: Globe, exact: false },
+  { to: "/api-keys", label: "API keys", icon: Key, exact: false },
   { to: "/webhooks", label: "Webhooks", icon: Webhook, exact: false },
   { to: "/applications", label: "Applications", icon: Layers, exact: false },
 ];
 
-// ── Org Switcher ──────────────────────────────────────────────────────────────
-
-function OrgAvatar({ name, logo, size = 24 }: { name: string; logo?: string | null; size?: number }) {
-  const [imgError, setImgError] = React.useState(false);
-  const borderRadius = 4;
-  const baseStyle: React.CSSProperties = {
-    width: size, height: size, borderRadius, flexShrink: 0,
-    display: "inline-flex", alignItems: "center", justifyContent: "center",
-    overflow: "hidden",
-  };
-
-  if (logo && !imgError) {
-    return (
-      <div style={baseStyle}>
-        <img
-          src={logo}
-          alt={name}
-          width={size}
-          height={size}
-          referrerPolicy="no-referrer"
-          onError={() => setImgError(true)}
-          style={{ width: size, height: size, objectFit: "cover", borderRadius }}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div style={{
-      ...baseStyle,
-      background: "var(--color-accent-dim)",
-      border: "1px solid rgba(59,130,246,0.2)",
-      fontFamily: "var(--font-mono)",
-      fontWeight: 700, fontSize: size * 0.44, color: "var(--color-text-accent)",
-    }}>
-      {name[0]?.toUpperCase() ?? "O"}
-    </div>
-  );
+function useDismiss(open: boolean, ref: React.RefObject<HTMLElement | null>, close: () => void) {
+  React.useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) close();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, ref, close]);
 }
+
+// ── Org Switcher ──────────────────────────────────────────────────────────────
 
 function OrgSwitcher() {
   const { data: activeOrg } = useActiveOrganization();
@@ -390,15 +296,8 @@ function OrgSwitcher() {
   const [open, setOpen] = React.useState(false);
   const [switching, setSwitching] = React.useState<string | null>(null);
   const ref = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  const close = React.useCallback(() => setOpen(false), []);
+  useDismiss(open, ref, close);
 
   const handleSetActive = async (orgId: string | null) => {
     if (orgId === (activeOrg?.id ?? null) || switching) return;
@@ -413,144 +312,58 @@ function OrgSwitcher() {
 
   if (!orgs || orgs.length === 0) return null;
 
+  const isPersonal = activeOrg === null;
+
   return (
-    <div ref={ref} style={{ position: "relative", marginBottom: 10 }}>
+    <div ref={ref} className="popover-anchor org-switcher">
       <button
+        type="button"
+        className="switcher-trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen(v => !v)}
-        style={{
-          width: "100%", display: "flex", alignItems: "center", gap: 8,
-          background: open ? "var(--color-surface-hover)" : "transparent",
-          border: "1px solid", borderColor: open ? "var(--color-border)" : "transparent",
-          borderRadius: 4, padding: "6px 8px", cursor: "pointer",
-          transition: "background 0.12s, border-color 0.12s",
-        }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
-        onMouseLeave={e => { if (!open) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
       >
         {activeOrg
-          ? <OrgAvatar name={activeOrg.name} logo={(activeOrg as any).logo ?? null} />
-          : <div style={{
-            width: 24, height: 24, borderRadius: 4, flexShrink: 0,
-            background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}><Building2 size={12} color="var(--color-text-tertiary)" /></div>
-        }
-        <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-          <p style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "0.75rem", fontWeight: 600,
-            color: "var(--color-text-primary)",
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            letterSpacing: "-0.01em",
-          }}>
-            {activeOrg?.name ?? "Select org"}
-          </p>
-          {activeOrg && (
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--color-text-tertiary)" }}>
-              {activeOrg.slug}
-            </p>
-          )}
-        </div>
-        <ChevronDown size={11} color="var(--color-text-tertiary)"
-          style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
-        />
+          ? <OrgAvatar name={activeOrg.name} logo={(activeOrg as any).logo ?? null} size={32} />
+          : <span className="icon-tile icon-tile-sm tone-neutral"><Building2 /></span>}
+        <span className="item-text">
+          <span className="text-strong truncate">{activeOrg?.name ?? "No organization"}</span>
+          {activeOrg && <span className="text-sm text-tertiary truncate">{activeOrg.slug}</span>}
+        </span>
+        <ChevronsUpDown aria-hidden="true" />
       </button>
 
       {open && (
-        <div role="listbox" style={{
-          position: "absolute", top: "calc(100% + 3px)", left: 0, right: 0, zIndex: 100,
-          background: "var(--color-surface)", border: "1px solid var(--color-border-strong)",
-          borderRadius: 5, padding: 3, boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
-        }}>
-          <p style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "0.58rem", color: "var(--color-text-tertiary)", fontWeight: 600,
-            letterSpacing: "0.1em", textTransform: "uppercase",
-            padding: "6px 8px 4px",
-          }}>Switch organization</p>
-
-          {(() => {
-            const isPersonal = activeOrg === null;
-            const isSwitching = switching === "__personal__";
-            return (
-              <button
-                role="option"
-                aria-selected={isPersonal}
-                disabled={isSwitching}
-                onClick={() => handleSetActive(null)}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", gap: 8,
-                  padding: "6px 8px", borderRadius: 4,
-                  cursor: isPersonal ? "default" : "pointer",
-                  background: isPersonal ? "var(--color-accent-glow)" : "transparent",
-                  border: isPersonal ? "1px solid rgba(59,130,246,0.15)" : "1px solid transparent",
-                  transition: "background 0.1s", marginBottom: 1,
-                  opacity: isSwitching ? 0.6 : 1,
-                }}
-                onMouseEnter={e => { if (!isPersonal) (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
-                onMouseLeave={e => { if (!isPersonal) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
-              >
-                <div style={{
-                  width: 24, height: 24, borderRadius: 4, flexShrink: 0,
-                  background: "var(--color-surface-raised)", border: "1px solid var(--color-border)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <UserCircle size={13} color="var(--color-text-tertiary)" />
-                </div>
-                <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                  <p style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "0.76rem", fontWeight: 600,
-                    color: isPersonal ? "var(--color-text-accent)" : "var(--color-text-secondary)",
-                    letterSpacing: "-0.01em",
-                  }}>
-                    {isSwitching ? "Switching…" : "No organization"}
-                  </p>
-                </div>
-                {isPersonal && <Check size={11} color="var(--color-text-accent)" />}
-              </button>
-            );
-          })()}
-
-          <div style={{ height: 1, background: "var(--color-border)", margin: "3px 0" }} />
-
+        <div className="menu menu-below" role="listbox" aria-label="Switch organization">
+          <p className="menu-label text-overline">Switch organization</p>
+          <button
+            type="button"
+            role="option"
+            aria-selected={isPersonal}
+            disabled={switching === "__personal__"}
+            className="menu-item"
+            onClick={() => handleSetActive(null)}
+          >
+            <UserCircle />
+            <span className="item-text truncate">{switching === "__personal__" ? "Switching…" : "No organization"}</span>
+            {isPersonal && <Check />}
+          </button>
+          <div className="menu-separator" />
           {orgs.map(org => {
             const isActive = org.id === activeOrg?.id;
-            const isSwitching = switching === org.id;
             return (
               <button
                 key={org.id}
+                type="button"
                 role="option"
                 aria-selected={isActive}
-                disabled={isSwitching}
+                disabled={switching === org.id}
+                className="menu-item"
                 onClick={() => handleSetActive(org.id)}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", gap: 8,
-                  padding: "6px 8px", borderRadius: 4,
-                  cursor: isActive ? "default" : "pointer",
-                  background: isActive ? "var(--color-accent-glow)" : "transparent",
-                  border: isActive ? "1px solid rgba(59,130,246,0.15)" : "1px solid transparent",
-                  transition: "background 0.1s", marginBottom: 1,
-                  opacity: isSwitching ? 0.6 : 1,
-                }}
-                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
-                onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
               >
-                <OrgAvatar name={org.name} logo={(org as any).logo ?? null} />
-                <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                  <p style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "0.76rem", fontWeight: 600,
-                    color: isActive ? "var(--color-text-accent)" : "var(--color-text-primary)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    letterSpacing: "-0.01em",
-                  }}>
-                    {isSwitching ? "Switching…" : org.name}
-                  </p>
-                </div>
-                {isActive && <Check size={11} color="var(--color-text-accent)" />}
+                <OrgAvatar name={org.name} logo={(org as any).logo ?? null} size={22} />
+                <span className="item-text truncate">{switching === org.id ? "Switching…" : org.name}</span>
+                {isActive && <Check />}
               </button>
             );
           })}
@@ -573,21 +386,14 @@ function SessionSwitcher() {
   const [open, setOpen] = React.useState(false);
   const [switching, setSwitching] = React.useState<string | null>(null);
   const ref = React.useRef<HTMLDivElement>(null);
+  const close = React.useCallback(() => setOpen(false), []);
+  useDismiss(open, ref, close);
 
   React.useEffect(() => {
     if (!open) return;
     multiSession.listDeviceSessions().then((res: Awaited<ReturnType<typeof multiSession.listDeviceSessions>>) => {
       setSessions((res.data as DeviceSession[] | null) ?? []);
     }).catch(() => setSessions([]));
-  }, [open]);
-
-  React.useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
   const handleSwitch = async (token: string) => {
@@ -604,121 +410,65 @@ function SessionSwitcher() {
   const others = sessions.filter(s => s.user.id !== currentSession?.user.id);
 
   return (
-    <div ref={ref} style={{ position: "relative", marginBottom: 3 }}>
+    <div ref={ref} className="popover-anchor">
       <button
+        type="button"
+        className="switcher-trigger switcher-trigger-sm text-secondary"
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={() => setOpen(v => !v)}
-        style={{
-          width: "100%", display: "flex", alignItems: "center", gap: 7,
-          background: "transparent", border: "1px solid transparent",
-          borderRadius: 4, padding: "5px 8px", cursor: "pointer",
-          fontFamily: "var(--font-mono)",
-          color: "var(--color-text-tertiary)", fontSize: "0.7rem", transition: "background 0.12s",
-        }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
-        onMouseLeave={e => { if (!open) (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
       >
-        <UserCircle size={12} />
-        <span style={{ flex: 1, textAlign: "left" }}>
-          Accounts{others.length > 0 ? ` (${others.length + 1})` : ""}
-        </span>
-        <ChevronDown size={10} style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+        <UserCircle aria-hidden="true" />
+        <span className="item-text">Accounts{others.length > 0 ? ` (${others.length + 1})` : ""}</span>
+        <ChevronsUpDown aria-hidden="true" />
       </button>
 
       {open && (
-        <div style={{
-          position: "absolute", bottom: "calc(100% + 3px)", left: 0, right: 0, zIndex: 100,
-          background: "var(--color-surface)", border: "1px solid var(--color-border-strong)",
-          borderRadius: 5, padding: 3, boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
-        }}>
-          <p style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "0.58rem", color: "var(--color-text-tertiary)", fontWeight: 600,
-            letterSpacing: "0.1em", textTransform: "uppercase",
-            padding: "6px 8px 4px",
-          }}>Switch account</p>
+        <div className="menu menu-above" role="menu" aria-label="Switch account">
+          <p className="menu-label text-overline">Switch account</p>
 
           {currentSession && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "6px 8px", borderRadius: 4,
-              background: "var(--color-accent-glow)",
-              border: "1px solid rgba(59,130,246,0.15)",
-              marginBottom: 1,
-            }}>
-              <UserAvatar
-                src={(currentSession.user as any).image as string | null}
-                name={currentSession.user.name}
-                size={22}
-                style={{ flexShrink: 0 }}
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", fontWeight: 600, color: "var(--color-text-accent)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>
-                  {currentSession.user.name ?? currentSession.user.email}
-                </p>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--color-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {currentSession.user.email}
-                </p>
-              </div>
-              <Check size={10} color="var(--color-text-accent)" />
+            <div className="menu-item is-current" role="menuitem" aria-current="true">
+              <UserAvatar src={(currentSession.user as any).image as string | null} name={currentSession.user.name} size={24} />
+              <span className="item-text">
+                <span className="text-strong truncate">{currentSession.user.name ?? currentSession.user.email}</span>
+                <span className="text-sm text-tertiary truncate">{currentSession.user.email}</span>
+              </span>
+              <Check />
             </div>
           )}
 
-          {others.map(s => {
-            const isSwitching = switching === s.session.token;
-            return (
-              <button
-                key={s.session.token}
-                onClick={() => handleSwitch(s.session.token)}
-                disabled={!!switching}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", gap: 8,
-                  padding: "6px 8px", borderRadius: 4, marginBottom: 1,
-                  background: "transparent", border: "1px solid transparent",
-                  cursor: "pointer",
-                  opacity: isSwitching ? 0.6 : 1, transition: "background 0.1s",
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
-              >
-                <UserAvatar
-                  src={(s.user as any).image as string | null}
-                  name={s.user.name}
-                  size={22}
-                  style={{ flexShrink: 0 }}
-                />
-                <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", fontWeight: 600, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>
-                    {isSwitching ? "Switching..." : (s.user.name ?? s.user.email)}
-                  </p>
-                  <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--color-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {s.user.email}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
+          {others.map(s => (
+            <button
+              key={s.session.token}
+              type="button"
+              role="menuitem"
+              className="menu-item"
+              onClick={() => handleSwitch(s.session.token)}
+              disabled={!!switching}
+            >
+              <UserAvatar src={(s.user as any).image as string | null} name={s.user.name} size={24} />
+              <span className="item-text">
+                <span className="text-strong truncate">
+                  {switching === s.session.token ? "Switching…" : (s.user.name ?? s.user.email)}
+                </span>
+                <span className="text-sm text-tertiary truncate">{s.user.email}</span>
+              </span>
+            </button>
+          ))}
 
           {others.length === 0 && sessions.length > 0 && (
-            <p style={{ fontFamily: "var(--font-mono)", padding: "7px 8px", fontSize: "0.72rem", color: "var(--color-text-tertiary)" }}>
-              Only one account signed in
-            </p>
+            <p className="menu-note text-sm text-tertiary">Only this account is signed in.</p>
           )}
 
-          <div style={{ height: 1, background: "var(--color-border)", margin: "3px 0" }} />
+          <div className="menu-separator" />
           <button
+            type="button"
+            role="menuitem"
+            className="menu-item"
             onClick={() => { setOpen(false); window.location.href = "/sign-in"; }}
-            style={{
-              width: "100%", display: "flex", alignItems: "center", gap: 7,
-              padding: "6px 8px", borderRadius: 4,
-              background: "transparent", border: "1px solid transparent",
-              cursor: "pointer",
-              fontFamily: "var(--font-mono)",
-              color: "var(--color-text-tertiary)", fontSize: "0.75rem", transition: "background 0.1s",
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "var(--color-surface-hover)"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
           >
-            <PlusCircle size={12} /> Add account
+            <PlusCircle /> Add account
           </button>
         </div>
       )}
@@ -733,6 +483,26 @@ function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNavigate: 
   const navigate = useNavigate();
   const location = useLocation();
   const path = location.pathname;
+  const ref = React.useRef<HTMLElement>(null);
+
+  // While the drawer is open on mobile: focus moves in, Tab stays inside.
+  React.useEffect(() => {
+    if (!mobileOpen || !ref.current) return;
+    const root = ref.current;
+    const focusable = () => Array.from(root.querySelectorAll<HTMLElement>("a[href], button:not([disabled])"));
+    focusable()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const list = focusable();
+      if (list.length === 0) return;
+      const first = list[0]!;
+      const last = list[list.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    root.addEventListener("keydown", onKey);
+    return () => root.removeEventListener("keydown", onKey);
+  }, [mobileOpen]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -740,140 +510,79 @@ function Sidebar({ mobileOpen, onNavigate }: { mobileOpen: boolean; onNavigate: 
   };
 
   return (
-    <aside className={`dashboard-sidebar${mobileOpen ? " is-open" : ""}`}>
-      {/* Logo — maple-style square icon + wordmark */}
+    <aside ref={ref} id="dashboard-nav" className={`dashboard-sidebar${mobileOpen ? " is-open" : ""}`} aria-label="Dashboard">
       <div className="sidebar-brand">
-        <KovaLogo size={22} variant="full" />
+        <KovaLogo size={24} variant="full" />
       </div>
 
-      {/* Org Switcher */}
       <OrgSwitcher />
 
-      {/* Nav section label */}
-      <p style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: "0.58rem", color: "var(--color-text-tertiary)",
-        fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase",
-        padding: "2px 10px 6px",
-      }}>
-        Navigation
-      </p>
-
-      {/* Nav */}
-      <nav className="sidebar-nav">
+      <nav className="sidebar-nav" aria-label="Main">
+        <p className="sidebar-group-label text-overline">Platform</p>
         {NAV.map(({ to, label, icon: Icon, exact }) => {
           const active = exact ? path === to : path.startsWith(to);
-            return (
-            <Link key={to} to={to as any} className={`nav-item${active ? " active" : ""}`} onClick={onNavigate}>
-              <Icon size={14} strokeWidth={active ? 2.5 : 1.75} />
+          return (
+            <Link key={to} to={to as any} className={`nav-item${active ? " active" : ""}`} aria-current={active ? "page" : undefined} onClick={onNavigate}>
+              <Icon strokeWidth={1.75} />
               {label}
             </Link>
           );
         })}
 
-        <div style={{ height: 1, background: "var(--color-border)", margin: "10px 2px" }} />
-        <p style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "0.58rem", color: "var(--color-text-tertiary)",
-          fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase",
-          padding: "2px 10px 6px",
-        }}>
-          Config
-        </p>
-        <Link to="/settings" className={`nav-item${path.startsWith("/settings") ? " active" : ""}`} onClick={onNavigate}>
-          <Settings size={14} strokeWidth={path.startsWith("/settings") ? 2.5 : 1.75} />
+        <p className="sidebar-group-label text-overline">Configure</p>
+        <Link
+          to="/settings"
+          className={`nav-item${path.startsWith("/settings") ? " active" : ""}`}
+          aria-current={path.startsWith("/settings") ? "page" : undefined}
+          onClick={onNavigate}
+        >
+          <Settings strokeWidth={1.75} />
           Settings
         </Link>
       </nav>
 
-      {/* Session / Account Switcher */}
-      <SessionSwitcher />
-
-      {/* User footer */}
-      {session && (
-        <div style={{ borderTop: "1px solid var(--color-border)", paddingTop: 10, marginTop: 2 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px" }}>
-            <UserAvatar
-              src={(session.user as any).image as string | null}
-              name={session.user.name}
-              size={26}
-            />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "0.76rem", fontWeight: 600,
-                color: "var(--color-text-primary)",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                letterSpacing: "-0.01em",
-              }}>
-                {session.user.name}
-              </p>
-              <p style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "0.62rem", color: "var(--color-text-tertiary)",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>
-                {session.user.email}
-              </p>
+      <div className="sidebar-footer">
+        <SessionSwitcher />
+        {session && (
+          <div className="session-row">
+            <UserAvatar src={(session.user as any).image as string | null} name={session.user.name} size={28} />
+            <div className="item-text">
+              <p className="text-strong truncate">{session.user.name}</p>
+              <p className="text-sm text-tertiary truncate">{session.user.email}</p>
             </div>
             <button
-              className="btn btn-ghost"
-              style={{ padding: "4px 6px", borderRadius: 4, minWidth: 28 }}
+              type="button"
+              className="btn btn-subtle btn-icon btn-sm"
               onClick={handleSignOut}
               title="Sign out"
               aria-label="Sign out"
             >
-              <LogOut size={13} />
+              <LogOut />
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </aside>
   );
 }
 
-function AccessRestricted({ name: _name, email, onSignOut }: { name: string; email: string; onSignOut: () => void }) {
+function AccessRestricted({ email, onSignOut }: { email: string; onSignOut: () => void }) {
   return (
-    <div style={{
-      height: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: "var(--color-bg)", padding: 24,
-    }}>
-      <div style={{
-        width: "100%", maxWidth: 400,
-        background: "var(--color-surface)",
-        borderRadius: 6, border: "1px solid rgba(248,113,113,0.2)",
-        padding: 36, textAlign: "center",
-        boxShadow: "0 24px 48px rgba(0,0,0,0.5)",
-      }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: 6, margin: "0 auto 20px",
-          background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <Shield size={20} color="var(--color-red)" strokeWidth={2} />
-        </div>
-        <h1 style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "1rem", fontWeight: 700,
-          color: "var(--color-text-primary)", marginBottom: 10,
-          letterSpacing: "-0.02em",
-        }}>
-          Admin access required
-        </h1>
-        <p style={{ fontSize: "0.82rem", color: "var(--color-text-secondary)", lineHeight: 1.65, marginBottom: 24 }}>
-          This dashboard is restricted to administrators. You're signed in as{" "}
-          <strong style={{ fontFamily: "var(--font-mono)", color: "var(--color-text-primary)" }}>{email}</strong>,
-          which doesn't have admin privileges.
+    <main className="center-screen">
+      <div className="card notice-card">
+        <span className="icon-tile icon-tile-lg tone-danger" aria-hidden="true"><Shield /></span>
+        <h1>Admin access required</h1>
+        <p>
+          This dashboard is for administrators. You're signed in as{" "}
+          <strong className="text-strong">{email}</strong>, which isn't an admin account.
         </p>
-        <button
-          className="btn btn-danger"
-          style={{ width: "100%", justifyContent: "center" }}
-          onClick={onSignOut}
-        >
-          <LogOut size={13} /> Sign out
-        </button>
+        <div className="notice-actions">
+          <button type="button" className="btn btn-secondary btn-block" onClick={onSignOut}>
+            <LogOut /> Sign out
+          </button>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -891,12 +600,23 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   };
 
   if (isPending) {
+    // Static frame in the shell's shape so the layout doesn't jump on load.
     return (
-      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div className="loading" style={{
-          fontFamily: "var(--font-mono)",
-          color: "var(--color-text-tertiary)", fontSize: "0.8rem",
-        }}>Loading…</div>
+      <div className="dashboard-shell" role="status" aria-label="Loading dashboard">
+        <div className="dashboard-sidebar" aria-hidden="true">
+          <div className="sidebar-brand"><KovaLogo size={24} variant="full" /></div>
+        </div>
+        <div className="dashboard-main">
+          <div className="dashboard-topbar" />
+          <div className="dashboard-content">
+            <div className="dashboard-content-inner">
+              <span className="skeleton" style={{ width: 180, height: 28, marginBottom: 24 }} />
+              <div className="stat-grid">
+                {[0, 1, 2, 3].map(i => <span key={i} className="skeleton" style={{ height: 78, borderRadius: "var(--radius-lg)" }} />)}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -907,16 +627,26 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAdmin(session.user.role)) {
-    return (
-      <AccessRestricted
-        name={session.user.name ?? ""}
-        email={session.user.email}
-        onSignOut={handleSignOut}
-      />
-    );
+    return <AccessRestricted email={session.user.email} onSignOut={handleSignOut} />;
   }
 
   return <>{children}</>;
+}
+
+function ThemeToggle() {
+  const { resolved } = useTheme();
+  const next = resolved === "dark" ? "light" : "dark";
+  return (
+    <button
+      type="button"
+      className="btn btn-subtle btn-icon"
+      onClick={toggleTheme}
+      aria-label={`Switch to ${next} theme`}
+      title={`Switch to ${next} theme`}
+    >
+      {resolved === "dark" ? <Sun /> : <Moon />}
+    </button>
+  );
 }
 
 function DashboardRoot() {
@@ -924,6 +654,7 @@ function DashboardRoot() {
   const { data: session } = useSession();
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const menuToggleRef = React.useRef<HTMLButtonElement>(null);
   const isPublic = ["/sign-in", "/auth-error", "/oauth/continue"].some(p => location.pathname === p)
     || location.pathname.startsWith("/accept-invitation")
     || location.pathname.startsWith("/approve/")
@@ -941,6 +672,32 @@ function DashboardRoot() {
     return () => window.removeEventListener("keydown", handler);
   }, [isPublic]);
 
+  // The backdrop stays mounted while the drawer slides out, fading with it.
+  const [backdrop, setBackdrop] = React.useState<"hidden" | "open" | "closing">("hidden");
+  React.useEffect(() => {
+    if (sidebarOpen) { setBackdrop("open"); return; }
+    setBackdrop(b => (b === "open" ? "closing" : b));
+    const t = setTimeout(() => setBackdrop(b => (b === "closing" ? "hidden" : b)), 260);
+    return () => clearTimeout(t);
+  }, [sidebarOpen]);
+
+  // The drawer closes on navigation, Escape, and when the viewport grows past it.
+  React.useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
+  React.useEffect(() => {
+    if (!sidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setSidebarOpen(false); menuToggleRef.current?.focus(); }
+    };
+    const wide = window.matchMedia("(min-width: 821px)");
+    const onWide = () => { if (wide.matches) setSidebarOpen(false); };
+    window.addEventListener("keydown", onKey);
+    wide.addEventListener("change", onWide);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      wide.removeEventListener("change", onWide);
+    };
+  }, [sidebarOpen]);
+
   if (isPublic) {
     return <Outlet />;
   }
@@ -954,28 +711,40 @@ function DashboardRoot() {
         />
       )}
       <div className="dashboard-shell">
-        {sidebarOpen && <button className="sidebar-backdrop" type="button" aria-label="Close navigation" onClick={() => setSidebarOpen(false)} />}
+        {backdrop !== "hidden" && (
+          <button
+            className="sidebar-backdrop"
+            data-state={backdrop}
+            type="button"
+            aria-label="Close navigation"
+            tabIndex={backdrop === "open" ? 0 : -1}
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
         <Sidebar mobileOpen={sidebarOpen} onNavigate={() => setSidebarOpen(false)} />
-        {/* Right column: topbar + scrollable main */}
-        <div className="dashboard-main">
-          {/* Topbar */}
-          <div className="dashboard-topbar">
-            <button className="dashboard-menu-toggle" type="button" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}>
-              <Menu size={16} />
-            </button>
+        <div className="dashboard-main" inert={sidebarOpen || undefined}>
+          <header className="dashboard-topbar">
             <button
-              className="dashboard-search"
-              onClick={() => setPaletteOpen(true)}
+              ref={menuToggleRef}
+              className="dashboard-menu-toggle btn btn-secondary btn-icon"
+              type="button"
+              aria-label="Open navigation"
+              aria-controls="dashboard-nav"
+              aria-expanded={sidebarOpen}
+              onClick={() => setSidebarOpen(true)}
             >
-              <Search size={11} />
-              <span>Search…</span>
-              <kbd>⌘K</kbd>
+              <Menu />
             </button>
-            {/* Spacer */}
-            <div style={{ flex: 1 }} />
-          </div>
+            <button type="button" className="dashboard-search" onClick={() => setPaletteOpen(true)} aria-label="Search (Ctrl K)">
+              <Search aria-hidden="true" />
+              <span>Search…</span>
+              <kbd aria-hidden="true">⌘K</kbd>
+            </button>
+            <div className="topbar-actions">
+              <ThemeToggle />
+            </div>
+          </header>
 
-          {/* Main scrollable content area — fills remaining height */}
           <main className="dashboard-content">
             <div className="dashboard-content-inner">
               <ErrorBoundary>
@@ -991,8 +760,10 @@ function DashboardRoot() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    // The boot script sets data-theme before hydration.
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <HeadContent />
       </head>
       <body>
@@ -1018,11 +789,12 @@ export const Route = createRootRoute({
       { title: "Kova | Identity infrastructure at the edge" },
     ],
     links: [
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap",
       },
       { rel: "stylesheet", href: appCss },
     ],

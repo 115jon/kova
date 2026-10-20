@@ -1,17 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
   <defs>
-    <linearGradient id="kova-brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#3b82f6" />
-      <stop offset="100%" stop-color="#06b6d4" />
+    <linearGradient id="k" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4fb8d6" />
+      <stop offset="100%" stop-color="#0283a7" />
     </linearGradient>
   </defs>
-  
-  <!-- Outer Squircle Container -->
-  <rect x="8" y="8" width="84" height="84" rx="20" fill="#09090b" stroke="rgba(255,255,255,0.06)" stroke-width="1.5" />
-  <rect x="8" y="8" width="84" height="84" rx="20" stroke="url(#kova-brand-grad)" stroke-width="1.5" stroke-opacity="0.8" fill="none" />
-  <rect x="10" y="10" width="80" height="80" rx="18" stroke="rgba(255,255,255,0.03)" stroke-width="1" fill="none" />
-  
-  <!-- Centered K-Gateway -->
-  <rect x="31" y="27" width="10" height="46" rx="5" fill="url(#kova-brand-grad)" />
-  <path d="M66,29 L49,46 C46.5,48.5 46.5,51.5 49,54 L66,71" stroke="url(#kova-brand-grad)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <rect x="8" y="8" width="84" height="84" rx="22" fill="#131515" stroke="#0283a7" stroke-opacity="0.6" stroke-width="1.5" />
+  <rect x="31" y="27" width="10" height="46" rx="5" fill="url(#k)" />
+  <path d="M66,29 L49,46 C46.5,48.5 46.5,51.5 49,54 L66,71" stroke="url(#k)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" />
 </svg>

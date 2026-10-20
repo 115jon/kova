@@ -1,6 +1,15 @@
+import { Activity, Building2, Fingerprint } from "lucide-react";
 import { useState } from "react";
-import coastUrl from "../assets/coast.webp";
 import { CoastField } from "./CoastField";
+import { KovaLogo } from "./KovaLogo";
+
+const SOURCE_URL = "https://github.com/115jon/kova";
+
+const PRODUCTS = [
+  { title: "Passkeys", body: "A tap, not a password.", icon: Fingerprint, tone: "" },
+  { title: "Organizations", body: "Roles, invites, and a switcher.", icon: Building2, tone: "tone-warning" },
+  { title: "Sessions", body: "Checked at the edge, close to the user.", icon: Activity, tone: "tone-success" },
+];
 
 export function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -9,15 +18,14 @@ export function LandingPage() {
   return (
     <div className="shore">
       <section className="shore-hero" id="top" aria-labelledby="shore-title">
-        <div className="shore-field-slot" aria-hidden="true">
-          <CoastField />
-        </div>
         <header className="shore-header">
           <a className="shore-brand" href="#top" aria-label="Kova home" onClick={closeMenu}>
-            <span className="shore-mark" aria-hidden="true">K</span>
-            <span className="shore-word">Kova</span>
+            <KovaLogo size={28} variant="full" />
           </a>
-          <a className="shore-signin" href="/sign-in">Sign in</a>
+          <div className="shore-header-actions">
+            <a className="shore-link" href={SOURCE_URL} rel="noreferrer" target="_blank">Source</a>
+            <a className="hero-btn hero-btn-light" href="/sign-in">Sign in</a>
+          </div>
           <button
             className="shore-menu"
             type="button"
@@ -34,53 +42,50 @@ export function LandingPage() {
             aria-label="Primary"
             hidden={!menuOpen}
           >
-            <a href="#top" onClick={closeMenu}>Home</a>
             <a href="/sign-in" onClick={closeMenu}>Sign in</a>
+            <a href={SOURCE_URL} rel="noreferrer" target="_blank" onClick={closeMenu}>Source</a>
           </nav>
         </header>
-        <div className="shore-stage">
-          <div className="shore-window">
-            <img className="shore-pane" src={coastUrl} alt="" />
-            <div className="shore-dots" aria-hidden="true">
-              <span className="shore-dot shore-dot-red" />
-              <span className="shore-dot shore-dot-amber" />
-              <span className="shore-dot shore-dot-green" />
-            </div>
-            <div className="shore-card">
-              <p className="shore-eyebrow">Hosted auth</p>
-              <h1 id="shore-title">Sign-in that stays out of the way.</h1>
-              <p className="shore-lead">Passkeys, organizations, and sessions for the apps you already run.</p>
-              <a className="shore-pill" href="/sign-in">Sign in</a>
+
+        <div className="shore-window">
+          <div className="shore-field-slot" aria-hidden="true">
+            <CoastField />
+          </div>
+          <div className="shore-vignette" aria-hidden="true" />
+          <div className="shore-copy">
+            <p className="shore-eyebrow shore-enter">Hosted auth</p>
+            <h1 id="shore-title" className="shore-enter">Sign-in that stays out of the way.</h1>
+            <p className="shore-lead shore-enter">Passkeys, organizations, and sessions for the apps you already run.</p>
+            <div className="shore-ctas shore-enter">
+              <a className="hero-btn hero-btn-light hero-btn-lg" href="/sign-in">Sign in</a>
+              <a className="hero-btn hero-btn-ghost hero-btn-lg" href={SOURCE_URL} rel="noreferrer" target="_blank">View source</a>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="shore-product" id="product" aria-label="Product">
-        <div className="shore-rows">
-          <div className="shore-row">
-            <h2>Passkeys</h2>
-            <p>A tap, not a password.</p>
-          </div>
-          <div className="shore-row">
-            <h2>Organizations</h2>
-            <p>Roles, invites, and a switcher.</p>
-          </div>
-          <div className="shore-row">
-            <h2>Sessions</h2>
-            <p>Checked at the edge, close to the user.</p>
+      <section className="shore-product" id="product" aria-labelledby="shore-product-title">
+        <div className="shore-product-inner">
+          <p className="section-label">What you get</p>
+          <h2 id="shore-product-title">The parts of auth you'd rather not build.</h2>
+          <div className="shore-bento">
+            {PRODUCTS.map(({ title, body, icon: Icon, tone }) => (
+              <article key={title} className="card">
+                <span className={`icon-tile icon-tile-lg ${tone}`} aria-hidden="true"><Icon /></span>
+                <h3>{title}</h3>
+                <p>{body}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>
 
       <footer className="shore-footer">
-        <div className="shore-brand">
-          <span className="shore-mark" aria-hidden="true">K</span>
-          <span className="shore-word">Kova</span>
+        <span className="shore-brand"><KovaLogo size={24} variant="full" /></span>
+        <div className="shore-footer-links">
+          <a href={SOURCE_URL} rel="noreferrer" target="_blank">Source</a>
+          <span>Secured by Kova · auth.115jon.site</span>
         </div>
-        <a className="shore-source" href="https://github.com/115jon/kova" rel="noreferrer" target="_blank">
-          Source
-        </a>
       </footer>
     </div>
   );

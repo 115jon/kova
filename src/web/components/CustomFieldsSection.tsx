@@ -35,7 +35,6 @@ import {
 import {
   AlertCircle,
   Check,
-  ChevronDown,
   Globe,
   Info,
   Lock,
@@ -156,34 +155,12 @@ function FieldRow({ def, currentValue, onSave }: FieldRowProps) {
     if (!def.selfEditable) {
       // Read-only display for admin-managed fields
       return (
-        <div style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          minWidth: 0,
-        }}>
-          <span style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "0.82rem",
-            color: currentValue !== null ? "var(--color-text-primary)" : "var(--color-text-tertiary)",
-          }}>
+        <div className="row" style={{ flex: 1 }}>
+          <span className={currentValue !== null ? "" : "text-tertiary"}>
             {currentValue !== null ? String(currentValue) : "(not set)"}
           </span>
-          <span style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            background: "rgba(251,191,36,0.08)",
-            border: "1px solid rgba(251,191,36,0.18)",
-            borderRadius: 4,
-            padding: "2px 7px",
-            fontSize: "0.68rem",
-            fontFamily: "var(--font-mono)",
-            color: "var(--color-amber)",
-            flexShrink: 0,
-          }}>
-            <Lock size={9} /> Admin managed
+          <span className="badge badge-warning">
+            <Lock aria-hidden="true" /> Admin managed
           </span>
         </div>
       );
@@ -194,72 +171,33 @@ function FieldRow({ def, currentValue, onSave }: FieldRowProps) {
       return (
         <button
           id={`field-${def.key}-toggle`}
+          type="button"
           role="switch"
           aria-checked={checked}
+          aria-label={def.label}
           onClick={() => setDraft(checked ? "false" : "true")}
-          style={{
-            width: 42,
-            height: 24,
-            borderRadius: 12,
-            border: "none",
-            cursor: "pointer",
-            background: checked ? "var(--color-accent)" : "var(--color-surface-raised)",
-            position: "relative",
-            transition: "background 0.2s",
-            outline: "none",
-            flexShrink: 0,
-          }}
+          className="switch"
           title={checked ? "Enabled (click to disable)" : "Disabled (click to enable)"}
-        >
-          <span style={{
-            position: "absolute",
-            top: 3,
-            left: checked ? 21 : 3,
-            width: 18,
-            height: 18,
-            borderRadius: "50%",
-            background: "#fff",
-            transition: "left 0.2s",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-          }} />
-        </button>
+        />
       );
     }
 
     if (def.type === "enum" && def.options) {
       return (
-        <div style={{ position: "relative", flex: 1, minWidth: 0, maxWidth: 280 }}>
-          <select
-            id={`field-${def.key}-select`}
-            className="input"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            style={{
-              width: "100%",
-              fontFamily: "var(--font-mono)",
-              fontSize: "0.82rem",
-              appearance: "none",
-              paddingRight: 32,
-            }}
-          >
-            {def.options.map((opt) => (
-              <option key={opt} value={opt}>
-                {def.key === "locale" ? localeLabel(opt) : opt}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            size={13}
-            style={{
-              position: "absolute",
-              right: 10,
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "var(--color-text-tertiary)",
-              pointerEvents: "none",
-            }}
-          />
-        </div>
+        <select
+          id={`field-${def.key}-select`}
+          aria-label={def.label}
+          className="select"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          style={{ flex: 1, maxWidth: 280 }}
+        >
+          {def.options.map((opt) => (
+            <option key={opt} value={opt}>
+              {def.key === "locale" ? localeLabel(opt) : opt}
+            </option>
+          ))}
+        </select>
       );
     }
 
@@ -267,10 +205,12 @@ function FieldRow({ def, currentValue, onSave }: FieldRowProps) {
     return (
       <input
         id={`field-${def.key}-input`}
+        aria-label={def.label}
         className="input"
         type={def.type === "number" ? "number" : "text"}
         value={draft}
         maxLength={def.maxLength}
+        aria-invalid={status === "error" || undefined}
         placeholder={
           def.defaultValue !== null
             ? `Default: ${def.defaultValue}`
@@ -285,78 +225,36 @@ function FieldRow({ def, currentValue, onSave }: FieldRowProps) {
             void handleSave();
           }
         }}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          maxWidth: 320,
-          fontFamily: "var(--font-mono)",
-          fontSize: "0.82rem",
-          borderColor: status === "error"
-            ? "rgba(248,113,113,0.5)"
-            : undefined,
-        }}
+        style={{ flex: 1, maxWidth: 320 }}
       />
     );
   };
 
   return (
-    <div style={{
-      padding: "12px 20px",
+    <div className="stack-sm" style={{
+      padding: "12px var(--space-5)",
       borderBottom: "1px solid var(--color-border)",
-      display: "flex",
-      flexDirection: "column",
-      gap: 6,
     }}>
       {/* Label row */}
-      <div style={{
-        display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
-        gap: 12,
-      }}>
-        <div style={{ minWidth: 0 }}>
-          <p style={{
-            fontSize: "0.84rem",
-            fontWeight: 600,
-            color: "var(--color-text-primary)",
-            lineHeight: 1.3,
-          }}>
-            {def.label}
-          </p>
-          <p style={{
-            fontSize: "0.72rem",
-            color: "var(--color-text-tertiary)",
-            fontFamily: "var(--font-mono)",
-            marginTop: 2,
-            lineHeight: 1.5,
-          }}>
+      <div className="row-between" style={{ alignItems: "flex-start" }}>
+        <div className="min-w-0">
+          <p className="text-strong">{def.label}</p>
+          <p className="text-sm text-tertiary">
             {def.description}
-            {def.maxLength && (
-              <span style={{ marginLeft: 6, opacity: 0.6 }}>
-                · max {def.maxLength} chars
-              </span>
-            )}
+            {def.maxLength && ` · max ${def.maxLength} chars`}
           </p>
         </div>
 
         {/* Status badge */}
         {status === "saved" && (
-          <span style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: "0.72rem",
-            fontFamily: "var(--font-mono)",
-            color: "var(--color-green)",
-            flexShrink: 0,
-          }}>
-            <Check size={11} /> Saved
+          <span className="badge badge-success" role="status">
+            <Check aria-hidden="true" /> Saved
           </span>
         )}
       </div>
 
       {/* Input + action row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <div className="row" style={{ flexWrap: "wrap" }}>
         {renderInput()}
 
         {def.selfEditable && (
@@ -365,14 +263,14 @@ function FieldRow({ def, currentValue, onSave }: FieldRowProps) {
             {isDirty && (
               <button
                 id={`field-${def.key}-save`}
-                className="btn btn-primary"
-                style={{ fontSize: "0.78rem", padding: "5px 12px" }}
+                type="button"
+                className="btn btn-primary btn-sm"
                 disabled={status === "saving"}
                 onClick={() => void handleSave()}
               >
                 {status === "saving"
-                  ? <><RefreshCw size={11} style={{ animation: "spin 1s linear infinite" }} /> Saving…</>
-                  : <><Save size={11} /> Save</>
+                  ? <><RefreshCw className="spin" /> Saving…</>
+                  : <><Save /> Save</>
                 }
               </button>
             )}
@@ -380,13 +278,13 @@ function FieldRow({ def, currentValue, onSave }: FieldRowProps) {
             {/* Reset to default — only visible when not at the default already */}
             {!isAtDefault && def.defaultValue !== null && (
               <button
-                className="btn btn-ghost"
-                style={{ fontSize: "0.75rem", padding: "5px 10px", color: "var(--color-text-tertiary)" }}
+                type="button"
+                className="btn btn-subtle btn-sm"
                 disabled={status === "saving"}
                 onClick={() => void handleReset()}
                 title={`Reset to default: ${def.defaultValue}`}
               >
-                <RefreshCw size={10} /> Reset
+                <RefreshCw /> Reset
               </button>
             )}
           </>
@@ -395,32 +293,15 @@ function FieldRow({ def, currentValue, onSave }: FieldRowProps) {
 
       {/* Error message */}
       {status === "error" && errorMsg && (
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          fontFamily: "var(--font-mono)",
-          fontSize: "0.72rem",
-          color: "var(--color-red)",
-          background: "var(--color-red-dim)",
-          border: "1px solid rgba(248,113,113,0.15)",
-          borderRadius: 4,
-          padding: "5px 10px",
-        }}>
-          <AlertCircle size={11} /> {errorMsg}
-        </div>
+        <p className="form-error" role="alert"><AlertCircle /> {errorMsg}</p>
       )}
 
       {/* Character count for long text */}
       {def.type === "string" && def.maxLength && draft.length > 0 && def.selfEditable && (
-        <div style={{
-          textAlign: "right",
-          fontSize: "0.68rem",
-          fontFamily: "var(--font-mono)",
-          color: draft.length > def.maxLength * 0.9
-            ? "var(--color-amber)"
-            : "var(--color-text-tertiary)",
-        }}>
+        <div
+          className={draft.length > def.maxLength * 0.9 ? "text-sm text-warning tabular" : "text-sm text-tertiary tabular"}
+          style={{ textAlign: "end" }}
+        >
           {draft.length} / {def.maxLength}
         </div>
       )}
@@ -447,7 +328,7 @@ const FIELD_GROUPS: { label: string; icon: React.ReactNode; keys: string[] }[] =
     keys: ["theme", "email_notifications"],
   },
   {
-    label: "Application (Admin Managed)",
+    label: "Application (admin managed)",
     icon: <Lock size={12} />,
     keys: ["app_role", "department", "employee_id"],
   },
@@ -479,35 +360,21 @@ export function CustomFieldsSection() {
 
   if (isLoading) {
     return (
-      <div style={{
-        padding: "28px 20px",
-        textAlign: "center",
-        fontFamily: "var(--font-mono)",
-        fontSize: "0.76rem",
-        color: "var(--color-text-tertiary)",
-      }}>
-        <RefreshCw
-          size={14}
-          style={{ animation: "spin 1s linear infinite", marginBottom: 8, display: "block", margin: "0 auto 8px" }}
-        />
-        Loading profile fields…
+      <div className="skeleton-rows" role="status" aria-label="Loading profile fields">
+        <span className="skeleton" />
+        <span className="skeleton" />
+        <span className="skeleton" />
       </div>
     );
   }
 
   if (schemaError) {
     return (
-      <div style={{
-        padding: 20,
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        fontFamily: "var(--font-mono)",
-        fontSize: "0.76rem",
-        color: "var(--color-red)",
-      }}>
-        <AlertCircle size={13} />
-        Failed to load field definitions: {schemaError.message}
+      <div className="panel-body">
+        <p className="alert alert-danger" role="alert">
+          <AlertCircle />
+          Failed to load field definitions: {schemaError.message}
+        </p>
       </div>
     );
   }
@@ -515,25 +382,18 @@ export function CustomFieldsSection() {
   return (
     <>
       {/* Intro banner */}
-      <div style={{
-        display: "flex",
+      <div className="row" style={{
         alignItems: "flex-start",
         gap: 10,
-        padding: "12px 20px",
+        padding: "12px var(--space-5)",
         borderBottom: "1px solid var(--color-border)",
-        background: "var(--color-accent-dim)",
-        borderTop: "none",
+        background: "var(--color-accent-soft)",
       }}>
-        <Info size={13} color="var(--color-text-accent)" style={{ flexShrink: 0, marginTop: 2 }} />
-        <p style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "0.72rem",
-          color: "var(--color-text-secondary)",
-          lineHeight: 1.6,
-        }}>
+        <Info size={16} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2, color: "var(--color-accent-text)" }} />
+        <p className="text-sm text-secondary">
           These fields are stored as extensible metadata on your account.
           They are accessible to applications via the API.
-          Fields marked as <strong style={{ color: "var(--color-amber)" }}>Admin managed</strong> are
+          Fields marked as <strong className="text-strong">Admin managed</strong> are
           set by platform administrators and are read-only here.
         </p>
       </div>
@@ -549,25 +409,13 @@ export function CustomFieldsSection() {
         return (
           <div key={group.label}>
             {/* Group header */}
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
-              padding: "8px 20px",
+            <div className="row text-overline" style={{
+              padding: "8px var(--space-5)",
               background: "var(--color-surface-raised)",
               borderBottom: "1px solid var(--color-border)",
             }}>
-              <span style={{ color: "var(--color-text-tertiary)" }}>{group.icon}</span>
-              <span style={{
-                fontSize: "0.68rem",
-                fontFamily: "var(--font-mono)",
-                fontWeight: 600,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                color: "var(--color-text-tertiary)",
-              }}>
-                {group.label}
-              </span>
+              <span aria-hidden="true" style={{ display: "inline-flex" }}>{group.icon}</span>
+              <span>{group.label}</span>
             </div>
 
             {/* Fields */}
@@ -582,9 +430,6 @@ export function CustomFieldsSection() {
           </div>
         );
       })}
-
-      {/* Bottom padding */}
-      <div style={{ padding: "10px 20px" }} />
     </>
   );
 }

@@ -1,12 +1,12 @@
 /**
- * AvatarUpload.tsx — crop tool with pure-black design system tokens.
+ * AvatarUpload.tsx — avatar picker with a crop dialog.
  */
 
+import { Modal, ModalHeader } from "@/components/Modal";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import { UserAvatar } from "@/components/UserAvatar";
-import { Camera, Check, Image as ImageIcon, Loader2, RotateCw, X } from "lucide-react";
+import { Camera, Check, Image as ImageIcon, Loader2, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import type { Area } from "react-easy-crop";
 import Cropper from "react-easy-crop";
 
@@ -93,122 +93,94 @@ function CropModal({
 
   const isReset = zoom === 1 && rotation === 0 && crop.x === 0 && crop.y === 0;
 
-  return createPortal(
-    <div
-      className="modal-overlay"
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
-    >
-      <div style={{
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-border-strong)",
-        borderRadius: 6, overflow: "hidden",
-        width: "min(92vw, 440px)", display: "flex", flexDirection: "column",
-        boxShadow: "0 32px 80px rgba(0,0,0,0.75)",
+  return (
+    <Modal onClose={onCancel} maxWidth={440}>
+      <ModalHeader
+        title="Crop photo"
+        icon={<span className="icon-tile" aria-hidden="true"><Camera /></span>}
+      />
+
+      {/* react-easy-crop viewport */}
+      <div style={{ position: "relative", width: "100%", height: 340, marginTop: "var(--space-5)", background: "var(--color-surface-raised)" }}>
+        <Cropper
+          image={picked.objectUrl}
+          crop={crop}
+          zoom={zoom}
+          rotation={rotation}
+          minZoom={1}
+          maxZoom={4}
+          aspect={1}
+          cropShape={type === "org" ? "rect" : "round"}
+          showGrid={false}
+          onCropChange={setCrop}
+          onZoomChange={setZoom}
+          onCropComplete={onCropComplete}
+          style={{
+            containerStyle: { background: "var(--color-surface-raised)" },
+            cropAreaStyle: {
+              border: "2px solid var(--color-accent)",
+              boxShadow: "0 0 0 9999px var(--color-overlay)",
+            },
+          }}
+        />
+      </div>
+
+      {/* Controls row */}
+      <div className="stack-sm" style={{
+        padding: "var(--space-3) var(--space-6)",
+        borderBlockStart: "1px solid var(--color-border)",
       }}>
-        {/* Header */}
-        <div className="modal-header">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: 4, flexShrink: 0,
-              background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <Camera size={13} color="var(--color-text-accent)" />
-            </div>
-            <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.86rem" }}>Crop photo</p>
-          </div>
-          <button
-            onClick={onCancel}
-            className="btn btn-ghost"
-            style={{ padding: 5, marginLeft: "auto" }}
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        {/* react-easy-crop viewport */}
-        <div style={{ position: "relative", width: "100%", height: 340, background: "#050505" }}>
-          <Cropper
-            image={picked.objectUrl}
-            crop={crop}
-            zoom={zoom}
-            rotation={rotation}
-            minZoom={1}
-            maxZoom={4}
-            aspect={1}
-            cropShape={type === "org" ? "rect" : "round"}
-            showGrid={false}
-            onCropChange={setCrop}
-            onZoomChange={setZoom}
-            onCropComplete={onCropComplete}
-            style={{
-              containerStyle: { background: "#050505" },
-              cropAreaStyle: {
-                border: "2px solid var(--color-accent)",
-                boxShadow: "0 0 0 9999px rgba(0,0,0,0.6)",
-              },
-            }}
+        {/* Zoom slider */}
+        <div className="row">
+          <ImageIcon size={14} aria-hidden="true" style={{ color: "var(--color-text-tertiary)" }} />
+          <input
+            type="range"
+            aria-label="Zoom"
+            min={1}
+            max={4}
+            step={0.01}
+            value={zoom}
+            onChange={(e) => setZoom(Number(e.target.value))}
+            style={{ flex: 1, width: "auto", accentColor: "var(--color-accent-solid)", cursor: "pointer" }}
           />
+          <ImageIcon size={18} aria-hidden="true" style={{ color: "var(--color-text-secondary)" }} />
         </div>
-
-        {/* Controls row */}
-        <div style={{
-          padding: "12px 18px 10px",
-          background: "var(--color-surface-raised)",
-          display: "flex", flexDirection: "column", gap: 10,
-          borderTop: "1px solid var(--color-border)",
-        }}>
-          {/* Zoom slider */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <ImageIcon size={12} color="var(--color-text-tertiary)" />
-            <input
-              type="range"
-              min={1}
-              max={4}
-              step={0.01}
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-              style={{ flex: 1, accentColor: "var(--color-accent)", cursor: "pointer" }}
-            />
-            <ImageIcon size={17} color="var(--color-text-secondary)" />
-          </div>
-          {/* Action buttons */}
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              onClick={handleRotate}
-              className="btn btn-ghost"
-              style={{ fontSize: "0.76rem", padding: "4px 10px" }}
-              title="Rotate 90°"
-            >
-              <RotateCw size={12} /> Rotate
-            </button>
-            <button
-              onClick={handleReset}
-              disabled={isReset}
-              className="btn btn-ghost"
-              style={{ fontSize: "0.76rem", padding: "4px 10px", opacity: isReset ? 0.4 : 1 }}
-              title="Reset to original view"
-            >
-              Reset
-            </button>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="modal-footer">
-          <button onClick={onCancel} className="btn btn-ghost">
-            Cancel
+        {/* Action buttons */}
+        <div className="row">
+          <button
+            type="button"
+            onClick={handleRotate}
+            className="btn btn-secondary btn-sm"
+            title="Rotate 90°"
+          >
+            <RotateCw /> Rotate
           </button>
           <button
-            onClick={() => { void handleConfirm(); }}
-            className="btn btn-primary"
+            type="button"
+            onClick={handleReset}
+            disabled={isReset}
+            className="btn btn-secondary btn-sm"
+            title="Reset to original view"
           >
-            <Check size={13} /> Apply
+            Reset
           </button>
         </div>
       </div>
-    </div>,
-    document.body,
+
+      {/* Footer */}
+      <div className="modal-footer">
+        <button type="button" onClick={onCancel} className="btn btn-secondary">
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => { void handleConfirm(); }}
+          className="btn btn-primary"
+        >
+          <Check /> Apply
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -314,16 +286,12 @@ export function AvatarUpload({
 
       <button
         type="button"
+        className="avatar-upload"
+        data-shape={type}
+        data-uploading={uploading || undefined}
         onClick={() => !uploading && inputRef.current?.click()}
         title="Change photo"
-        style={{
-          all: "unset",
-          display: "inline-flex",
-          cursor: uploading ? "wait" : "pointer",
-          borderRadius: 5,
-          position: "relative",
-          flexShrink: 0,
-        }}
+        aria-label="Change photo"
       >
         {type === "org" ? (
           <OrgAvatar logo={currentSrc} name={name} size={size} />
@@ -331,28 +299,13 @@ export function AvatarUpload({
           <UserAvatar src={currentSrc} name={name} size={size} />
         )}
 
-        <span
-          className="avatar-overlay"
-          style={{
-            position: "absolute", inset: 0, borderRadius: 5,
-            background: uploading ? "rgba(0,0,0,0.6)" : "transparent",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            transition: "background 0.18s",
-            color: "#fff",
-          }}
-        >
+        <span className="avatar-upload-overlay" aria-hidden="true">
           {uploading
-            ? <Loader2 size={Math.round(size * 0.35)} style={{ animation: "spin 0.8s linear infinite" }} />
-            : <Camera size={Math.round(size * 0.35)} className="avatar-cam" style={{ opacity: 0, transition: "opacity 0.15s" }} />
+            ? <Loader2 className="spin" size={Math.round(size * 0.35)} />
+            : <Camera className="avatar-upload-cam" size={Math.round(size * 0.35)} />
           }
         </span>
       </button>
-
-      <style>{`
-        button:hover .avatar-overlay { background: rgba(0,0,0,0.5) !important; }
-        button:hover .avatar-cam { opacity: 1 !important; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
 
       {picked && (
         <CropModal

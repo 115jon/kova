@@ -185,7 +185,7 @@ function render(config: HostedBootstrap): void {
   if (!root) return;
   root.replaceChildren();
 
-  const primary = config.appearance.primaryColor || "#3b82f6";
+  const primary = config.appearance.primaryColor || "#026f8e";
   const isSignUp = config.page === "sign-up";
   const appName = config.app.name || "this app";
 
@@ -313,7 +313,7 @@ function render(config: HostedBootstrap): void {
   card.appendChild(footer);
 
   if (!config.hideBranding) {
-    card.appendChild(el("p", { class: "ra-brand" }, "Secured by kova-auth"));
+    card.appendChild(el("p", { class: "ra-brand" }, "Secured by Kova"));
   }
 
   root.appendChild(card);
@@ -326,47 +326,66 @@ function injectStyles(primary: string): void {
   style.id = "ra-hosted-styles";
   style.textContent = `
     .ra-card {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 10px;
-      padding: 32px 28px;
-      color: rgba(255,255,255,0.86);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 20px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+      padding: 32px 28px 24px;
+      color: #ffffff;
+      font-size: 15px;
+      line-height: 1.5;
     }
-    .ra-logo { display: block; height: 36px; width: auto; margin: 0 auto 16px; }
-    .ra-title { font-size: 1.15rem; font-weight: 600; text-align: center; color: #fff; }
-    .ra-sub, .ra-test, .ra-or, .ra-foot, .ra-brand {
-      text-align: center; color: rgba(255,255,255,0.45); font-size: 0.75rem;
-    }
-    .ra-sub { margin: 6px 0 18px; }
-    .ra-test {
-      margin: -10px 0 16px; color: ${primary}; letter-spacing: 0.08em;
-      text-transform: uppercase; font-size: 0.65rem;
-    }
+    .ra-logo { display: block; height: 48px; width: auto; margin: 0 auto 16px; border-radius: 12px; }
+    .ra-title { font-size: 20px; font-weight: 600; line-height: 1.25; letter-spacing: -0.015em; text-align: center; color: #ffffff; }
+    .ra-sub, .ra-test, .ra-or, .ra-foot, .ra-brand { text-align: center; }
+    .ra-sub { margin: 6px 0 24px; color: #b8b8b8; font-size: 15px; }
+    .ra-test { margin: -14px 0 16px; color: #ffb020; font-size: 12px; font-weight: 500; }
     .ra-error {
-      margin: 0 0 12px; color: rgba(248,113,113,0.9); font-size: 0.75rem; text-align: center;
+      margin: 0 0 16px; padding: 12px 14px; border-radius: 12px; text-align: left;
+      color: #ffffff; font-size: 14px;
+      background: rgba(255,107,107,0.10); border: 1px solid rgba(255,107,107,0.24);
     }
     .ra-google, .ra-submit, .ra-input {
-      width: 100%; font: inherit; border-radius: 8px;
+      width: 100%; height: 44px; font: inherit; font-size: 15px; border-radius: 12px;
     }
     .ra-google, .ra-submit {
-      border: 0; cursor: pointer; padding: 11px 14px; font-size: 0.8rem;
+      border: 0; cursor: pointer; padding: 0 16px; font-weight: 500;
+      transition: background-color 150ms ease, border-color 150ms ease, transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
     }
     .ra-google {
-      background: rgba(255,255,255,0.08); color: #fff;
-      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.08); color: #ffffff;
+      border: 1px solid rgba(255,255,255,0.10);
     }
-    .ra-google:disabled, .ra-submit:disabled { opacity: 0.55; cursor: progress; }
-    .ra-or { margin: 14px 0; }
-    .ra-form { display: flex; flex-direction: column; gap: 10px; }
+    .ra-google + .ra-google { margin-top: 8px; }
+    .ra-google:active:not(:disabled), .ra-submit:active:not(:disabled) { transform: scale(0.98); }
+    .ra-google:disabled, .ra-submit:disabled { opacity: 0.5; cursor: progress; }
+    .ra-or { margin: 20px 0; color: #8a9090; font-size: 13px; }
+    .ra-form { display: flex; flex-direction: column; gap: 12px; }
     .ra-input {
-      background: rgba(0,0,0,0.35); color: #fff;
-      border: 1px solid rgba(255,255,255,0.1); padding: 11px 12px; font-size: 0.8rem;
+      background: rgba(255,255,255,0.08); color: #ffffff;
+      border: 1px solid rgba(255,255,255,0.10); padding: 0 16px;
+      transition: border-color 150ms ease;
     }
-    .ra-input:focus { outline: 1px solid ${primary}; border-color: ${primary}; }
-    .ra-submit { color: #fff; font-weight: 600; }
-    .ra-foot { margin-top: 16px; }
-    .ra-foot a { color: rgba(255,255,255,0.7); }
-    .ra-brand { margin-top: 18px; font-size: 0.65rem; color: rgba(255,255,255,0.28); }
+    .ra-input::placeholder { color: #8a9090; }
+    .ra-input:focus { outline: none; border-color: ${primary}; }
+    .ra-google:focus-visible, .ra-submit:focus-visible, .ra-input:focus-visible, .ra-foot a:focus-visible {
+      outline: 2px solid ${primary}; outline-offset: 2px;
+    }
+    .ra-submit { color: #ffffff; font-weight: 600; margin-top: 4px; }
+    .ra-foot { margin-top: 20px; color: #8a9090; font-size: 13px; }
+    .ra-foot a { color: #b8b8b8; }
+    .ra-brand { margin-top: 20px; font-size: 12px; color: #8a9090; }
+    @media (hover: hover) and (pointer: fine) {
+      .ra-google:hover:not(:disabled) { border-color: rgba(255,255,255,0.18); }
+      .ra-foot a:hover { color: #ffffff; }
+    }
+    @media (max-width: 479px) {
+      .ra-card { padding: 28px 20px 20px; }
+      .ra-input { font-size: 16px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ra-google:active:not(:disabled), .ra-submit:active:not(:disabled) { transform: none; }
+    }
   `;
   document.head.appendChild(style);
 }
@@ -465,7 +484,7 @@ export function bootHostedAuth(): void {
       root.textContent = "";
       const fail = document.createElement("div");
       fail.className = "ra-skeleton";
-      fail.style.color = "rgba(248,113,113,0.8)";
+      fail.style.color = "#ff6b6b";
       fail.textContent = "Failed to load. Please try again.";
       root.appendChild(fail);
     }

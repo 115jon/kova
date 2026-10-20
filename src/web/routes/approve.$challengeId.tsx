@@ -1,7 +1,8 @@
+import { KovaLogo } from "@/components/KovaLogo";
 import { AUTH_URL, useSession } from "@/lib/auth-client";
 import { createFileRoute } from "@tanstack/react-router";
 import { CheckCircle, Laptop, Shield, XCircle } from "lucide-react";
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type ChallengeStatus = "pending" | "approved" | "denied" | "claimed";
 
@@ -89,109 +90,54 @@ function ApproveDevicePage() {
     ?? challenge?.label
     ?? "an unknown machine";
 
-  return (
-    <div style={{
-      minHeight: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "var(--color-bg)",
-      padding: 24,
-    }}
-    >
-      <div style={{
-        position: "fixed",
-        top: 22,
-        left: 28,
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-      }}
-      >
-        <div style={{
-          width: 22,
-          height: 22,
-          borderRadius: 4,
-          background: "var(--color-accent)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-        >
-          <span style={{
-            fontFamily: "var(--font-mono)",
-            fontWeight: 800,
-            color: "#fff",
-            fontSize: "0.65rem",
-          }}
-          >
-            K
-          </span>
-        </div>
-        <span style={{
-          fontFamily: "var(--font-mono)",
-          fontWeight: 700,
-          color: "var(--color-text-primary)",
-          fontSize: "0.88rem",
-        }}
-        >
-          kova
-        </span>
-      </div>
+  const statusTile = challenge?.status === "approved" || challenge?.status === "claimed"
+    ? <span className="icon-tile icon-tile-lg tone-success" aria-hidden="true"><CheckCircle /></span>
+    : challenge?.status === "denied"
+      ? <span className="icon-tile icon-tile-lg tone-danger" aria-hidden="true"><XCircle /></span>
+      : <span className="icon-tile icon-tile-lg" aria-hidden="true"><Laptop /></span>;
 
-      <div style={{
-        width: "100%",
-        maxWidth: 400,
-        background: "var(--color-surface)",
-        border: "1px solid var(--color-border-strong)",
-        borderRadius: 6,
-        padding: 36,
-        textAlign: "center",
-        boxShadow: "0 32px 64px rgba(0,0,0,0.6)",
-      }}
-      >
-        <div style={{
-          width: 48,
-          height: 48,
-          borderRadius: 5,
-          margin: "0 auto 16px",
-          background: "var(--color-accent-dim)",
-          border: "1px solid rgba(59,130,246,0.2)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-        >
-          {challenge?.status === "approved" || challenge?.status === "claimed"
-            ? <CheckCircle size={20} color="var(--color-text-accent)" />
-            : challenge?.status === "denied"
-              ? <XCircle size={20} color="var(--color-red)" />
-              : <Laptop size={20} color="var(--color-text-accent)" />}
+  return (
+    <main className="center-screen">
+      <div className="card public-card stack" style={{ textAlign: "center" }}>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <KovaLogo size={48} />
         </div>
+
+        <div style={{ display: "flex", justifyContent: "center" }}>{statusTile}</div>
 
         {loadError && (
-          <>
-            <h1 style={titleStyle}>Can't approve this</h1>
-            <p style={bodyStyle}>{loadError}</p>
-          </>
+          <div className="stack-sm">
+            <h1 className="text-h2">Can't approve this</h1>
+            <p className="text-secondary">{loadError}</p>
+          </div>
         )}
 
         {!loadError && challenge?.status === "pending" && (
-          <>
-            <h1 style={titleStyle}>Approve this machine?</h1>
-            <p style={bodyStyle}>
-              <strong style={{ color: "var(--color-text-primary)" }}>{machine}</strong>
-              {challenge.platform ? ` · ${challenge.platform}` : ""}
-              {" "}wants house git access. This does not hand over secrets until mint runs.
-            </p>
-            {sessionPending && <p style={bodyStyle}>Checking your session…</p>}
+          <div className="stack">
+            <div className="stack-sm">
+              <h1 className="text-h2">Approve this machine?</h1>
+              <p className="text-secondary">
+                <strong className="text-strong">{machine}</strong>
+                {challenge.platform ? ` · ${challenge.platform}` : ""}
+                {" "}wants house git access. This does not hand over secrets until mint runs.
+              </p>
+            </div>
+            {sessionPending && <p className="text-secondary">Checking your session…</p>}
             {!sessionPending && !session && (
-              <a className="btn btn-primary" href={signInHref(challengeId)} style={{ display: "inline-flex", marginTop: 8 }}>
-                <Shield size={14} /> Sign in to approve
+              <a className="btn btn-primary btn-block" href={signInHref(challengeId)}>
+                <Shield /> Sign in to approve
               </a>
             )}
             {!sessionPending && session && (
-              <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
+              <div className="row" style={{ justifyContent: "center" }}>
+                <button
+                  className="btn btn-secondary"
+                  disabled={busy !== null}
+                  onClick={() => void act("deny")}
+                  type="button"
+                >
+                  {busy === "deny" ? "Denying…" : "Deny"}
+                </button>
                 <button
                   className="btn btn-primary"
                   disabled={busy !== null}
@@ -200,57 +146,33 @@ function ApproveDevicePage() {
                 >
                   {busy === "approve" ? "Approving…" : "Approve"}
                 </button>
-                <button
-                  className="btn btn-ghost"
-                  disabled={busy !== null}
-                  onClick={() => void act("deny")}
-                  type="button"
-                >
-                  {busy === "deny" ? "Denying…" : "Deny"}
-                </button>
               </div>
             )}
-            {actionError && <p style={{ ...bodyStyle, color: "var(--color-red)", marginTop: 12 }}>{actionError}</p>}
-          </>
+            {actionError && <p className="alert alert-danger" role="alert" style={{ textAlign: "start" }}><XCircle /> {actionError}</p>}
+          </div>
         )}
 
         {!loadError && challenge?.status === "approved" && (
-          <>
-            <h1 style={titleStyle}>Approved</h1>
-            <p style={bodyStyle}>{machine} can finish bootstrap. You can close this.</p>
-          </>
+          <div className="stack-sm">
+            <h1 className="text-h2">Approved</h1>
+            <p className="text-secondary">{machine} can finish bootstrap. You can close this.</p>
+          </div>
         )}
 
         {!loadError && challenge?.status === "claimed" && (
-          <>
-            <h1 style={titleStyle}>Already used</h1>
-            <p style={bodyStyle}>That approval was claimed. Start a new bootstrap if you need another machine.</p>
-          </>
+          <div className="stack-sm">
+            <h1 className="text-h2">Already used</h1>
+            <p className="text-secondary">That approval was claimed. Start a new bootstrap if you need another machine.</p>
+          </div>
         )}
 
         {!loadError && challenge?.status === "denied" && (
-          <>
-            <h1 style={titleStyle}>Denied</h1>
-            <p style={bodyStyle}>{machine} did not get access.</p>
-          </>
+          <div className="stack-sm">
+            <h1 className="text-h2">Denied</h1>
+            <p className="text-secondary">{machine} did not get access.</p>
+          </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }
-
-const titleStyle: CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: "1rem",
-  fontWeight: 700,
-  color: "var(--color-text-primary)",
-  marginBottom: 8,
-};
-
-const bodyStyle: CSSProperties = {
-  fontFamily: "var(--font-sans)",
-  fontSize: "0.84rem",
-  color: "var(--color-text-secondary)",
-  lineHeight: 1.5,
-  margin: 0,
-};

@@ -4,9 +4,10 @@ import type { SocialProvider } from "./providers";
 export type AppAppearance = ServerAppearance;
 export type ColorScheme = "dark" | "light";
 
-const SANS = '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif';
-const DEFAULT_PRIMARY = "#3b82f6";
-const DEFAULT_BACKGROUND: Record<ColorScheme, string> = { dark: "#0b0d12", light: "#f5f6f8" };
+const SANS = '"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif';
+const MONO = '"IBM Plex Mono", ui-monospace, monospace';
+export const DEFAULT_PRIMARY = "#026f8e";
+export const DEFAULT_BACKGROUND: Record<ColorScheme, string> = { dark: "#131515", light: "#f7f7f7" };
 
 export function resolveColorScheme(
   theme: AppAppearance["theme"] | null | undefined,
@@ -56,42 +57,55 @@ export function appSignInLook(
   const shared = {
     colorPrimary: primary,
     colorBackground: background,
-    borderRadius: "16px",
-    borderRadiusSm: "10px",
+    borderRadius: "20px",
+    borderRadiusSm: "12px",
     fontFamily: SANS,
-    fontFamilyMono: SANS,
-    fontSize: "14px",
+    fontFamilyMono: MONO,
+    fontSize: "15px",
   };
 
   const variables: AppearanceVariables = scheme === "dark"
     ? {
       ...shared,
       colorPrimaryHover: `color-mix(in oklab, ${primary} 86%, white)`,
-      colorSurface: backdrop === "dark" ? `color-mix(in oklab, ${background} 95%, white)` : "#16181d",
-      colorSurfaceRaised: backdrop === "dark" ? `color-mix(in oklab, ${background} 89%, white)` : "#1e2026",
-      colorText: "#f3f4f6",
-      colorTextSecondary: "rgb(243 244 246 / 0.7)",
-      colorTextTertiary: "rgb(243 244 246 / 0.5)",
-      colorBorder: "rgb(255 255 255 / 0.09)",
-      colorBorderStrong: "rgb(255 255 255 / 0.17)",
-      colorError: "#f87171",
+      colorSurface: backdrop === "dark" ? `color-mix(in oklab, ${background} 95%, white)` : "#1a1c1c",
+      colorSurfaceRaised: backdrop === "dark" ? `color-mix(in oklab, ${background} 89%, white)` : "#222525",
+      colorText: "#ffffff",
+      colorTextSecondary: "#b8b8b8",
+      colorTextTertiary: "#8a9090",
+      colorBorder: "rgba(255, 255, 255, 0.1)",
+      colorBorderStrong: "rgba(255, 255, 255, 0.18)",
+      colorError: "#ff6b6b",
       colorSuccess: "#4ade80",
+      colorWarning: "#ffb020",
+      shadow: "0 8px 20px rgba(0, 0, 0, 0.35)",
     }
     : {
       ...shared,
       colorPrimaryHover: `color-mix(in oklab, ${primary} 88%, black)`,
       colorSurface: "#ffffff",
-      colorSurfaceRaised: "#f4f5f7",
-      colorText: "#15171c",
-      colorTextSecondary: "rgb(21 23 28 / 0.68)",
-      colorTextTertiary: "rgb(21 23 28 / 0.5)",
-      colorBorder: "rgb(21 23 28 / 0.1)",
-      colorBorderStrong: "rgb(21 23 28 / 0.18)",
-      colorError: "#dc2626",
-      colorSuccess: "#16a34a",
+      colorSurfaceRaised: "#f0f0f0",
+      colorText: "#131515",
+      colorTextSecondary: "#494d4d",
+      colorTextTertiary: "#6b7070",
+      colorBorder: "rgba(19, 21, 21, 0.1)",
+      colorBorderStrong: "rgba(19, 21, 21, 0.18)",
+      colorError: "#d92d20",
+      colorSuccess: "#0f8a08",
+      colorWarning: "#9a5b00",
+      shadow: "0 8px 20px rgba(19, 21, 21, 0.05)",
     };
 
   return { scheme, background, primary, backdrop, variables };
+}
+
+/**
+ * Kova's own /sign-in: the same card as an app page, in Kova's colours, with
+ * pill controls. Follows the dashboard theme the visitor last chose.
+ */
+export function kovaSignInLook(scheme: ColorScheme): AppSignInLook {
+  const look = appSignInLook({ primaryColor: null, backgroundColor: null, theme: scheme }, scheme === "dark");
+  return { ...look, variables: { ...look.variables, borderRadiusSm: "999px" } };
 }
 
 /**

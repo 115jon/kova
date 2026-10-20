@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appSignInLook, appSignInProviders, resolveColorScheme } from "./app-sign-in";
+import { appSignInLook, appSignInProviders, DEFAULT_BACKGROUND, kovaSignInLook, resolveColorScheme } from "./app-sign-in";
 
 describe("app sign-in look", () => {
   it("follows the app theme, and the system only for auto", () => {
@@ -21,12 +21,20 @@ describe("app sign-in look", () => {
     expect(look.scheme).toBe("light");
     expect(look.backdrop).toBe("dark");
     expect(look.variables.colorSurface).toBe("#ffffff");
-    expect(look.primary).toBe("#3b82f6");
+    expect(look.primary).toBe("#026f8e");
   });
 
   it("falls back to a background that matches the theme", () => {
     expect(appSignInLook({ primaryColor: null, backgroundColor: null, theme: "light" }, true).backdrop).toBe("light");
     expect(appSignInLook({ primaryColor: null, backgroundColor: "", theme: "dark" }, true).backdrop).toBe("dark");
+    expect(appSignInLook({ primaryColor: null, backgroundColor: null, theme: "light" }, true).background).toBe(DEFAULT_BACKGROUND.light);
+  });
+
+  it("gives Kova's own page pill controls in the chosen scheme", () => {
+    const look = kovaSignInLook("light");
+    expect(look).toMatchObject({ scheme: "light", backdrop: "light", primary: "#026f8e" });
+    expect(look.variables.borderRadiusSm).toBe("999px");
+    expect(kovaSignInLook("dark").variables.colorSurface).not.toBe("#ffffff");
   });
 });
 
