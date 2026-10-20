@@ -191,7 +191,7 @@ The provider automatically:
 - injects `Authorization: Bearer <token>` into subsequent Kova requests;
 - stores the app token under a publishable-key-specific local-storage key by default.
 
-For custom UI, use `useSignIn()` and `useSignUp()`. Do not reimplement Kova's callback and OAuth URL validation in the browser.
+For custom UI, use `useSignIn()` and `useSignUp()`. Do not reimplement Kova's callback and OAuth URL validation in the browser. `<SignIn>` shows "Forgot password?", which goes to Kova's reset page and returns to `afterSignInUrl`.
 
 ## Browser Session Flows
 
@@ -215,9 +215,11 @@ App -> Kova /api/pub/apps/:pk/oauth/start
      -> Kova main-domain OAuth callback
      -> short-lived single-use transfer code
      -> app callback?kova_auth_code=...
-     -> SDK exchanges code for app session token
+     -> SDK checks the returned state, exchanges code for app session token
      -> SDK removes the code from the URL and uses Bearer auth
 ```
+
+The start URL carries a `state` the SDK minted and stored in this browser; the bounce echoes it back on success and on every `kova_auth_error`.
 
 The transfer code is high-entropy, publishable-key-bound, single-use, and short-lived. It is not the session token. Never log it or persist it as an application credential.
 
@@ -234,6 +236,7 @@ Every application has one sign-in URL. The app's Overview tab in the dashboard s
 - The page uses the app's Appearance settings (display name, logo, primary and background colors, theme, terms/privacy links, "Secured by Kova") and its enabled Providers.
 - `redirect_url` must exactly match a registered redirect URI. The page refuses an unregistered one before showing the form, and the handoff re-checks it.
 - After sign-in Kova redirects to `redirect_url?kova_auth_code=...` (also sent as `code=`, plus `state=` when the link carried one). Exchange the code once with `POST {KOVA_AUTH_URL}/api/pub/apps/{pk}/exchange-code` and body `{ "code": "..." }`. The response holds the app-scoped session token. `@kova/react` does this automatically.
+- The SDK only consumes a `kova_auth_code` whose `state` it minted itself. Build the hosted URL with `createHostedSignInUrl({ authUrl, publishableKey, redirectUrl })` from `@115jon/kova-react`. Call it in a click handler, not during render or on the server, because the state is saved to this browser's localStorage when minted: `onClick={() => window.location.assign(createHostedSignInUrl({ authUrl, publishableKey, redirectUrl }))}`. Custom integrations must generate `state`, store it, and reject a code whose `state` does not match a flow they started.
 - `native_handoff=1` is a legacy hint. It is accepted and not required.
 - `https://{auth_slug}.auth.115jon.site/sign-in?redirect_url=...` (or the app's custom domain) is a short alias that forwards to the same page. It also accepts `redirect_uri`, and passes `state` through.
 

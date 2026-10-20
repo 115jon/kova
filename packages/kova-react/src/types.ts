@@ -412,6 +412,8 @@ export interface SignInProps {
   afterSignInUrl?: string;
   /** Override the sign-up link href; `null` hides the link. @default "/sign-up" */
   signUpUrl?: string | null;
+  /** "Forgot password?" target. Default: Kova's reset page for this app, which returns to `afterSignInUrl` after sign-in. `null` hides the link. */
+  forgotPasswordUrl?: string | null;
   /** Initial tab shown. @default "email" */
   defaultTab?: SignInTab;
   /** Custom appearance for this instance. Merged with provider appearance. */

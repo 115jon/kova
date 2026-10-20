@@ -7,12 +7,13 @@
  *  - Embeds the <ConnectedAccounts /> drop-in component
  */
 
-import { ConnectedAccounts, useLinkedAccounts } from "@115jon/kova-react";
+import { ConnectedAccounts, useKovaAuth, useLinkedAccounts } from "@115jon/kova-react";
 import { Log, useLog } from "../components/Log";
 
 export function ConnectedAccountsPage() {
   const { accounts, isLoaded, isUpdating, error, linkAccount, refetch } =
     useLinkedAccounts();
+  const { hasBearerSession } = useKovaAuth();
   const { log, lines } = useLog();
 
   return (
@@ -117,12 +118,12 @@ export function ConnectedAccountsPage() {
                 <button
                   key={p}
                   className={`btn ${isLinked ? "btn-ghost" : "btn-secondary"}`}
-                  disabled={isUpdating || !isLoaded || isLinked}
+                  disabled={isUpdating || !isLoaded || isLinked || hasBearerSession}
                   onClick={async () => {
                     log(`Initiating link for ${p}…`, "info");
                     await linkAccount({ provider: p, callbackURL: window.location.pathname });
                   }}
-                  title={isLinked ? "Already connected" : `Link ${labels[p]}`}
+                  title={hasBearerSession ? "Manage in Kova" : isLinked ? "Already connected" : `Link ${labels[p]}`}
                 >
                   {isLinked ? `✓ ${labels[p]}` : `+ ${labels[p]}`}
                 </button>

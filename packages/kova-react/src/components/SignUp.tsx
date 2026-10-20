@@ -23,12 +23,12 @@
  */
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { authErrorMessage, emailLinkCallbackUrl } from "../auth-result";
+import { authErrorMessage, resolveAbsoluteUrl } from "../auth-result";
 import { mergeAppearance, useKovaAuth } from "../context";
 import { useRateLimit } from "../hooks/use-rate-limit";
 import { useSignUp } from "../hooks/use-sign-up";
 import type { SignUpProps } from "../types";
-import { resolveAbsoluteUrl, SocialButtons } from "./social-buttons";
+import { SocialButtons } from "./social-buttons";
 import {
   Alert,
   Card,
@@ -151,7 +151,6 @@ export function SignUp({
     afterSignUpUrl: providerUrl,
     oauthProviders,
     authUrl,
-    publishableKey,
     authError,
     isAppearanceLoaded,
     appearanceError,
@@ -174,12 +173,8 @@ export function SignUp({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [resent, setResent] = useState(false);
 
-  // The verification link is opened outside this page; see emailLinkCallbackUrl.
-  const absCallbackUrl = emailLinkCallbackUrl(
-    authUrl,
-    publishableKey,
-    resolveAbsoluteUrl(authUrl, resolvedUrl),
-  );
+  // The hook wraps this for the emailed verification link.
+  const absCallbackUrl = resolveAbsoluteUrl(authUrl, resolvedUrl);
 
   if (!isAppearanceLoaded) {
     return (

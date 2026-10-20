@@ -21,7 +21,13 @@
  */
 
 import { useCallback, useState } from "react";
-import { unwrapAuthResult } from "../auth-result";
+import {
+  buildSdkOAuthStartUrl,
+  emailLinkCallbackUrl,
+  resolveAbsoluteUrl,
+  unwrapAuthResult,
+} from "../auth-result";
+import { browserStorage, createPendingState } from "../auth-state";
 import { useKovaAuth } from "../context";
 import { extractRetryAfter } from "./use-rate-limit";
 
@@ -133,7 +139,7 @@ function is429(err: unknown): boolean {
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useSignIn(): UseSignInReturn {
-  const { client, afterSignInUrl } = useKovaAuth();
+  const { client, afterSignInUrl, authUrl, publishableKey } = useKovaAuth();
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [twoFactorRequired, setTwoFactorRequired] = useState(false);
@@ -200,6 +206,12 @@ export function useSignIn(): UseSignInReturn {
   const signInMagicLink = useCallback(
     async (opts: SignInMagicLinkOpts) => {
       await run(async () => {
+        // Emailed links open outside this page, so they return through the
+        // bounce carrying a state this browser will recognise.
+        const dest = resolveAbsoluteUrl(authUrl, opts.callbackURL ?? afterSignInUrl);
+        const callbackURL = publishableKey
+          ? emailLinkCallbackUrl(authUrl, publishableKey, dest, createPendingState(browserStorage(), publishableKey))
+          : dest;
         await unwrapAuthResult((hooks) =>
           (
             client as unknown as {
@@ -213,7 +225,7 @@ export function useSignIn(): UseSignInReturn {
             }
           ).signIn.magicLink({
             email: opts.email,
-            callbackURL: opts.callbackURL ?? afterSignInUrl,
+            callbackURL,
             fetchOptions: hooks,
           }),
         );
@@ -221,24 +233,33 @@ export function useSignIn(): UseSignInReturn {
         setRetryAfterSeconds(null);
       });
     },
-    [client, afterSignInUrl, run],
+    [client, afterSignInUrl, authUrl, publishableKey, run],
   );
 
   const signInSocial = useCallback(
     async (opts: SignInSocialOpts) => {
       await run(async () => {
+        const callback = resolveAbsoluteUrl(authUrl, opts.callbackURL ?? afterSignInUrl);
+        const errorCb = resolveAbsoluteUrl(authUrl, opts.errorCallbackURL ?? "/sign-in?error=oauth");
+        if (publishableKey && typeof window !== "undefined") {
+          const state = createPendingState(browserStorage(), publishableKey);
+          window.location.assign(
+            buildSdkOAuthStartUrl(authUrl, publishableKey, opts.provider, callback, errorCb, state),
+          );
+          return;
+        }
         await unwrapAuthResult((hooks) =>
           client.signIn.social({
             provider: opts.provider,
-            callbackURL: opts.callbackURL ?? afterSignInUrl,
-            errorCallbackURL: opts.errorCallbackURL,
+            callbackURL: callback,
+            errorCallbackURL: errorCb,
             fetchOptions: hooks,
           } as Parameters<typeof client.signIn.social>[0]),
         );
         setRetryAfterSeconds(null);
       });
     },
-    [client, afterSignInUrl, run],
+    [client, afterSignInUrl, authUrl, publishableKey, run],
   );
 
   const signInPasskey = useCallback(

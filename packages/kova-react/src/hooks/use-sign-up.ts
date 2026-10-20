@@ -11,7 +11,13 @@
  */
 
 import { useCallback, useState } from "react";
-import { signUpNeedsVerification, unwrapAuthResult } from "../auth-result";
+import {
+  emailLinkCallbackUrl,
+  resolveAbsoluteUrl,
+  signUpNeedsVerification,
+  unwrapAuthResult,
+} from "../auth-result";
+import { browserStorage, createPendingState } from "../auth-state";
 import { useKovaAuth } from "../context";
 import { extractRetryAfter } from "./use-rate-limit";
 
@@ -82,7 +88,7 @@ function is429(err: unknown): boolean {
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useSignUp(): UseSignUpReturn {
-  const { client, afterSignUpUrl } = useKovaAuth();
+  const { client, afterSignUpUrl, authUrl, publishableKey } = useKovaAuth();
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verificationPending, setVerificationPending] = useState(false);
@@ -97,6 +103,18 @@ export function useSignUp(): UseSignUpReturn {
     setRetryAfterSeconds(is429(err) ? extractRetryAfter(err) : null);
   }, []);
 
+  // The verification link is opened outside this page, so it returns through
+  // the bounce with a fresh state (see emailLinkCallbackUrl).
+  const verificationCallback = useCallback(
+    (callbackURL: string | undefined) => {
+      const dest = resolveAbsoluteUrl(authUrl, callbackURL ?? afterSignUpUrl);
+      return publishableKey
+        ? emailLinkCallbackUrl(authUrl, publishableKey, dest, createPendingState(browserStorage(), publishableKey))
+        : dest;
+    },
+    [authUrl, publishableKey, afterSignUpUrl],
+  );
+
   const signUpEmail = useCallback(
     async (opts: SignUpEmailOpts) => {
       setLoading(true);
@@ -109,7 +127,7 @@ export function useSignUp(): UseSignUpReturn {
             name: opts.name,
             // username is an optional plugin field — pass through if provided
             ...(opts.username ? { username: opts.username } : {}),
-            callbackURL: opts.callbackURL ?? afterSignUpUrl,
+            callbackURL: verificationCallback(opts.callbackURL),
             fetchOptions: hooks,
           } as Parameters<typeof client.signUp.email>[0]),
         );
@@ -129,7 +147,7 @@ export function useSignUp(): UseSignUpReturn {
         setLoading(false);
       }
     },
-    [client, afterSignUpUrl, recordFailure],
+    [client, verificationCallback, recordFailure],
   );
 
   const resendVerification = useCallback(
@@ -140,7 +158,7 @@ export function useSignUp(): UseSignUpReturn {
         await unwrapAuthResult((hooks) =>
           client.sendVerificationEmail({
             email: opts.email,
-            callbackURL: opts.callbackURL ?? afterSignUpUrl,
+            callbackURL: verificationCallback(opts.callbackURL),
             fetchOptions: hooks,
           }),
         );
@@ -152,7 +170,7 @@ export function useSignUp(): UseSignUpReturn {
         setLoading(false);
       }
     },
-    [client, afterSignUpUrl, recordFailure],
+    [client, verificationCallback, recordFailure],
   );
 
   return {

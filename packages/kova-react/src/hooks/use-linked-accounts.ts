@@ -35,7 +35,7 @@ type RawAccount = {
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useLinkedAccounts(): UseLinkedAccountsReturn {
-  const { client } = useKovaAuth();
+  const { client, hasBearerSession } = useKovaAuth();
 
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -103,6 +103,10 @@ export function useLinkedAccounts(): UseLinkedAccountsReturn {
       provider: string;
       callbackURL?: string;
     }) => {
+      if (hasBearerSession) {
+        setError("Connect providers from your Kova account settings.");
+        return;
+      }
       setIsUpdating(true);
       setError(null);
       try {
@@ -120,7 +124,10 @@ export function useLinkedAccounts(): UseLinkedAccountsReturn {
           return;
         }
 
-        const res = await c.linkSocial({ provider, callbackURL });
+        const res = await c.linkSocial({
+          provider,
+          callbackURL: new URL(callbackURL, window.location.origin).toString(),
+        });
         if (res?.error?.message) {
           setError(res.error.message);
         }
@@ -132,7 +139,7 @@ export function useLinkedAccounts(): UseLinkedAccountsReturn {
         setIsUpdating(false);
       }
     },
-    [client],
+    [client, hasBearerSession],
   );
 
   return {

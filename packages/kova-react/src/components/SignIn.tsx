@@ -30,11 +30,11 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import {
   authErrorMessage,
-  emailLinkCallbackUrl,
   isPasskeyCancel,
   passkeyUsableHere,
   unwrapAuthResult,
 } from "../auth-result";
+import { createPasswordResetUrl } from "../auth-state";
 import { mergeAppearance, useKovaAuth } from "../context";
 import { useRateLimit } from "../hooks/use-rate-limit";
 import { useSignIn } from "../hooks/use-sign-in";
@@ -130,14 +130,16 @@ function useSeedRateLimitCountdown(
 
 function EmailPasswordForm({
   afterSignInUrl,
+  forgotPasswordUrl,
   elements,
 }: {
   afterSignInUrl: string;
+  forgotPasswordUrl: string | null | undefined;
   elements?: AppearanceElements;
 }) {
   const { signIn, isLoading, error, twoFactorRequired, retryAfterSeconds } =
     useSignIn();
-  const { authUrl } = useKovaAuth();
+  const { authUrl, publishableKey } = useKovaAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
@@ -243,6 +245,27 @@ function EmailPasswordForm({
         error={fieldErrors["password"]}
         elements={elements}
       />
+      {forgotPasswordUrl !== null && (
+        <p style={{ textAlign: "right", margin: "-6px 0 14px", fontSize: "0.82rem" }}>
+          <a
+            href={forgotPasswordUrl ?? `${authUrl}/reset-password`}
+            onClick={(e) => {
+              if (forgotPasswordUrl !== undefined) return; // explicit URL: plain link
+              // Minted on click, not render, so idle forms leave no pending states.
+              e.preventDefault();
+              window.location.assign(
+                createPasswordResetUrl({
+                  authUrl,
+                  publishableKey,
+                  redirectUrl: resolveAbsoluteUrl(authUrl, afterSignInUrl),
+                }),
+              );
+            }}
+          >
+            Forgot password?
+          </a>
+        </p>
+      )}
       <SubmitButton
         isLoading={isLoading}
         disabled={isRateLimited}
@@ -262,7 +285,7 @@ function MagicLinkForm({
   elements?: AppearanceElements;
 }) {
   const { signIn, isLoading, error, retryAfterSeconds } = useSignIn();
-  const { authUrl, publishableKey } = useKovaAuth();
+  const { authUrl } = useKovaAuth();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -271,11 +294,7 @@ function MagicLinkForm({
   const { isRateLimited, secondsRemaining, recordRateLimit } = useRateLimit();
   useSeedRateLimitCountdown(retryAfterSeconds, recordRateLimit);
 
-  const absCallbackUrl = emailLinkCallbackUrl(
-    authUrl,
-    publishableKey,
-    resolveAbsoluteUrl(authUrl, afterSignInUrl),
-  );
+  const absCallbackUrl = resolveAbsoluteUrl(authUrl, afterSignInUrl);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -347,6 +366,7 @@ export function SignIn({
   afterSignInUrl,
   signUpUrl = "/sign-up",
   defaultTab = "email",
+  forgotPasswordUrl,
   appearance: instanceAppearance,
   className,
 }: SignInProps) {
@@ -454,7 +474,11 @@ export function SignIn({
         />
 
         {activeTab === "email" && (
-          <EmailPasswordForm afterSignInUrl={resolvedUrl} elements={el} />
+          <EmailPasswordForm
+            afterSignInUrl={resolvedUrl}
+            forgotPasswordUrl={forgotPasswordUrl}
+            elements={el}
+          />
         )}
         {activeTab === "magic-link" && (
           <MagicLinkForm afterSignInUrl={resolvedUrl} elements={el} />

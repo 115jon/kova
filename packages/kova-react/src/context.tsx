@@ -20,6 +20,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { browserStorage, consumePendingState } from "./auth-state";
 import { createKovaAuthClient, type KovaAuthClient } from "./client";
 import { resolveAuthUrl } from "./key";
 import { readAuthSessionPayload, shouldMintAppSessionToken } from "./session-token";
@@ -300,6 +301,8 @@ export function KovaAuthProvider({
     setPersistentSessionToken,
   ]);
 
+  const [authError, setAuthError] = useState<string | null>(null);
+
   // ── Detect OAuth transfer code on mount ──────────────────────────────────
   // After the cross-origin OAuth flow lands at the consumer app with
   // ?kova_auth_code=xfr_..., we clean the URL immediately (prevents Referer
@@ -309,10 +312,23 @@ export function KovaAuthProvider({
     const params = new URLSearchParams(window.location.search);
     const code = params.get("kova_auth_code");
     if (!code) return;
+    const state = params.get("state");
 
     const cleanUrl = new URL(window.location.href);
-    cleanUrl.searchParams.delete("kova_auth_code");
+    for (const k of ["kova_auth_code", "code", "state"]) cleanUrl.searchParams.delete(k);
     window.history.replaceState({}, "", cleanUrl.toString());
+
+    if (!state) {
+      console.warn("[KovaAuth] kova_auth_code arrived without state. Build hosted sign-in links with createHostedSignInUrl().");
+      setAuthError("MISSING_STATE");
+      return;
+    }
+
+    // Only a code for a flow this browser started may sign it in (login CSRF).
+    if (!consumePendingState(browserStorage(), publishableKey, state)) {
+      setAuthError("STATE_MISMATCH");
+      return;
+    }
 
     void fetch(
       `${resolvedAuthUrl}/api/pub/apps/${publishableKey}/exchange-code`,
@@ -329,7 +345,10 @@ export function KovaAuthProvider({
         r.ok ? (r.json() as Promise<{ sessionToken?: string }>) : null,
       )
       .then((data) => {
-        if (!data?.sessionToken) return;
+        if (!data?.sessionToken) {
+          setAuthError("INVALID_CODE");
+          return;
+        }
         setPersistentSessionToken(data.sessionToken);
         // Register the user in app_user immediately with the Bearer token.
         // The mount-time /me call fires before the token is ready and may fail
@@ -348,17 +367,19 @@ export function KovaAuthProvider({
       });
   }, [resolvedAuthUrl, publishableKey, setPersistentSessionToken]); // intentionally run once on mount
 
-  // A failed emailed link returns here as ?kova_auth_error=CODE. Clean the URL
-  // like the code above, and keep the code for the cards to show.
-  const [authError, setAuthError] = useState<string | null>(null);
+  // A failed emailed link or provider sign-in returns here as ?kova_auth_error=CODE
+  // (or ?error=oauth). Clean the URL like the code above, and keep the code for
+  // the cards to show.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    const failure = params.get("kova_auth_error");
+    const failure = params.get("kova_auth_error") ?? (params.get("error") === "oauth" ? "OAUTH" : null);
     if (!failure) return;
     setAuthError(failure);
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete("kova_auth_error");
+    if (params.get("error") === "oauth") cleanUrl.searchParams.delete("error");
+    cleanUrl.searchParams.delete("state");
     window.history.replaceState({}, "", cleanUrl.toString());
   }, []);
 

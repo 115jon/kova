@@ -78,7 +78,7 @@ export function ConnectedAccounts({
   elements,
   layout = "compact",
 }: ConnectedAccountsProps) {
-  const { oauthProviders } = useKovaAuth();
+  const { oauthProviders, hasBearerSession, authUrl } = useKovaAuth();
 
   const { accounts, isLoaded, isUpdating, error, linkAccount } =
     useLinkedAccounts();
@@ -217,6 +217,30 @@ export function ConnectedAccounts({
                 >
                   Not set
                 </span>
+              ) : hasBearerSession ? (
+                <a
+                  data-ra-element="connectedAccountsConnectButton"
+                  href={`${authUrl}/settings`}
+                  target="_blank"
+                  rel="noopener"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "3px 8px",
+                    borderRadius: "var(--ra-radius-sm, 5px)",
+                    border: "1px solid var(--ra-color-border-strong)",
+                    background: "transparent",
+                    color: "var(--ra-color-primary)",
+                    fontFamily: "var(--ra-font)",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    textDecoration: "none",
+                    ...elements?.connectedAccountsConnectButton,
+                  }}
+                >
+                  Manage in Kova
+                </a>
               ) : (
                 <button
                   type="button"

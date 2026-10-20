@@ -65,6 +65,7 @@ export type { UseRateLimitReturn } from "./hooks/use-rate-limit";
  */
 export { appearanceLoadErrorMessage, useKovaAuth } from "./context";
 export { authErrorMessage } from "./auth-result";
+export { createHostedSignInUrl, createPasswordResetUrl } from "./auth-state";
 export type { KovaAuthContextValue, ServerAppearance } from "./context";
 
 // ── Client factory ────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   authErrorMessage,
   buildSdkBounceUrl,
+  buildSdkOAuthStartUrl,
   emailLinkCallbackUrl,
   isPasskeyCancel,
   passkeyUsableHere,
@@ -85,7 +86,14 @@ describe("emailLinkCallbackUrl", () => {
       mode: "sdk",
       pk: "pk_live_x",
       redirect_uri: "https://app.example.com/home",
+      fresh: "1",
     });
+  });
+
+  it("carries the pending state onto the bounce", () => {
+    const url = new URL(emailLinkCallbackUrl(auth, "pk_live_x", "https://app.example.com/home", "st_1"));
+    expect(url.searchParams.get("state")).toBe("st_1");
+    expect(url.searchParams.get("fresh")).toBe("1");
   });
 
   it("leaves the callback alone when there is no publishable key", () => {
@@ -106,6 +114,30 @@ describe("buildSdkBounceUrl", () => {
   });
 });
 
+describe("buildSdkOAuthStartUrl", () => {
+  it("forwards the state only when given", () => {
+    const withState = new URL(
+      buildSdkOAuthStartUrl(
+        "https://auth.115jon.site",
+        "pk_x",
+        "github",
+        "https://app.example.com/",
+        "https://app.example.com/e",
+        "st_1",
+      ),
+    );
+    expect(withState.pathname).toBe("/api/pub/apps/pk_x/oauth/start");
+    expect(Object.fromEntries(withState.searchParams)).toEqual({
+      provider: "github",
+      redirect_uri: "https://app.example.com/",
+      error_callback_url: "https://app.example.com/e",
+      state: "st_1",
+    });
+    const without = new URL(buildSdkOAuthStartUrl("https://auth.115jon.site", "pk_x", "github", "https://a/", "https://a/e"));
+    expect(without.searchParams.has("state")).toBe(false);
+  });
+});
+
 describe("authErrorMessage", () => {
   it("explains the codes Better Auth puts on a failed link", () => {
     expect(authErrorMessage("INVALID_TOKEN")).toMatch(/isn't valid/);
@@ -113,6 +145,11 @@ describe("authErrorMessage", () => {
     expect(authErrorMessage("EXPIRED_TOKEN")).toMatch(/expired/);
     expect(authErrorMessage("ATTEMPTS_EXCEEDED")).toMatch(/already used/);
     expect(authErrorMessage("INVALID_USER")).toMatch(/different account/);
+    expect(authErrorMessage("STATE_MISMATCH")).toMatch(/different browser/);
+    expect(authErrorMessage("MISSING_STATE")).toMatch(/wasn't started from this app/);
+    expect(authErrorMessage("ALREADY_USED")).toMatch(/already used/);
+    expect(authErrorMessage("NO_SESSION")).toBe("Sign-in didn't finish. Try again.");
+    expect(authErrorMessage("OAUTH_START_FAILED")).toBe("Sign-in didn't finish. Try again.");
     expect(authErrorMessage("oauth")).toMatch(/provider/);
   });
 
