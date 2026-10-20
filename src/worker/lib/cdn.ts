@@ -78,3 +78,23 @@ export function sniffImageType(bytes: Uint8Array): (typeof ALLOWED_IMAGE_TYPES)[
   if (at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50)) return "image/webp";
   return null;
 }
+
+export const FAVICON_TYPES = ["image/png", "image/x-icon", "image/webp"] as const;
+export const FAVICON_EXTENSION = { "image/png": "png", "image/x-icon": "ico", "image/webp": "webp" } as const;
+
+/** ICO (00 00 01 00), PNG or WebP by signature. SVG is scriptable and JPEG/GIF make poor icons; both are refused. */
+export function sniffFaviconType(bytes: Uint8Array): (typeof FAVICON_TYPES)[number] | null {
+  const at = (offset: number, ...expected: number[]) => expected.every((byte, i) => bytes[offset + i] === byte);
+  if (at(0, 0x00, 0x00, 0x01, 0x00)) return "image/x-icon";
+  if (at(0, 0x89, 0x50, 0x4e, 0x47)) return "image/png";
+  if (at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50)) return "image/webp";
+  return null;
+}
+
+/** Best-effort DELETE of one CDN object by its key (`kova-auth/apps/...`). */
+export async function deleteCdnObject(env: Env, key: string): Promise<void> {
+  await fetch(`${env.CDN_URL}/files/${key}`, {
+    method: "DELETE",
+    headers: { "CDN-API-Key": env.CDN_API_KEY },
+  }).catch(() => { });
+}

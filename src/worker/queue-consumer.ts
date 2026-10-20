@@ -3,7 +3,7 @@
  *
  * Handles async side-effects that must not block synchronous HTTP responses:
  *
- *   app.deleted      — R2 asset cleanup + Stripe customer archival
+ *   app.deleted      — CDN asset cleanup + Stripe customer archival
  *   plan.updated     — KV cache invalidation + app_plan_feature sync
  *   email.smtp       — SMTP email dispatch (Pro+ per-app email routing)
  *
@@ -11,6 +11,7 @@
  * Each message type is idempotent — safe to retry on transient failures.
  */
 
+import { appAssetKey, deleteCdnObject } from "./lib/cdn";
 import { syncPlanFeatures, type Plan } from "./lib/plan-limits";
 
 // ── Message types ─────────────────────────────────────────────────────────────
@@ -88,13 +89,10 @@ async function handleMessage(msg: AppEventMessage, env: Env): Promise<void> {
 async function handleAppDeleted(msg: AppDeletedMsg, env: Env): Promise<void> {
   const tasks: Promise<unknown>[] = [];
 
-  // 1. R2 asset cleanup — remove branding files
-  // Note: env.R2 is the CDN worker's bucket exposed via service bindings.
-  // If it's not bound here, skip gracefully.
-  if ((env as Env & { CDN_R2?: R2Bucket }).CDN_R2) {
-    const r2 = (env as Env & { CDN_R2: R2Bucket }).CDN_R2;
-    if (msg.logoUrl) tasks.push(r2.delete(`apps/${msg.appId}/logo.webp`).catch(() => { }));
-    if (msg.faviconUrl) tasks.push(r2.delete(`apps/${msg.appId}/favicon.ico`).catch(() => { }));
+  // 1. CDN asset cleanup: only keys inside this app's own folder are deleted.
+  for (const url of [msg.logoUrl, msg.faviconUrl]) {
+    const key = appAssetKey(env.CDN_URL, msg.appId, url);
+    if (key) tasks.push(deleteCdnObject(env, key));
   }
 
   // 2. KV cache invalidation

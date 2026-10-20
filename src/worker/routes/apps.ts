@@ -11,7 +11,7 @@ import {
 } from "../applications";
 import { createAuth } from "../auth";
 import { sessionExpiresAtMs } from "../lib/app-session";
-import { appAssetKey, CDN_APP, isFileLike, scanUpload, sniffImageType } from "../lib/cdn";
+import { appAssetKey, CDN_APP, deleteCdnObject, FAVICON_EXTENSION, isFileLike, scanUpload, sniffFaviconType, sniffImageType } from "../lib/cdn";
 import { syncPlanFeatures } from "../lib/plan-limits";
 import { hasAdminRole } from "../lib/roles";
 import { verifyStripeWebhookSignature } from "../lib/stripe-webhook";
@@ -71,25 +71,6 @@ async function cdnErrorMessage(res: Response): Promise<string> {
     if (typeof body.message === "string" && body.message.trim()) return body.message;
   } catch { /* fall through */ }
   return text;
-}
-
-async function createCdnShareUrl(env: Env, key: string, label: string, createdBy: string): Promise<string> {
-  const shareRes = await fetch(`${env.CDN_URL}/api/shares`, {
-    method: "POST",
-    headers: {
-      "CDN-API-Key": env.CDN_API_KEY,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ key, label, createdBy }),
-  });
-
-  if (!shareRes.ok) {
-    throw new Error(await cdnErrorMessage(shareRes));
-  }
-
-  const body = await shareRes.json<{ shareUrl?: string }>();
-  if (!body.shareUrl) throw new Error("CDN share response did not include a share URL");
-  return body.shareUrl;
 }
 
 // ── LIST ──────────────────────────────────────────────────────────────────────
@@ -357,20 +338,13 @@ appsRouter.get("/:id/stats", async (c) => {
 // (Share links, which logos used before, are `max-age=300, must-revalidate` and
 // cost the CDN a KV write per view.)
 
-async function deleteCdnObject(env: Env, key: string): Promise<void> {
-  await fetch(`${env.CDN_URL}/files/${key}`, {
-    method: "DELETE",
-    headers: { "CDN-API-Key": env.CDN_API_KEY },
-  }).catch(() => { });
-}
-
 /**
- * Best-effort removal of a replaced or removed logo. A stored URL is data, so
- * only a key inside this app's own folder is ever deleted; share-link logos
+ * Best-effort removal of a replaced or removed logo or favicon. A stored URL is data, so
+ * only a key inside this app's own folder is ever deleted; share-link assets
  * have no known key and stay.
  */
-async function deleteAppLogo(env: Env, appId: string, logoUrl: string | null): Promise<void> {
-  const key = appAssetKey(env.CDN_URL, appId, logoUrl);
+async function deleteAppAsset(env: Env, appId: string, assetUrl: string | null): Promise<void> {
+  const key = appAssetKey(env.CDN_URL, appId, assetUrl);
   if (key) await deleteCdnObject(env, key);
 }
 
@@ -432,7 +406,7 @@ appsRouter.post("/:id/logo", async (c) => {
   // Persist URL + invalidate KV appearance cache
   await updateApplication(c.env.DB, id, { logo_url: logoUrl });
   invalidateAppKv(c.env.KV, app.publishable_key, id);
-  c.executionCtx.waitUntil(deleteAppLogo(c.env, id, app.logo_url));
+  c.executionCtx.waitUntil(deleteAppAsset(c.env, id, app.logo_url));
 
   return Response.json({ logoUrl });
 });
@@ -447,7 +421,7 @@ appsRouter.delete("/:id/logo", async (c) => {
 
   await updateApplication(c.env.DB, id, { logo_url: null });
   invalidateAppKv(c.env.KV, app.publishable_key, id);
-  c.executionCtx.waitUntil(deleteAppLogo(c.env, id, app.logo_url));
+  c.executionCtx.waitUntil(deleteAppAsset(c.env, id, app.logo_url));
 
   return Response.json({ ok: true });
 });
@@ -463,17 +437,29 @@ appsRouter.post("/:id/favicon", async (c) => {
   if (!app) return Response.json({ error: "Not found" }, { status: 404 });
 
   const formData = await c.req.raw.formData().catch(() => null);
-  const file = formData?.get("file") as File | null;
-  if (!file) return Response.json({ error: "No file uploaded" }, { status: 400 });
+  const file = formData?.get("file");
+  if (!isFileLike(file)) return Response.json({ error: "No file uploaded" }, { status: 400 });
 
   if (file.size > APP_FAVICON_MAX_BYTES) {
     return Response.json({ error: "Favicon too large (max 512 KB)" }, { status: 400 });
   }
 
+  // The bytes decide the type; the client's Content-Type is only a claim.
+  const bytes = await file.arrayBuffer();
+  const type = sniffFaviconType(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 12)));
+  if (!type) {
+    return Response.json({ error: "Only PNG, ICO and WebP favicons are accepted" }, { status: 400 });
+  }
+
+  const ext = FAVICON_EXTENSION[type];
+  const key = `apps/${id}/favicon-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}.${ext}`;
   const uploadForm = new FormData();
-  uploadForm.append("file", file);
-  uploadForm.append("app", "kova-auth");
-  uploadForm.append("key", `apps/${id}/favicon.ico`);
+  uploadForm.append("file", new File([bytes], `favicon.${ext}`, { type }));
+  uploadForm.append("app", CDN_APP);
+  uploadForm.append("key", key);
+  uploadForm.append("uploader", session.user.id);
+  uploadForm.append("tags", "app-favicon");
+  uploadForm.append("cacheControl", "immutable");
 
   const cdnRes = await fetch(`${c.env.CDN_URL}/upload`, {
     method: "POST",
@@ -485,17 +471,19 @@ appsRouter.post("/:id/favicon", async (c) => {
     return Response.json({ error: `CDN upload failed: ${await cdnErrorMessage(cdnRes)}` }, { status: 502 });
   }
 
-  const { key } = await cdnRes.json<{ key: string }>();
-  let faviconUrl: string;
-  try {
-    faviconUrl = await createCdnShareUrl(c.env, key, `${app.name} favicon`, session.user.id);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : "Unknown error";
-    return Response.json({ error: `CDN share creation failed: ${detail}` }, { status: 502 });
+  const { url: faviconUrl } = await cdnRes.json<{ url?: string }>();
+  if (!faviconUrl) {
+    return Response.json({ error: "CDN upload response did not include a URL" }, { status: 502 });
+  }
+
+  if (!(await scanUpload(c.env.CDN_URL, c.env.CDN_API_KEY, `${CDN_APP}/${key}`))) {
+    c.executionCtx.waitUntil(deleteCdnObject(c.env, `${CDN_APP}/${key}`));
+    return Response.json({ error: "Image rejected: content policy violation" }, { status: 422 });
   }
 
   await updateApplication(c.env.DB, id, { favicon_url: faviconUrl });
   invalidateAppKv(c.env.KV, app.publishable_key, id);
+  c.executionCtx.waitUntil(deleteAppAsset(c.env, id, app.favicon_url));
 
   return Response.json({ faviconUrl });
 });
@@ -510,6 +498,7 @@ appsRouter.delete("/:id/favicon", async (c) => {
 
   await updateApplication(c.env.DB, id, { favicon_url: null });
   invalidateAppKv(c.env.KV, app.publishable_key, id);
+  c.executionCtx.waitUntil(deleteAppAsset(c.env, id, app.favicon_url));
 
   return Response.json({ ok: true });
 });

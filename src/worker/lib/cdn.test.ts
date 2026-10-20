@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appAssetKey, sniffImageType } from "./cdn";
+import { appAssetKey, sniffFaviconType, sniffImageType } from "./cdn";
 
 describe("appAssetKey", () => {
   const cdn = "https://cdn.115jon.site";
@@ -73,5 +73,21 @@ describe("sniffImageType", () => {
     expect(sniffImageType(new Uint8Array([0xff, 0xd8]))).toBeNull();
     expect(sniffImageType(new Uint8Array([0x89, 0x50, 0x4e]))).toBeNull();
     expect(sniffImageType(new Uint8Array(0))).toBeNull();
+  });
+});
+
+describe("sniffFaviconType", () => {
+  it("recognises ICO, PNG and WebP by signature", () => {
+    expect(sniffFaviconType(new Uint8Array([0, 0, 1, 0, 1, 0]))).toBe("image/x-icon");
+    expect(sniffFaviconType(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d]))).toBe("image/png");
+    expect(sniffFaviconType(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]))).toBe("image/webp");
+  });
+
+  it("refuses JPEG, GIF, SVG, CUR and empty input", () => {
+    expect(sniffFaviconType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBeNull();
+    expect(sniffFaviconType(new Uint8Array([0x47, 0x49, 0x46, 0x38]))).toBeNull();
+    expect(sniffFaviconType(new TextEncoder().encode("<svg xmlns='http://www.w3.org/2000/svg'/>"))).toBeNull();
+    expect(sniffFaviconType(new Uint8Array([0, 0, 2, 0]))).toBeNull();
+    expect(sniffFaviconType(new Uint8Array())).toBeNull();
   });
 });

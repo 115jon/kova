@@ -187,8 +187,10 @@ function SignInUrlsPanel({ app }: { app: Application }) {
       <div className="panel-body stack">
         <p className="text-sm text-secondary">
           Send users to this page. It shows this app&apos;s Appearance and Providers settings, then returns
-          to the redirect URL with <code>?kova_auth_code=…</code>. Exchange the code once at{" "}
-          <code>POST /api/pub/apps/{"{pk}"}/exchange-code</code>; <code>@115jon/kova-react</code> does this for you.
+          to the redirect URL with <code>?kova_auth_code=…</code>. With <code>@115jon/kova-react</code>, build the
+          link with <code>createHostedSignInUrl({"{ authUrl, publishableKey, redirectUrl }"})</code> so the SDK
+          accepts the returned code. The URLs below are for previews and custom integrations, which must send
+          their own <code>state</code> and check it on return.
         </p>
         {app.redirect_uris.length > 0 ? (
           app.redirect_uris.map(uri => (
@@ -207,7 +209,8 @@ function SignInUrlsPanel({ app }: { app: Application }) {
             <UrlRow label="Hosted alias" url={`https://${aliasHost}/sign-in`} />
             <p className="text-sm text-tertiary">
               A short per-app address that forwards to the sign-in page above. Append{" "}
-              <code>?redirect_url=…</code> to return to your app.
+              <code>?redirect_url=…</code> to return to your app. With <code>@115jon/kova-react</code>, build the
+              link with <code>createHostedSignInUrl({"{ authUrl, publishableKey, redirectUrl }"})</code>.
             </p>
           </>
         )}
@@ -447,8 +450,8 @@ function AppearanceTab({ app, isPlatformAdmin = false, onFormChange }: { app: Ap
       setErr("Logo must be a JPEG, PNG or WebP image.");
       return;
     }
-    if (kind === "favicon" && !file.type.startsWith("image/") && !file.name.toLowerCase().endsWith(".ico")) {
-      setErr("Favicon must be an image file.");
+    if (kind === "favicon" && !["image/png", "image/x-icon", "image/vnd.microsoft.icon", "image/webp"].includes(file.type) && !/\.(png|ico|webp)$/i.test(file.name)) {
+      setErr("Favicon must be a PNG, ICO or WebP image.");
       return;
     }
     try {
@@ -507,7 +510,7 @@ function AppearanceTab({ app, isPlatformAdmin = false, onFormChange }: { app: Ap
               </button>
               {app.favicon_url && <button type="button" className="btn btn-danger btn-sm btn-icon" aria-label="Remove favicon" title="Remove favicon" onClick={() => deleteFavicon.mutate({ id: app.id })}><Trash2 /></button>}
             </div>
-            <input ref={faviconRef} type="file" accept="image/*,.ico" aria-label="Upload favicon" style={{ display: "none" }}
+            <input ref={faviconRef} type="file" accept=".png,.ico,.webp,image/png,image/x-icon,image/vnd.microsoft.icon,image/webp" aria-label="Upload favicon" style={{ display: "none" }}
               onChange={e => { const f = e.target.files?.[0]; if (f) void uploadAsset("favicon", f); e.currentTarget.value = ""; }} />
           </div>
         </div>
