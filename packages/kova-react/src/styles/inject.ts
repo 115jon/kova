@@ -23,6 +23,8 @@ const VAR_MAP: Record<keyof AppearanceVariables, string> = {
   colorBorderStrong: "--ra-color-border-strong",
   colorError: "--ra-color-error",
   colorSuccess: "--ra-color-success",
+  colorWarning: "--ra-color-warning",
+  shadow: "--ra-shadow",
   borderRadius: "--ra-radius",
   borderRadiusSm: "--ra-radius-sm",
   fontFamily: "--ra-font",
@@ -68,6 +70,7 @@ ${declarations}
 [data-ra-root] {
   font-family: var(--ra-font);
   font-size: var(--ra-font-size);
+  line-height: 1.5;
   color: var(--ra-color-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -77,59 +80,64 @@ ${declarations}
   box-sizing: inherit;
 }
 
-/* Card */
+/* Card: enters once, 300ms ease-out. */
 [data-ra-element="card"] {
   background: var(--ra-color-surface);
   border: 1px solid var(--ra-color-border);
   border-radius: var(--ra-radius);
+  box-shadow: var(--ra-shadow);
   overflow: hidden;
   width: 100%;
-  max-width: 420px;
+  max-width: 400px;
   margin: 0 auto;
-  backdrop-filter: blur(16px) saturate(1.25);
-  -webkit-backdrop-filter: blur(16px) saturate(1.25);
-  box-shadow: 0 16px 40px oklch(0.12 0.02 250 / 0.35), inset 0 1px 0 oklch(0.955 0.01 95 / 0.22);
+  transition: opacity 300ms cubic-bezier(0.23, 1, 0.32, 1), transform 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@starting-style {
+  [data-ra-element="card"] { opacity: 0; transform: translateY(8px); }
 }
 
 /* Card sections */
 [data-ra-element="cardHeader"] {
-  padding: 28px 28px 0;
+  padding: 32px 28px 0;
+  text-align: center;
 }
 [data-ra-element="appLogo"] {
-  width: 38px;
-  height: 38px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
-  border-radius: var(--ra-radius-sm);
+  border-radius: 12px;
   display: block;
-  margin: 0 0 16px;
+  margin: 0 auto 16px;
 }
 [data-ra-element="cardBody"] {
   padding: 24px 28px;
 }
 [data-ra-element="cardFooter"] {
-  padding: 0 28px 20px;
+  padding: 0 28px 24px;
   text-align: center;
+  font-size: 14px;
 }
 
-/* Card title */
 [data-ra-element="cardTitle"] {
   font-family: var(--ra-font);
-  font-size: 1.05rem;
-  font-weight: 500;
-  letter-spacing: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
   color: var(--ra-color-text);
-  margin: 0 0 6px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
-
-/* Card subtitle */
 [data-ra-element="cardSubtitle"] {
-  font-size: 0.82rem;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--ra-color-text-secondary);
-  margin: 0 0 20px;
-  line-height: 1.6;
+  margin: 6px 0 0;
+  text-wrap: pretty;
 }
 
-/* Tabs */
+/* Tabs: underline, no animated indicator (switching is instant). */
 [data-ra-element="tabsRoot"] {
   display: flex;
   gap: 2px;
@@ -141,22 +149,19 @@ ${declarations}
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  padding: 9px 12px;
+  margin-bottom: -1px;
+  padding: 10px 12px;
   cursor: pointer;
-  font-family: var(--ra-font-mono);
-  font-size: 0.78rem;
+  font-family: var(--ra-font);
+  font-size: 14px;
   font-weight: 500;
   color: var(--ra-color-text-tertiary);
-  letter-spacing: -0.01em;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 150ms ease;
   white-space: nowrap;
-}
-[data-ra-element="tab"]:hover {
-  color: var(--ra-color-text-secondary);
 }
 [data-ra-element="tab"][aria-selected="true"] {
   color: var(--ra-color-text);
-  border-bottom-color: var(--ra-color-text);
+  border-bottom-color: var(--ra-color-primary);
 }
 
 /* Form fields */
@@ -164,81 +169,90 @@ ${declarations}
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 [data-ra-element="formFieldLabel"] {
   font-family: var(--ra-font);
-  font-size: 0.74rem;
+  font-size: 13px;
   font-weight: 500;
+  line-height: 1.4;
   color: var(--ra-color-text-secondary);
-  letter-spacing: 0;
 }
 [data-ra-element="formFieldInput"] {
   width: 100%;
+  height: 44px;
   background: var(--ra-color-surface-raised);
   border: 1px solid var(--ra-color-border);
   border-radius: var(--ra-radius-sm);
   font-family: var(--ra-font);
-  font-size: 0.84rem;
+  font-size: var(--ra-font-size);
   color: var(--ra-color-text);
-  outline: none;
-  min-height: 44px;
   padding: 0 16px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-[data-ra-element="formFieldInput"]:focus-visible {
-  outline: 2px solid oklch(0.84 0.018 210);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px oklch(0.16 0.02 255 / 0.9);
+  outline: none;
+  transition: border-color 150ms ease;
 }
 [data-ra-element="formFieldInput"]::placeholder {
   color: var(--ra-color-text-tertiary);
+  opacity: 1;
+}
+[data-ra-element="formFieldInput"]:focus {
+  border-color: var(--ra-color-primary);
+}
+[data-ra-element="formFieldInput"][aria-invalid="true"] {
+  border-color: var(--ra-color-error);
+}
+[data-ra-element="formFieldInput"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 [data-ra-element="formFieldError"] {
-  font-size: 0.75rem;
+  font-size: 13px;
+  line-height: 1.4;
   color: var(--ra-color-error);
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 
 /* Submit button */
 [data-ra-element="formSubmitButton"] {
   width: 100%;
+  height: 44px;
   background: var(--ra-color-primary);
   color: #fff;
   border: none;
   border-radius: var(--ra-radius-sm);
-  padding: 10px 16px;
-  min-height: 44px;
+  padding: 0 16px;
   font-family: var(--ra-font);
-  font-size: 0.84rem;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
-  letter-spacing: 0;
-  transition: background 0.15s, opacity 0.15s, transform 0.1s;
+  transition: background-color 150ms ease, opacity 150ms ease, transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   margin-top: 4px;
 }
-[data-ra-element="formSubmitButton"]:hover:not(:disabled) {
-  background: var(--ra-color-primary-hover);
-}
-[data-ra-element="formSubmitButton"]:focus-visible,
-[data-ra-element="socialButton"]:focus-visible,
-[data-ra-element="tab"]:focus-visible {
-  outline: 2px solid oklch(0.84 0.018 210);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px oklch(0.16 0.02 255 / 0.9);
-}
 [data-ra-element="formSubmitButton"]:active:not(:disabled) {
-  transform: scale(0.99);
+  transform: scale(0.98);
 }
 [data-ra-element="formSubmitButton"]:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
+}
+[data-ra-element="formSubmitButton"][aria-busy="true"] {
+  cursor: progress;
+}
+/* The spinner sits beside the label without pushing it off-centre. */
+[data-ra-element="formSubmitButton"] {
+  position: relative;
+}
+[data-ra-element="formSubmitButton"] > [data-ra-element="spinner"] {
+  position: absolute;
+  inset-inline-start: 16px;
+  top: 50%;
+  margin-top: -7px;
 }
 
 /* Social buttons */
@@ -246,36 +260,47 @@ ${declarations}
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 [data-ra-element="socialButton"] {
   width: 100%;
+  height: 44px;
   background: var(--ra-color-surface-raised);
   border: 1px solid var(--ra-color-border);
   border-radius: var(--ra-radius-sm);
-  padding: 9px 14px;
+  padding: 0 16px;
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   font-family: var(--ra-font);
-  font-size: 0.82rem;
+  font-size: 15px;
   font-weight: 500;
   color: var(--ra-color-text);
-  min-height: 44px;
-  transition: background 0.12s, border-color 0.12s;
+  transition: border-color 150ms ease, transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
-[data-ra-element="socialButton"]:hover:not(:disabled) {
-  background: var(--ra-color-surface);
-  border-color: var(--ra-color-border-strong);
+[data-ra-element="socialButton"] svg { width: 18px; height: 18px; flex-shrink: 0; }
+[data-ra-element="socialButton"]:active:not(:disabled) {
+  transform: scale(0.98);
+}
+[data-ra-element="socialButton"]:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+/* One focus ring for every control, in the app's own primary. */
+[data-ra-root] :is(button, a, input, [role="tab"]):focus-visible {
+  outline: 2px solid var(--ra-color-primary);
+  outline-offset: 2px;
 }
 
 /* Divider */
 [data-ra-element="dividerRow"] {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 16px 0;
+  gap: 12px;
+  margin: 20px 0;
 }
 [data-ra-element="dividerLine"] {
   flex: 1;
@@ -283,8 +308,8 @@ ${declarations}
   background: var(--ra-color-border);
 }
 [data-ra-element="dividerText"] {
-  font-family: var(--ra-font-mono);
-  font-size: 0.68rem;
+  font-family: var(--ra-font);
+  font-size: 13px;
   color: var(--ra-color-text-tertiary);
   white-space: nowrap;
   user-select: none;
@@ -293,45 +318,130 @@ ${declarations}
 /* Footer link */
 [data-ra-element="cardFooter"] a,
 [data-ra-element="cardFooter"] button {
-  font-size: 0.78rem;
+  font-family: var(--ra-font);
+  font-size: 14px;
+  font-weight: 500;
   color: var(--ra-color-text-secondary);
   background: none;
   border: none;
   cursor: pointer;
   text-decoration: none;
-  transition: color 0.12s;
-  font-family: var(--ra-font-mono);
+  transition: color 150ms ease;
 }
-[data-ra-element="cardFooter"] a:hover,
-[data-ra-element="cardFooter"] button:hover {
-  color: var(--ra-color-text);
+[data-ra-footer-badges] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+[data-ra-footer-badges]:not(:empty) {
+  margin-top: 16px;
+}
+[data-ra-element="cardFooter"] > [data-ra-footer-badges]:first-child {
+  margin-top: 0;
 }
 
-/* Alert banner */
+/* Branding + development badges */
+[data-ra-element="cardFooter"] [data-ra-element="brandingBadge"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ra-color-text-tertiary);
+  opacity: 0.8;
+  transition: opacity 150ms ease;
+}
+[data-ra-element="devModeBadge"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding-top: 10px;
+  border-top: 1px dashed var(--ra-color-border-strong);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ra-color-warning);
+}
+[data-ra-dev-dot] {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+/* Alert banner: the icon carries the status colour, the text stays legible. */
 [data-ra-element="alertBanner"] {
-  border-radius: var(--ra-radius);
-  padding: 10px 12px;
-  font-size: 0.78rem;
-  line-height: 1.55;
-  margin-bottom: 14px;
+  border-radius: min(var(--ra-radius-sm), 12px);
+  border: 1px solid transparent;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 16px;
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 10px;
+  color: var(--ra-color-text);
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+[data-ra-element="alertBanner"] [data-ra-alert-icon] {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 [data-ra-element="alertBanner"][data-variant="error"] {
-  background: rgba(248,113,113,0.08);
-  border: 1px solid rgba(248,113,113,0.18);
+  background: color-mix(in srgb, var(--ra-color-error) 10%, transparent);
+  border-color: color-mix(in srgb, var(--ra-color-error) 24%, transparent);
+}
+[data-ra-element="alertBanner"][data-variant="error"] [data-ra-alert-icon] { color: var(--ra-color-error); }
+[data-ra-element="alertBanner"][data-variant="success"] {
+  background: color-mix(in srgb, var(--ra-color-success) 10%, transparent);
+  border-color: color-mix(in srgb, var(--ra-color-success) 24%, transparent);
+}
+[data-ra-element="alertBanner"][data-variant="success"] [data-ra-alert-icon] { color: var(--ra-color-success); }
+[data-ra-element="alertBanner"][data-variant="info"] {
+  background: color-mix(in srgb, var(--ra-color-primary) 10%, transparent);
+  border-color: color-mix(in srgb, var(--ra-color-primary) 24%, transparent);
+}
+[data-ra-element="alertBanner"][data-variant="info"] [data-ra-alert-icon] { color: var(--ra-color-primary); }
+
+/* Rate-limit banner */
+[data-ra-element="rateLimitBanner"] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: min(var(--ra-radius-sm), 12px);
+  border: 1px solid color-mix(in srgb, var(--ra-color-error) 32%, transparent);
+  background: color-mix(in srgb, var(--ra-color-error) 10%, var(--ra-color-surface));
+  font-family: var(--ra-font);
+}
+[data-ra-rate-limit-row] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
   color: var(--ra-color-error);
 }
-[data-ra-element="alertBanner"][data-variant="success"] {
-  background: rgba(74,222,128,0.08);
-  border: 1px solid rgba(74,222,128,0.18);
-  color: var(--ra-color-success);
+[data-ra-rate-limit-row] svg { flex-shrink: 0; }
+[data-ra-rate-limit-track] {
+  height: 3px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--ra-color-error) 20%, var(--ra-color-border));
 }
-[data-ra-element="alertBanner"][data-variant="info"] {
-  background: color-mix(in srgb, var(--ra-color-primary) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--ra-color-primary) 18%, transparent);
-  color: var(--ra-color-text);
+[data-ra-rate-limit-fill] {
+  height: 100%;
+  width: 100%;
+  border-radius: 999px;
+  background: var(--ra-color-error);
+  transform-origin: left center;
+  transition: transform 200ms linear;
 }
 
 /* UserButton */
@@ -344,76 +454,99 @@ ${declarations}
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  transition: background 0.12s, border-color 0.12s;
-}
-[data-ra-element="userButtonTrigger"]:hover {
-  background: rgba(255,255,255,0.05);
-  border-color: var(--ra-color-border);
+  transition: background-color 150ms ease, border-color 150ms ease;
 }
 [data-ra-element="userButtonMenu"] {
   position: absolute;
   z-index: 9999;
   min-width: 220px;
-  background: oklch(0.16 0.02 255);
+  background: var(--ra-color-surface);
   border: 1px solid var(--ra-color-border-strong);
-  border-radius: var(--ra-radius);
-  box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+  border-radius: min(calc(var(--ra-radius-sm) + 4px), 16px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25), 0 16px 40px rgba(0,0,0,0.35);
   padding: 4px;
   overflow: hidden;
+  transform-origin: top right;
+  transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1), transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@starting-style {
+  [data-ra-element="userButtonMenu"] { opacity: 0; transform: scale(0.96); }
 }
 [data-ra-element="userButtonMenuItem"] {
   width: 100%;
+  min-height: 36px;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
+  gap: 10px;
+  padding: 6px 10px;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
-  font-family: var(--ra-font-mono);
-  font-size: 0.78rem;
+  font-family: var(--ra-font);
+  font-size: 14px;
   color: var(--ra-color-text-secondary);
-  transition: background 0.1s, color 0.1s;
+  transition: background-color 100ms ease, color 100ms ease;
   text-align: left;
 }
-[data-ra-element="userButtonMenuItem"]:hover {
-  background: rgba(255,255,255,0.04);
-  color: var(--ra-color-text);
-}
-[data-ra-element="userButtonMenuItem"][data-destructive="true"]:hover {
-  background: rgba(248,113,113,0.08);
-  color: var(--ra-color-error);
+
+@media (hover: hover) and (pointer: fine) {
+  [data-ra-element="tab"]:hover { color: var(--ra-color-text); }
+  [data-ra-element="formSubmitButton"]:hover:not(:disabled) { background: var(--ra-color-primary-hover); }
+  [data-ra-element="socialButton"]:hover:not(:disabled) { border-color: var(--ra-color-border-strong); }
+  [data-ra-element="cardFooter"] a:hover,
+  [data-ra-element="cardFooter"] button:hover { color: var(--ra-color-text); }
+  [data-ra-element="cardFooter"] [data-ra-element="brandingBadge"]:hover { opacity: 1; }
+  [data-ra-element="userButtonTrigger"]:hover {
+    background: color-mix(in srgb, var(--ra-color-text) 6%, transparent);
+    border-color: var(--ra-color-border);
+  }
+  [data-ra-element="userButtonMenuItem"]:hover {
+    background: color-mix(in srgb, var(--ra-color-text) 6%, transparent);
+    color: var(--ra-color-text);
+  }
+  [data-ra-element="userButtonMenuItem"][data-destructive="true"]:hover {
+    background: color-mix(in srgb, var(--ra-color-error) 12%, transparent);
+    color: var(--ra-color-error);
+  }
 }
 
-/* Spinner */
+/* Spinner: rendered only while a request is in flight. */
 @keyframes ra-spin { to { transform: rotate(360deg); } }
 [data-ra-element="spinner"] {
   display: inline-block;
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(255,255,255,0.25);
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
   border-top-color: currentColor;
   border-radius: 50%;
-  animation: ra-spin 0.7s linear infinite;
+  animation: ra-spin 700ms linear infinite;
   flex-shrink: 0;
 }
 
-/* Skeleton shimmer */
-@keyframes ra-shimmer {
-  0%   { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
-}
+/* Skeleton: static block, no shimmer. */
 [data-ra-element="skeleton"] {
   border-radius: var(--ra-radius-sm);
-  background: linear-gradient(
-    90deg,
-    var(--ra-color-surface-raised) 25%,
-    rgba(255,255,255,0.04) 50%,
-    var(--ra-color-surface-raised) 75%
-  );
-  background-size: 800px 100%;
-  animation: ra-shimmer 1.4s ease-in-out infinite;
+  background: var(--ra-color-surface-raised);
+}
+
+@media (max-width: 479px) {
+  [data-ra-element="cardHeader"] { padding: 28px 20px 0; }
+  [data-ra-element="cardBody"] { padding: 22px 20px; }
+  [data-ra-element="cardFooter"] { padding: 0 20px 20px; }
+  /* 16px stops iOS from zooming into the field. */
+  [data-ra-element="formFieldInput"] { font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ra-element="card"],
+  [data-ra-element="userButtonMenu"] { transition: opacity 120ms ease; }
+  @starting-style {
+    [data-ra-element="card"],
+    [data-ra-element="userButtonMenu"] { transform: none; }
+  }
+  [data-ra-element="formSubmitButton"]:active:not(:disabled),
+  [data-ra-element="socialButton"]:active:not(:disabled) { transform: none; }
 }
 `.trim();
 

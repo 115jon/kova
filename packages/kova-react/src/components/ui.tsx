@@ -59,6 +59,28 @@ export function Skeleton({
 }
 
 // ── Alert ─────────────────────────────────────────────────────────────────────
+// Status colour never travels alone: each variant carries its own icon.
+
+const ALERT_ICON_PATHS: Record<"error" | "success" | "info", ReactNode> = {
+  error: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 8v4M12 16h.01" />
+    </>
+  ),
+  success: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="m8.5 12.5 2.5 2.5 4.5-5" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 11v5M12 8h.01" />
+    </>
+  ),
+};
 
 export function Alert({
   variant,
@@ -77,7 +99,21 @@ export function Alert({
       role={variant === "error" ? "alert" : "status"}
       style={style}
     >
-      {children}
+      <svg
+        aria-hidden="true"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        data-ra-alert-icon=""
+      >
+        {ALERT_ICON_PATHS[variant]}
+      </svg>
+      <span>{children}</span>
     </div>
   );
 }
@@ -119,87 +155,35 @@ export function RateLimitBanner({
       role="alert"
       aria-live="polite"
       aria-atomic="true"
-      style={{
-        borderRadius: "var(--ra-border-radius-sm)",
-        border:
-          "1px solid color-mix(in srgb, var(--ra-color-error) 40%, transparent)",
-        background:
-          "color-mix(in srgb, var(--ra-color-error) 10%, var(--ra-color-surface))",
-        padding: "10px 12px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        margin: "4px 0",
-      }}
     >
-      {/* Message row */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        {/* Lock icon */}
+      <div data-ra-rate-limit-row="">
         <svg
-          role="img"
           aria-hidden="true"
           width="14"
           height="14"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="var(--ra-color-error)"
+          stroke="currentColor"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          style={{ flexShrink: 0 }}
         >
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
           <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
-
-        <span
-          style={{
-            fontSize: "0.8rem",
-            color: "var(--ra-color-error)",
-            fontFamily: "var(--ra-font-family)",
-            fontWeight: 500,
-            lineHeight: 1.3,
-          }}
-        >
-          {message}
-        </span>
+        <span>{message}</span>
       </div>
 
-      {/* Progress bar */}
-      <div
-        aria-hidden="true"
-        style={{
-          height: 3,
-          borderRadius: 2,
-          background:
-            "color-mix(in srgb, var(--ra-color-error) 20%, var(--ra-color-border))",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            width: "100%",
-            background: "var(--ra-color-error)",
-            borderRadius: 2,
-            transform: `scaleX(${progress})`,
-            transformOrigin: "left center",
-            transition: "transform 0.2s linear",
-          }}
-        />
-        <progress
-          value={secondsRemaining}
-          max={safeTotal}
-          aria-label={`Rate limit countdown: ${secondsRemaining} seconds remaining`}
-          style={visuallyHiddenStyle}
-        />
+      {/* Depletes once per second as the countdown ticks: bounded, not a loop. */}
+      <div aria-hidden="true" data-ra-rate-limit-track="">
+        <div data-ra-rate-limit-fill="" style={{ transform: `scaleX(${progress})` }} />
       </div>
+      <progress
+        value={secondsRemaining}
+        max={safeTotal}
+        aria-label={`Rate limit countdown: ${secondsRemaining} seconds remaining`}
+        style={visuallyHiddenStyle}
+      />
     </div>
   );
 }
@@ -312,17 +296,12 @@ export function SubmitButton({
     <button
       type="submit"
       disabled={disabled ?? isLoading}
+      aria-busy={isLoading || undefined}
       data-ra-element="formSubmitButton"
       style={{ ...elements?.formSubmitButton, ...style }}
     >
-      {isLoading ? (
-        <>
-          <Spinner size={13} style={{ borderTopColor: "#fff" }} />
-          Loading…
-        </>
-      ) : (
-        children
-      )}
+      {isLoading && <Spinner size={14} />}
+      {children}
     </button>
   );
 }
@@ -361,9 +340,9 @@ export function Avatar({
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
-    fontFamily: "var(--ra-font-mono)",
-    fontWeight: 700,
-    fontSize: size * 0.38,
+    fontFamily: "var(--ra-font)",
+    fontWeight: 600,
+    fontSize: Math.max(12, Math.round(size * 0.4)),
     ...style,
   };
 
@@ -413,45 +392,10 @@ function KovaAuthBranding() {
       target="_blank"
       rel="noopener noreferrer"
       data-ra-element="brandingBadge"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-        fontFamily: "var(--ra-font-mono)",
-        fontSize: "0.75rem",
-        color: "var(--ra-color-text-tertiary)",
-        textDecoration: "none",
-        opacity: 0.75,
-        transition: "opacity 0.15s",
-        marginTop: 8,
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.opacity = "1";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.opacity = "0.75";
-      }}
     >
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-      >
-        <circle
-          cx="12"
-          cy="12"
-          r="10"
-          fill="var(--ra-color-primary)"
-          opacity="0.9"
-        />
-        <path
-          d="M8 16V8h5a3 3 0 0 1 0 6H8"
-          stroke="#fff"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="12" fill="#0283a7" />
+        <path d="M8.5 7v10M15.5 7.5 11 12l4.5 4.5" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       Secured by Kova
     </a>
@@ -465,41 +409,9 @@ function DevModeBadge() {
   const { mode } = useKovaAuth();
   if (mode !== "test") return null;
   return (
-    <div
-      data-ra-element="devModeBadge"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 6,
-        padding: "6px 0 0",
-        borderTop:
-          "1px dashed color-mix(in srgb, var(--ra-color-border-strong) 60%, transparent)",
-        marginTop: 10,
-        width: "100%",
-      }}
-    >
-      <span
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: "#f59e0b",
-          flexShrink: 0,
-          boxShadow: "0 0 5px #f59e0b88",
-        }}
-      />
-      <span
-        style={{
-          fontFamily: "var(--ra-font-mono)",
-          fontSize: "0.75rem",
-          color: "#f59e0b",
-          letterSpacing: "0.04em",
-          fontWeight: 600,
-        }}
-      >
-        DEVELOPMENT INSTANCE
-      </span>
+    <div data-ra-element="devModeBadge">
+      <span aria-hidden="true" data-ra-dev-dot="" />
+      Development instance
     </div>
   );
 }
@@ -589,13 +501,7 @@ export function CardFooter({
     <div data-ra-element="cardFooter" style={elements?.cardFooter}>
       {children}
       {/* Branding + dev badge injected at the bottom of every footer */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-        }}
-      >
+      <div data-ra-footer-badges="">
         <KovaAuthBranding />
         <DevModeBadge />
       </div>

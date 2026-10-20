@@ -104,7 +104,7 @@ function MultiSessionSection({
       />
       <p
         style={{
-          fontFamily: "var(--ra-font-mono)",
+          fontFamily: "var(--ra-font)",
           fontSize: "0.75rem",
           color: "var(--ra-color-text-tertiary)",
           fontWeight: 600,
@@ -137,7 +137,7 @@ function MultiSessionSection({
             <span
               style={{
                 display: "block",
-                fontFamily: "var(--ra-font-mono)",
+                fontFamily: "var(--ra-font)",
                 fontSize: "0.76rem",
                 fontWeight: 600,
                 overflow: "hidden",
@@ -150,7 +150,7 @@ function MultiSessionSection({
             <span
               style={{
                 display: "block",
-                fontFamily: "var(--ra-font-mono)",
+                fontFamily: "var(--ra-font)",
                 fontSize: "0.75rem",
                 color: "var(--ra-color-text-tertiary)",
                 overflow: "hidden",
@@ -266,7 +266,7 @@ export function UserButton({
         {showName && (
           <span
             style={{
-              fontFamily: "var(--ra-font-mono)",
+              fontFamily: "var(--ra-font)",
               fontSize: "0.82rem",
               fontWeight: 500,
               color: "var(--ra-color-text)",
@@ -307,7 +307,7 @@ export function UserButton({
             <div style={{ flex: 1, minWidth: 0 }}>
               <p
                 style={{
-                  fontFamily: "var(--ra-font-mono)",
+                  fontFamily: "var(--ra-font)",
                   fontSize: "0.82rem",
                   fontWeight: 600,
                   color: "var(--ra-color-text)",
@@ -321,7 +321,7 @@ export function UserButton({
               </p>
               <p
                 style={{
-                  fontFamily: "var(--ra-font-mono)",
+                  fontFamily: "var(--ra-font)",
                   fontSize: "0.75rem",
                   color: "var(--ra-color-text-secondary)",
                   overflow: "hidden",

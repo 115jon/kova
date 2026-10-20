@@ -53,8 +53,8 @@ const PASSWORD_RULES = [
 function PasswordStrength({ password }: { password: string }) {
   if (!password) return null;
   const passed = PASSWORD_RULES.filter((r) => r.test(password)).length;
-  const colors = ["#f87171", "#f97316", "#facc15", "#4ade80"];
-  const color = colors[Math.max(0, passed - 1)] ?? "#f87171";
+  const colors = ["var(--ra-color-error)", "var(--ra-color-warning)", "var(--ra-color-warning)", "var(--ra-color-success)"];
+  const color = colors[Math.max(0, passed - 1)] ?? "var(--ra-color-error)";
   const progress = passed / PASSWORD_RULES.length;
 
   return (
@@ -100,7 +100,7 @@ function PasswordStrength({ password }: { password: string }) {
           <span
             key={r.label}
             style={{
-              fontFamily: "var(--ra-font-mono)",
+              fontFamily: "var(--ra-font)",
               fontSize: "0.75rem",
               color: r.test(password)
                 ? "var(--ra-color-success)"
@@ -264,7 +264,7 @@ export function SignUp({
                 border: "none",
                 color: "var(--ra-color-primary)",
                 cursor: "pointer",
-                fontFamily: "var(--ra-font-mono)",
+                fontFamily: "var(--ra-font)",
                 fontSize: "inherit",
                 padding: 0,
               }}

@@ -158,7 +158,7 @@ Customize every token globally (on the provider) or per-component:
   publishableKey="pk_live_..."
   appearance={{
     variables: {
-      colorPrimary: "#7c3aed",          // Violet instead of blue
+      colorPrimary: "#7c3aed",          // Violet instead of Kova teal
       colorBackground: "#0f0f1a",
       colorSurface: "#16162a",
       borderRadius: "12px",
@@ -168,6 +168,9 @@ Customize every token globally (on the provider) or per-component:
   <App />
 </KovaAuthProvider>
 ```
+
+The SDK doesn't load fonts. The default `fontFamily` is Figtree, falling back to
+the system UI font; load Figtree on your page or set your own `fontFamily`.
 
 Override individual elements (merged on top of provider appearance):
 

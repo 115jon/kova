@@ -12,42 +12,46 @@ import type { ServerAppearance } from "./context";
 
 /**
  * Design tokens that cascade as CSS custom properties onto every SDK component.
- * Any value not specified falls back to a sensible dark-mode default.
+ * Any value not specified falls back to Kova's dark default.
  */
 export interface AppearanceVariables {
-  /** Primary accent color (buttons, active states). @default "oklch(0.51 0.095 176)" */
+  /** Primary accent (submit button, active tab, focus ring). White text sits on it. @default "#026f8e" */
   colorPrimary?: string;
-  /** Hover tone of primary. @default "oklch(0.47 0.085 176)" */
+  /** Hover tone of primary. @default "#025a73" */
   colorPrimaryHover?: string;
-  /** Background behind the card. @default "oklch(0.16 0.02 255)" */
+  /** Background behind the card. @default "#131515" */
   colorBackground?: string;
-  /** Card / surface background. @default "oklch(0.20 0.03 245 / 0.78)" */
+  /** Card / surface background. @default "#1a1c1c" */
   colorSurface?: string;
-  /** Subtle raised surface (inputs, keylines). @default "oklch(0.24 0.03 245 / 0.55)" */
+  /** Raised surface (inputs, social buttons, skeletons). @default "#222525" */
   colorSurfaceRaised?: string;
-  /** Primary text. @default "oklch(0.97 0.01 210)" */
+  /** Primary text. @default "#ffffff" */
   colorText?: string;
-  /** Secondary / label text. @default "oklch(0.84 0.018 210)" */
+  /** Secondary / label text. @default "#b8b8b8" */
   colorTextSecondary?: string;
-  /** Placeholder / disabled text. @default "oklch(0.78 0.02 215)" */
+  /** Meta and placeholder text. @default "#8a9090" */
   colorTextTertiary?: string;
-  /** Default border color. @default "oklch(0.955 0.01 95 / 0.18)" */
+  /** Default border color. @default "rgba(255,255,255,0.10)" */
   colorBorder?: string;
-  /** Strong border (focused inputs, open dropdowns). @default "oklch(0.955 0.01 95 / 0.32)" */
+  /** Strong border (hovered controls, menus). @default "rgba(255,255,255,0.18)" */
   colorBorderStrong?: string;
-  /** Error / destructive color. @default "oklch(0.72 0.14 25)" */
+  /** Error / destructive color. @default "#ff6b6b" */
   colorError?: string;
-  /** Success color. @default "oklch(0.78 0.12 155)" */
+  /** Success color. @default "#4ade80" */
   colorSuccess?: string;
-  /** Border radius for cards. @default "18px" */
+  /** Warning color (development-instance badge). @default "#ffb020" */
+  colorWarning?: string;
+  /** Card shadow. @default "0 8px 20px rgba(0,0,0,0.35)" */
+  shadow?: string;
+  /** Border radius for cards. @default "20px" */
   borderRadius?: string;
-  /** Border radius for inputs and buttons. @default "999px" */
+  /** Border radius for inputs and buttons. @default "12px" */
   borderRadiusSm?: string;
-  /** Body font family. @default "\"IBM Plex Sans\", system-ui, sans-serif" */
+  /** Body font family. @default "\"Figtree\", system-ui, -apple-system, \"Segoe UI\", sans-serif" */
   fontFamily?: string;
-  /** Monospace font family. @default "\"IBM Plex Mono\", ui-monospace, monospace" */
+  /** Monospace font family, for codes only. @default "\"IBM Plex Mono\", ui-monospace, monospace" */
   fontFamilyMono?: string;
-  /** Base font size. @default "14px" */
+  /** Base font size. Inputs stay at 16px below 480px wide to stop iOS zoom. @default "15px" */
   fontSize?: string;
 }
 

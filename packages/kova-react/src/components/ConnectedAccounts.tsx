@@ -178,7 +178,7 @@ export function ConnectedAccounts({
                 data-ra-element="connectedAccountsItemLabel"
                 style={{
                   flex: 1,
-                  fontFamily: "var(--ra-font-mono)",
+                  fontFamily: "var(--ra-font)",
                   fontSize: "0.76rem",
                   color: isConnected
                     ? "var(--ra-color-text)"
@@ -196,7 +196,7 @@ export function ConnectedAccounts({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 3,
-                    fontFamily: "var(--ra-font-mono)",
+                    fontFamily: "var(--ra-font)",
                     fontSize: "0.75rem",
                     color: "var(--ra-color-success)",
                     fontWeight: 600,
@@ -210,7 +210,7 @@ export function ConnectedAccounts({
                 // credential = password — can't link via OAuth redirect
                 <span
                   style={{
-                    fontFamily: "var(--ra-font-mono)",
+                    fontFamily: "var(--ra-font)",
                     fontSize: "0.75rem",
                     color: "var(--ra-color-text-tertiary)",
                   }}
@@ -232,7 +232,7 @@ export function ConnectedAccounts({
                     border: "1px solid var(--ra-color-border-strong)",
                     background: "transparent",
                     color: "var(--ra-color-primary)",
-                    fontFamily: "var(--ra-font-mono)",
+                    fontFamily: "var(--ra-font)",
                     fontSize: "0.75rem",
                     fontWeight: 600,
                     cursor: busy ? "not-allowed" : "pointer",

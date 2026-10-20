@@ -71,7 +71,7 @@ function OrgAvatar({
       style={{
         ...base,
         background: "var(--ra-color-primary)",
-        fontFamily: "var(--ra-font-mono)",
+        fontFamily: "var(--ra-font)",
         fontWeight: 700,
         fontSize: Math.max(12, size * 0.44),
         color: "#fff",
@@ -245,7 +245,7 @@ export function OrgSwitcher({
         <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
           <p
             style={{
-              fontFamily: "var(--ra-font-mono)",
+              fontFamily: "var(--ra-font)",
               fontSize: "0.78rem",
               fontWeight: 600,
               color: "var(--ra-color-text)",
@@ -261,7 +261,7 @@ export function OrgSwitcher({
           {activeOrg && (
             <p
               style={{
-                fontFamily: "var(--ra-font-mono)",
+                fontFamily: "var(--ra-font)",
                 fontSize: "0.75rem",
                 color: "var(--ra-color-text-tertiary)",
                 margin: 0,
@@ -300,12 +300,12 @@ export function OrgSwitcher({
             border: "1px solid var(--ra-color-border-strong)",
             borderRadius: "var(--ra-radius-sm)",
             padding: 4,
-            boxShadow: "0 16px 40px rgba(0,0,0,0.6)",
+            boxShadow: "var(--ra-shadow)",
           }}
         >
           <p
             style={{
-              fontFamily: "var(--ra-font-mono)",
+              fontFamily: "var(--ra-font)",
               fontSize: "0.75rem",
               color: "var(--ra-color-text-tertiary)",
               fontWeight: 600,
@@ -346,7 +346,7 @@ export function OrgSwitcher({
               <Spinner size={13} />
               <span
                 style={{
-                  fontFamily: "var(--ra-font-mono)",
+                  fontFamily: "var(--ra-font)",
                   fontSize: "0.75rem",
                   color: "var(--ra-color-text-tertiary)",
                 }}
@@ -409,9 +409,9 @@ function OrgOption({
         padding: "6px 8px",
         borderRadius: 4,
         cursor: isActive ? "default" : "pointer",
-        background: isActive ? "rgba(59,130,246,0.08)" : "transparent",
+        background: isActive ? "color-mix(in srgb, var(--ra-color-primary) 12%, transparent)" : "transparent",
         border: isActive
-          ? "1px solid rgba(59,130,246,0.15)"
+          ? "1px solid color-mix(in srgb, var(--ra-color-primary) 22%, transparent)"
           : "1px solid transparent",
         transition: "background 0.1s",
         marginBottom: 1,
@@ -422,7 +422,7 @@ function OrgOption({
       <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
         <p
           style={{
-            fontFamily: "var(--ra-font-mono)",
+            fontFamily: "var(--ra-font)",
             fontSize: "0.78rem",
             fontWeight: 600,
             color: isActive
@@ -440,7 +440,7 @@ function OrgOption({
         {sublabel && (
           <p
             style={{
-              fontFamily: "var(--ra-font-mono)",
+              fontFamily: "var(--ra-font)",
               fontSize: "0.75rem",
               color: "var(--ra-color-text-tertiary)",
               overflow: "hidden",
