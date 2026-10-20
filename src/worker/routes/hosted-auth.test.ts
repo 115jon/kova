@@ -157,3 +157,44 @@ describe("hosted password create-ticket", () => {
     );
   });
 });
+
+describe("hosted per-app sign-in alias", () => {
+  async function get(path: string) {
+    const { hostedAuthRouter } = await import("./hosted-auth");
+    const env = {
+      __hostedApp: { app: app(["mira://auth", "https://app.example.com/callback"]) },
+      DB: {},
+      KV: {},
+      BETTER_AUTH_SECRET: "test-secret",
+      AUTH_URL: "https://auth.115jon.site",
+    };
+    return hostedAuthRouter.request(
+      new Request(`https://mira.auth.115jon.site${path}`, { headers: { host: "mira.auth.115jon.site" } }),
+      {},
+      env as never,
+    );
+  }
+
+  it("forwards to the app's branded sign-in page with the redirect and state", async () => {
+    const res = await get(`/sign-in?redirect_uri=${encodeURIComponent("mira://auth")}&state=app-nonce`);
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(
+      "https://auth.115jon.site/sign-in?pk=pk_live_mira&redirect_url=mira%3A%2F%2Fauth&state=app-nonce",
+    );
+  });
+
+  it("accepts redirect_url and opens the bare page from / and /sign-up", async () => {
+    const res = await get(`/?redirect_url=${encodeURIComponent("https://app.example.com/callback")}`);
+    expect(res.headers.get("location")).toBe(
+      "https://auth.115jon.site/sign-in?pk=pk_live_mira&redirect_url=https%3A%2F%2Fapp.example.com%2Fcallback",
+    );
+    expect((await get("/sign-up")).headers.get("location")).toBe(
+      "https://auth.115jon.site/sign-in?pk=pk_live_mira",
+    );
+  });
+
+  it("refuses unregistered redirects before leaving the alias", async () => {
+    expect((await get(`/sign-in?redirect_uri=${encodeURIComponent("mira://evil")}`)).status).toBe(403);
+    expect((await get(`/sign-in?redirect_url=${encodeURIComponent("https://evil.example/auth")}`)).status).toBe(403);
+  });
+});

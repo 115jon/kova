@@ -7,6 +7,8 @@ export type SignInRouteSearch = {
   redirect_url?: string;
   native_handoff?: string;
   add_account?: string;
+  /** App nonce echoed back to redirect_url unchanged. */
+  state?: string;
 };
 
 export { safeOauthContinuePath };
@@ -36,6 +38,13 @@ export function safeSignInReturnPath(redirectUrl: string | undefined): string | 
   return safeApproveReturnPath(redirectUrl) ?? safeOauthContinuePath(redirectUrl);
 }
 
+/**
+ * App sign-in rule: `pk` + `redirect_url` means "sign in for this app, then
+ * hand an app session back to redirect_url" (see worker/lib/sign-in-url.ts).
+ * `native_handoff=1` is an optional legacy hint and is not required. The
+ * redirect is never trusted here: the sign-in page pre-checks it and
+ * handleSdkBounce enforces the app's exact redirect URI allowlist.
+ */
 export function buildNativeHandoffPath(
   search: SignInRouteSearch,
 ): string | null {
@@ -49,6 +58,7 @@ export function buildNativeHandoffPath(
     pk,
     redirect_uri: redirectUrl,
   });
+  if (search.state) params.set("state", search.state);
   return `/api/hosted/oauth-complete?${params.toString()}`;
 }
 
@@ -61,6 +71,7 @@ export function buildSignInReturnPath(search: SignInRouteSearch): string {
     params.set("native_handoff", search.native_handoff);
   }
   if (search.add_account) params.set("add_account", search.add_account);
+  if (search.state) params.set("state", search.state);
 
   const query = params.toString();
   return query ? `/sign-in?${query}` : "/sign-in";

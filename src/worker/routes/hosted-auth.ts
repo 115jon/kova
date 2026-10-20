@@ -8,8 +8,8 @@
  *
  * ## Route overview
  *
- *   GET  /sign-in                          → Renders branded sign-in HTML page
- *   GET  /sign-up                          → Renders branded sign-up HTML page
+ *   GET  / , /sign-in, /sign-up            → 302 to {AUTH_URL}/sign-in?pk=…&redirect_url=…
+ *                                            (device_return sign-in still renders here)
  *   ALL  /api/auth/*                       → Proxied to Better Auth (subdomain-scoped session)
  *   POST /api/hosted/create-ticket         → Issues short-lived auth code after sign-in
  *   POST /api/hosted/exchange-ticket       → Exchanges code for userId (requires sk_*)
@@ -46,6 +46,7 @@ import {
 } from "../lib/device-login";
 import { escapeHtml, jsonForHtmlScript } from "../lib/html";
 import { hostedProviders } from "../lib/hosted-providers";
+import { appSignInUrl } from "../lib/sign-in-url";
 import { RALPH_RADIO_SVG, resolveHostedAppearance, type HostedProvider } from "../../shared/hosted-brand";
 import { findMFAEnforcedOrgBlockingUser } from "../org-settings";
 import { encodeOAuthCtx, oauthStartUsesSdkBounce } from "./oauth-bounce";
@@ -184,68 +185,49 @@ async function buildHostedPage(opts: {
 </html>`;
 }
 
-// ── GET /sign-in ───────────────────────────────────────────────────────────────
+// ── GET / , /sign-in, /sign-up ─────────────────────────────────────────────────
+//
+// The per-app host is a short alias for the app's branded sign-in page on the
+// main auth domain, so there is one sign-in UI to brand and maintain. It accepts
+// `redirect_uri` (the original hosted name) or `redirect_url`, and forwards
+// `state`. Device approval is the exception: its session cookie must be scoped
+// to this host, so a `device_return` sign-in still renders here.
 
-function hostedPageQuery(c: HC): { redirectUri: string; state: string; returnPath?: string } {
+async function hostedSignIn(c: HC, mode: HostedPageMode): Promise<Response> {
+  const app = getApp(c);
+  if (app.suspended_at) return c.html(`<p style="font-family:monospace;color:#f87171;padding:32px">Application suspended.</p>`, 403);
+
   const deviceReturn = c.req.query("device_return");
   if (isSafeDeviceReturnPath(deviceReturn)) {
-    return { redirectUri: "", state: "", returnPath: deviceReturn };
+    const enabledProviders = await hostedProviders(c.env, app.id).catch(() => null);
+    if (!enabledProviders) return c.html(deviceMessagePage(app, "Sign-in providers could not be loaded. Please try again."), 503);
+    const host = getHost(c);
+    return c.html(await buildHostedPage({
+      app, mode, redirectUri: "", state: "", returnPath: deviceReturn,
+      enabledProviders,
+      authUrl: `https://${host}`,
+      mainAuthUrl: c.env.AUTH_URL,
+      signingSecret: c.env.BETTER_AUTH_SECRET,
+    }));
   }
-  return {
-    redirectUri: c.req.query("redirect_uri") ?? "",
-    state: c.req.query("state") ?? "",
-  };
+
+  const redirectUri = c.req.query("redirect_uri") ?? c.req.query("redirect_url") ?? "";
+  if (redirectUri && !isRedirectUriAllowed(app, redirectUri)) {
+    return c.html(
+      `<p style="font-family:monospace;color:#f87171;padding:32px">Invalid redirect_uri — not in allowlist.</p>`,
+      403
+    );
+  }
+
+  return c.redirect(
+    appSignInUrl(c.env.AUTH_URL, app.publishable_key, redirectUri || undefined, c.req.query("state") || undefined),
+    302,
+  );
 }
 
-hostedAuthRouter.get("/sign-in", async (c) => {
-  const app = getApp(c);
-  if (app.suspended_at) return c.html(`<p style="font-family:monospace;color:#f87171;padding:32px">Application suspended.</p>`, 403);
-  const host = getHost(c);
-  const { redirectUri, state, returnPath } = hostedPageQuery(c);
-
-  if (redirectUri && !isRedirectUriAllowed(app, redirectUri)) {
-    return c.html(
-      `<p style="font-family:monospace;color:#f87171;padding:32px">Invalid redirect_uri — not in allowlist.</p>`,
-      403
-    );
-  }
-
-  const enabledProviders = await hostedProviders(c.env, app.id).catch(() => null);
-  if (!enabledProviders) return c.html(deviceMessagePage(app, "Sign-in providers could not be loaded. Please try again."), 503);
-  return c.html(await buildHostedPage({
-    app, mode: "sign-in", redirectUri, state, returnPath,
-    enabledProviders,
-    authUrl: `https://${host}`,
-    mainAuthUrl: c.env.AUTH_URL,
-    signingSecret: c.env.BETTER_AUTH_SECRET,
-  }));
-});
-
-// ── GET /sign-up ───────────────────────────────────────────────────────────────
-
-hostedAuthRouter.get("/sign-up", async (c) => {
-  const app = getApp(c);
-  if (app.suspended_at) return c.html(`<p style="font-family:monospace;color:#f87171;padding:32px">Application suspended.</p>`, 403);
-  const host = getHost(c);
-  const { redirectUri, state, returnPath } = hostedPageQuery(c);
-
-  if (redirectUri && !isRedirectUriAllowed(app, redirectUri)) {
-    return c.html(
-      `<p style="font-family:monospace;color:#f87171;padding:32px">Invalid redirect_uri — not in allowlist.</p>`,
-      403
-    );
-  }
-
-  const enabledProviders = await hostedProviders(c.env, app.id).catch(() => null);
-  if (!enabledProviders) return c.html(deviceMessagePage(app, "Sign-in providers could not be loaded. Please try again."), 503);
-  return c.html(await buildHostedPage({
-    app, mode: "sign-up", redirectUri, state, returnPath,
-    enabledProviders,
-    authUrl: `https://${host}`,
-    mainAuthUrl: c.env.AUTH_URL,
-    signingSecret: c.env.BETTER_AUTH_SECRET,
-  }));
-});
+hostedAuthRouter.get("/", (c) => hostedSignIn(c, "sign-in"));
+hostedAuthRouter.get("/sign-in", (c) => hostedSignIn(c, "sign-in"));
+hostedAuthRouter.get("/sign-up", (c) => hostedSignIn(c, "sign-up"));
 
 // ── ALL /api/auth/* — Better Auth proxy ────────────────────────────────────────
 //

@@ -38,7 +38,7 @@ vi.mock("../lib/app-session", () => ({
 vi.mock("../applications", () => ({
   getApplicationByPublishableKey: (db: unknown, pk: string) => getApplicationByPublishableKey(db, pk),
   getApplicationById: vi.fn(),
-  isRedirectUriAllowed: () => false,
+  isRedirectUriAllowed: (app: Application, uri: string) => app.redirect_uris.includes(uri),
   validateSecretKey: async () => false,
 }));
 
@@ -408,5 +408,33 @@ describe("hosted device approval page", () => {
     expect(config?.redirectUri).toBe("");
     expect((config?.app as { homeUrl?: string } | undefined)?.homeUrl).toBe("/device?code=ABCD-EFGH");
     expect(html).not.toContain("evil.example");
+  });
+});
+
+describe("public redirect check", () => {
+  async function check(pk: string, redirectUri?: string) {
+    const { pubAppsRouter } = await import("./pub/apps");
+    const query = redirectUri === undefined ? "" : `?redirect_uri=${encodeURIComponent(redirectUri)}`;
+    return pubAppsRouter.request(
+      new Request(`https://auth.115jon.site/${pk}/redirect-check${query}`),
+      {},
+      env(memoryKv()),
+    );
+  }
+
+  it("answers whether a sign-in return URL is registered, without caching", async () => {
+    getApplicationByPublishableKey.mockImplementationOnce(async () => mira({ redirect_uris: ["mira://auth"] }));
+    const allowed = await check("pk_live_mira", "mira://auth");
+    expect(allowed.status).toBe(200);
+    expect(allowed.headers.get("cache-control")).toBe("no-store");
+    await expect(allowed.json()).resolves.toEqual({ allowed: true });
+
+    await expect((await check("pk_live_mira", "mira://evil")).json()).resolves.toEqual({ allowed: false });
+    await expect((await check("pk_live_mira")).json()).resolves.toEqual({ allowed: false });
+  });
+
+  it("rejects unknown and suspended apps", async () => {
+    expect((await check("pk_unknown", "mira://auth")).status).toBe(404);
+    expect((await check("pk_suspended", "mira://auth")).status).toBe(403);
   });
 });

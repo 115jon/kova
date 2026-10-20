@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { appSignInUrl } from "../../worker/lib/sign-in-url";
 import {
   buildNativeHandoffPath,
   buildSignInReturnUrl,
@@ -39,6 +40,25 @@ describe("sign-in redirect helpers", () => {
   it("preserves native context when an auth method returns to sign-in", () => {
     expect(buildSignInReturnUrl(nativeSearch, "https://auth.example")).toBe(
       "https://auth.example/sign-in?pk=pk_dev_float&redirect_url=float%3A%2F%2Fauth&native_handoff=1",
+    );
+  });
+
+  it("echoes the app state through the handoff and the sign-in round trip", () => {
+    const search = { ...nativeSearch, native_handoff: undefined, state: "nonce-1" };
+    expect(buildNativeHandoffPath(search)).toBe(
+      "/api/hosted/oauth-complete?mode=sdk&pk=pk_dev_float&redirect_uri=float%3A%2F%2Fauth&state=nonce-1",
+    );
+    expect(buildSignInReturnUrl(search, "https://auth.example")).toBe(
+      "https://auth.example/sign-in?pk=pk_dev_float&redirect_url=float%3A%2F%2Fauth&state=nonce-1",
+    );
+  });
+
+  it("builds the app sign-in URL the dashboard shows and the hosted alias forwards to", () => {
+    expect(appSignInUrl("https://auth.115jon.site", "pk_live_abc", "t3code://app/auth/kova")).toBe(
+      "https://auth.115jon.site/sign-in?pk=pk_live_abc&redirect_url=t3code%3A%2F%2Fapp%2Fauth%2Fkova",
+    );
+    expect(appSignInUrl("https://auth.115jon.site/", "pk_dev_x")).toBe(
+      "https://auth.115jon.site/sign-in?pk=pk_dev_x",
     );
   });
 

@@ -10,6 +10,9 @@
  *     → KV cache key: `appearance:{publishableKey}` (TTL: 300 s / 5 min)
  *     → No authentication required — the publishable key IS the identifier.
  *
+ *   GET /api/pub/apps/:publishableKey/redirect-check?redirect_uri=…
+ *     → { allowed } for the sign-in page's up-front redirect check. Uncached.
+ *
  *   GET /api/pub/apps/:publishableKey/plan
  *     → Returns plan name + allowed features for operator-side feature gating.
  *     → Requires X-Secret-Key header matching the application's secret key.
@@ -102,6 +105,23 @@ pubAppsRouter.get("/:pk/appearance", async (c) => {
       "X-Appearance-Source": "d1",
     },
   });
+});
+
+// ── GET /:pk/redirect-check — validate a sign-in return URL up front ─────────
+//
+// The main-domain /sign-in?pk=… page calls this before showing the form, so a
+// bad redirect_url fails on the first screen instead of after the user signs
+// in. handleSdkBounce still re-validates; this is not the security boundary.
+
+pubAppsRouter.get("/:pk/redirect-check", async (c) => {
+  const app = await getApplicationByPublishableKey(c.env.DB, c.req.param("pk")).catch(() => null);
+  if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+  const redirectUri = c.req.query("redirect_uri") ?? "";
+  return Response.json(
+    { allowed: !!redirectUri && isRedirectUriAllowed(app, redirectUri) },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 });
 
 // ── GET /:pk/plan — feature flags for operator use ────────────────────────────
