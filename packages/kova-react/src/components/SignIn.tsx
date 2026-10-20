@@ -28,6 +28,13 @@
  */
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import {
+  authErrorMessage,
+  emailLinkCallbackUrl,
+  isPasskeyCancel,
+  passkeyUsableHere,
+  unwrapAuthResult,
+} from "../auth-result";
 import { mergeAppearance, useKovaAuth } from "../context";
 import { useRateLimit } from "../hooks/use-rate-limit";
 import { useSignIn } from "../hooks/use-sign-in";
@@ -55,14 +62,8 @@ import {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function PasskeyButton({
-  elements,
-  callbackURL,
-}: {
-  elements?: AppearanceElements;
-  callbackURL?: string;
-}) {
-  const { client, authUrl } = useKovaAuth();
+function PasskeyButton({ elements }: { elements?: AppearanceElements }) {
+  const { client } = useKovaAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,17 +71,20 @@ function PasskeyButton({
     setLoading(true);
     setError(null);
     try {
-      await (
-        client as unknown as {
-          signIn: { passkey: (o: { callbackURL: string }) => Promise<unknown> };
-        }
-      ).signIn.passkey({
-        callbackURL: resolveAbsoluteUrl(authUrl, callbackURL),
-      });
+      // Signing in sets the session cookie and the client's session store;
+      // the page that hosts this card decides where to go next.
+      await unwrapAuthResult(() =>
+        (
+          client as unknown as {
+            signIn: { passkey: () => Promise<unknown> };
+          }
+        ).signIn.passkey(),
+      );
     } catch (err) {
-      // Ignore user-cancel (DOMException name = "NotAllowedError")
-      if (err instanceof DOMException && err.name === "NotAllowedError") return;
-      setError("Passkey authentication failed. Try another method.");
+      const failure = err as { code?: string; message?: string };
+      // Dismissing the browser's prompt is not a failure.
+      if (isPasskeyCancel(failure)) return;
+      setError(failure.message || "Passkey authentication failed. Try another method.");
     } finally {
       setLoading(false);
     }
@@ -258,7 +262,7 @@ function MagicLinkForm({
   elements?: AppearanceElements;
 }) {
   const { signIn, isLoading, error, retryAfterSeconds } = useSignIn();
-  const { authUrl } = useKovaAuth();
+  const { authUrl, publishableKey } = useKovaAuth();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -267,7 +271,11 @@ function MagicLinkForm({
   const { isRateLimited, secondsRemaining, recordRateLimit } = useRateLimit();
   useSeedRateLimitCountdown(retryAfterSeconds, recordRateLimit);
 
-  const absCallbackUrl = resolveAbsoluteUrl(authUrl, afterSignInUrl);
+  const absCallbackUrl = emailLinkCallbackUrl(
+    authUrl,
+    publishableKey,
+    resolveAbsoluteUrl(authUrl, afterSignInUrl),
+  );
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -350,6 +358,7 @@ export function SignIn({
     appearanceError,
     retryAppearance,
     serverAppearance,
+    authError,
   } = useKovaAuth();
 
   const merged = mergeAppearance(providerAppearance, instanceAppearance);
@@ -359,7 +368,17 @@ export function SignIn({
   const el = merged.elements ?? {};
   const resolvedUrl = afterSignInUrl ?? providerAfterSignIn;
 
-  const [activeTab, setActiveTab] = useState<SignInTab>(defaultTab);
+  // Known only in the browser, so it starts false and the tab appears on mount.
+  const { authUrl } = useKovaAuth();
+  const [passkeyOffered, setPasskeyOffered] = useState(false);
+  useEffect(() => {
+    setPasskeyOffered(
+      passkeyUsableHere(authUrl, window.location, typeof window.PublicKeyCredential !== "undefined"),
+    );
+  }, [authUrl]);
+  const tabs = passkeyOffered ? TABS : TABS.filter((tab) => tab.id !== "passkey");
+  const [requestedTab, setActiveTab] = useState<SignInTab>(defaultTab);
+  const activeTab = tabs.some((tab) => tab.id === requestedTab) ? requestedTab : "email";
 
   if (!isAppearanceLoaded) {
     return (
@@ -413,6 +432,7 @@ export function SignIn({
       />
 
       <CardBody elements={el}>
+        {authError && <Alert variant="error">{authErrorMessage(authError)}</Alert>}
         {/* OAuth social providers */}
         {oauthProviders.length > 0 && (
           <>
@@ -427,7 +447,7 @@ export function SignIn({
 
         {/* Method tabs (email | magic-link | passkey) */}
         <Tabs
-          tabs={TABS}
+          tabs={tabs}
           active={activeTab}
           onSelect={(id) => setActiveTab(id as SignInTab)}
           elements={el}
@@ -440,7 +460,7 @@ export function SignIn({
           <MagicLinkForm afterSignInUrl={resolvedUrl} elements={el} />
         )}
         {activeTab === "passkey" && (
-          <PasskeyButton elements={el} callbackURL={resolvedUrl} />
+          <PasskeyButton elements={el} />
         )}
       </CardBody>
 

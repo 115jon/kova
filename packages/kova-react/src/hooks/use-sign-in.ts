@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useState } from "react";
+import { unwrapAuthResult } from "../auth-result";
 import { useKovaAuth } from "../context";
 import { extractRetryAfter } from "./use-rate-limit";
 
@@ -165,37 +166,24 @@ export function useSignIn(): UseSignInReturn {
   const signInEmail = useCallback(
     async (opts: SignInEmailOpts) => {
       return run(async () => {
-        const res = await client.signIn.email({
-          email: opts.email,
-          password: opts.password,
-          rememberMe: opts.rememberMe ?? true,
-          callbackURL: opts.callbackURL ?? afterSignInUrl,
-          fetchOptions: {
-            onSuccess() {
-              setTwoFactorRequired(false);
-              setRetryAfterSeconds(null);
+        const res = await unwrapAuthResult((hooks) =>
+          client.signIn.email({
+            email: opts.email,
+            password: opts.password,
+            rememberMe: opts.rememberMe ?? true,
+            callbackURL: opts.callbackURL ?? afterSignInUrl,
+            fetchOptions: {
+              onSuccess() {
+                setTwoFactorRequired(false);
+                setRetryAfterSeconds(null);
+              },
+              onError: hooks.onError,
             },
-            onError(ctx: {
-              error: { message?: string; status?: number };
-              response?: Response;
-            }) {
-              const msg = ctx.error.message ?? "";
-              // Better Auth returns this specific message for pending 2FA
-              if (
-                msg.toLowerCase().includes("two factor") ||
-                ctx.error.status === 403
-              ) {
-                setTwoFactorRequired(true);
-              }
-              // Surface Retry-After via the onError callback's response object
-              if (ctx.error.status === 429 && ctx.response) {
-                const secs = extractRetryAfter({ response: ctx.response });
-                if (secs !== null) setRetryAfterSeconds(secs);
-              }
-            },
-          },
-        });
-        // Check if the response body signals 2FA is required
+          }),
+        );
+        // A 2FA account answers 200 with `twoFactorRedirect`; every other
+        // failure (wrong password, unverified email, MFA enforcement) has
+        // thrown above and shows its own message.
         const body = (
           res as unknown as { data?: { twoFactorRedirect?: boolean } }
         )?.data;
@@ -212,19 +200,23 @@ export function useSignIn(): UseSignInReturn {
   const signInMagicLink = useCallback(
     async (opts: SignInMagicLinkOpts) => {
       await run(async () => {
-        await (
-          client as unknown as {
-            signIn: {
-              magicLink: (o: {
-                email: string;
-                callbackURL: string;
-              }) => Promise<unknown>;
-            };
-          }
-        ).signIn.magicLink({
-          email: opts.email,
-          callbackURL: opts.callbackURL ?? afterSignInUrl,
-        });
+        await unwrapAuthResult((hooks) =>
+          (
+            client as unknown as {
+              signIn: {
+                magicLink: (o: {
+                  email: string;
+                  callbackURL: string;
+                  fetchOptions: unknown;
+                }) => Promise<unknown>;
+              };
+            }
+          ).signIn.magicLink({
+            email: opts.email,
+            callbackURL: opts.callbackURL ?? afterSignInUrl,
+            fetchOptions: hooks,
+          }),
+        );
         // Clear any stale rate-limit state on success
         setRetryAfterSeconds(null);
       });
@@ -235,11 +227,14 @@ export function useSignIn(): UseSignInReturn {
   const signInSocial = useCallback(
     async (opts: SignInSocialOpts) => {
       await run(async () => {
-        await client.signIn.social({
-          provider: opts.provider,
-          callbackURL: opts.callbackURL ?? afterSignInUrl,
-          errorCallbackURL: opts.errorCallbackURL,
-        } as Parameters<typeof client.signIn.social>[0]);
+        await unwrapAuthResult((hooks) =>
+          client.signIn.social({
+            provider: opts.provider,
+            callbackURL: opts.callbackURL ?? afterSignInUrl,
+            errorCallbackURL: opts.errorCallbackURL,
+            fetchOptions: hooks,
+          } as Parameters<typeof client.signIn.social>[0]),
+        );
         setRetryAfterSeconds(null);
       });
     },
@@ -249,15 +244,13 @@ export function useSignIn(): UseSignInReturn {
   const signInPasskey = useCallback(
     async (opts: SignInPasskeyOpts = {}) => {
       await run(async () => {
-        await (
-          client as unknown as {
-            signIn: {
-              passkey: (o: { callbackURL: string }) => Promise<unknown>;
-            };
-          }
-        ).signIn.passkey({
-          callbackURL: opts.callbackURL ?? afterSignInUrl,
-        });
+        await unwrapAuthResult(() =>
+          (
+            client as unknown as {
+              signIn: { passkey: () => Promise<unknown> };
+            }
+          ).signIn.passkey(),
+        );
         setRetryAfterSeconds(null);
       });
     },
@@ -267,19 +260,18 @@ export function useSignIn(): UseSignInReturn {
   const signInTotp = useCallback(
     async (opts: SignInTOTPOpts) => {
       await run(async () => {
-        await (
-          client as unknown as {
-            twoFactor: {
-              verifyTotp: (o: {
-                code: string;
-                callbackURL: string;
-              }) => Promise<unknown>;
-            };
-          }
-        ).twoFactor.verifyTotp({
-          code: opts.code,
-          callbackURL: afterSignInUrl,
-        });
+        await unwrapAuthResult((hooks) =>
+          (
+            client as unknown as {
+              twoFactor: {
+                verifyTotp: (o: {
+                  code: string;
+                  fetchOptions: unknown;
+                }) => Promise<unknown>;
+              };
+            }
+          ).twoFactor.verifyTotp({ code: opts.code, fetchOptions: hooks }),
+        );
         setTwoFactorRequired(false);
         setRetryAfterSeconds(null);
       });
@@ -290,13 +282,18 @@ export function useSignIn(): UseSignInReturn {
   const signInEmailOtp = useCallback(
     async (opts: SignInEmailOtpVerifyOpts) => {
       await run(async () => {
-        await (
-          client as unknown as {
-            twoFactor: {
-              verifyOtp: (o: { code: string }) => Promise<unknown>;
-            };
-          }
-        ).twoFactor.verifyOtp({ code: opts.otp });
+        await unwrapAuthResult((hooks) =>
+          (
+            client as unknown as {
+              twoFactor: {
+                verifyOtp: (o: {
+                  code: string;
+                  fetchOptions: unknown;
+                }) => Promise<unknown>;
+              };
+            }
+          ).twoFactor.verifyOtp({ code: opts.otp, fetchOptions: hooks }),
+        );
         setTwoFactorRequired(false);
         setRetryAfterSeconds(null);
       });

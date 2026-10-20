@@ -11,6 +11,7 @@
  */
 
 import { useState } from "react";
+import { buildSdkBounceUrl } from "../auth-result";
 import { useKovaAuth } from "../context";
 import type { AppearanceElements } from "../types";
 import { ProviderIcon, providerLabel } from "./icons";
@@ -79,18 +80,6 @@ function _isCrossOriginDomain(authUrl: string): boolean {
  * restriction).  The handler reads the session, creates a 60s transfer code,
  * and redirects to `redirectUri?kova_auth_code=xxx`.
  */
-function buildSdkBounceUrl(
-  authUrl: string,
-  publishableKey: string,
-  redirectUri: string,
-): string {
-  const bounce = new URL(`${authUrl}/api/hosted/oauth-complete`);
-  bounce.searchParams.set("mode", "sdk");
-  bounce.searchParams.set("pk", publishableKey);
-  bounce.searchParams.set("redirect_uri", redirectUri);
-  return bounce.toString();
-}
-
 function buildSdkOAuthStartUrl(
   authUrl: string,
   publishableKey: string,

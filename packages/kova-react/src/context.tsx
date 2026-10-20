@@ -111,6 +111,11 @@ export interface KovaAuthContextValue {
   appearanceError: string | null;
   /** Re-run the public appearance fetch. */
   retryAppearance: () => void;
+  /**
+   * Error code the auth server put on the return URL as `kova_auth_error`
+   * (an expired or invalid emailed link). Read once on load; the cards show it.
+   */
+  authError: string | null;
   afterSignInUrl: string;
   afterSignUpUrl: string;
   afterSignOutUrl: string;
@@ -343,6 +348,20 @@ export function KovaAuthProvider({
       });
   }, [resolvedAuthUrl, publishableKey, setPersistentSessionToken]); // intentionally run once on mount
 
+  // A failed emailed link returns here as ?kova_auth_error=CODE. Clean the URL
+  // like the code above, and keep the code for the cards to show.
+  const [authError, setAuthError] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const failure = params.get("kova_auth_error");
+    if (!failure) return;
+    setAuthError(failure);
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("kova_auth_error");
+    window.history.replaceState({}, "", cleanUrl.toString());
+  }, []);
+
   useEffect(() => {
     if (!sessionToken) return;
     void sessionResult.refetch();
@@ -461,6 +480,7 @@ export function KovaAuthProvider({
         !publishableKey || serverAppearance !== null || appearanceError !== null,
       appearanceError,
       retryAppearance,
+      authError,
       afterSignInUrl,
       afterSignUpUrl,
       afterSignOutUrl,
@@ -484,6 +504,7 @@ export function KovaAuthProvider({
       serverAppearance,
       appearanceError,
       retryAppearance,
+      authError,
       afterSignInUrl,
       afterSignUpUrl,
       afterSignOutUrl,

@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useState } from "react";
+import { signUpNeedsVerification, unwrapAuthResult } from "../auth-result";
 import { useKovaAuth } from "../context";
 import { extractRetryAfter } from "./use-rate-limit";
 
@@ -26,6 +27,12 @@ export interface UseSignUpReturn {
   signUp: {
     /** Register a new account with email + password. */
     email: (opts: SignUpEmailOpts) => Promise<void>;
+    /**
+     * Email the verification link again. Signing up a second time sends
+     * nothing (the server does not reveal that the address is taken), so
+     * "resend" has to go through this.
+     */
+    resendVerification: (opts: { email: string; callbackURL?: string }) => Promise<void>;
   };
   isLoading: boolean;
   error: string | null;
@@ -85,49 +92,71 @@ export function useSignUp(): UseSignUpReturn {
 
   const clearError = useCallback(() => setError(null), []);
 
+  const recordFailure = useCallback((err: unknown) => {
+    setError(extractMessage(err));
+    setRetryAfterSeconds(is429(err) ? extractRetryAfter(err) : null);
+  }, []);
+
   const signUpEmail = useCallback(
     async (opts: SignUpEmailOpts) => {
       setLoading(true);
       setError(null);
       try {
-        const res = await client.signUp.email({
-          email: opts.email,
-          password: opts.password,
-          name: opts.name,
-          // username is an optional plugin field — pass through if provided
-          ...(opts.username ? { username: opts.username } : {}),
-          callbackURL: opts.callbackURL ?? afterSignUpUrl,
-        } as Parameters<typeof client.signUp.email>[0]);
+        const res = await unwrapAuthResult((hooks) =>
+          client.signUp.email({
+            email: opts.email,
+            password: opts.password,
+            name: opts.name,
+            // username is an optional plugin field — pass through if provided
+            ...(opts.username ? { username: opts.username } : {}),
+            callbackURL: opts.callbackURL ?? afterSignUpUrl,
+            fetchOptions: hooks,
+          } as Parameters<typeof client.signUp.email>[0]),
+        );
 
-        // Better Auth sets `requireEmailVerification` — the response body
-        // won't contain a session token; it returns a redirect or empty body.
-        const data = (
-          res as unknown as { data?: { requiresEmailVerification?: boolean } }
-        )?.data;
-        if (data?.requiresEmailVerification) {
+        // With requireEmailVerification the server creates the account but
+        // issues no session (`token: null`); the user finishes from the email.
+        if (signUpNeedsVerification((res as { data?: { token?: string | null } }).data)) {
           setVerificationPending(true);
         }
 
         // Clear any stale rate-limit on success
         setRetryAfterSeconds(null);
       } catch (err) {
-        setError(extractMessage(err));
-        if (is429(err)) {
-          const secs = extractRetryAfter(err);
-          setRetryAfterSeconds(secs);
-        } else {
-          setRetryAfterSeconds(null);
-        }
+        recordFailure(err);
         throw err;
       } finally {
         setLoading(false);
       }
     },
-    [client, afterSignUpUrl],
+    [client, afterSignUpUrl, recordFailure],
+  );
+
+  const resendVerification = useCallback(
+    async (opts: { email: string; callbackURL?: string }) => {
+      setLoading(true);
+      setError(null);
+      try {
+        await unwrapAuthResult((hooks) =>
+          client.sendVerificationEmail({
+            email: opts.email,
+            callbackURL: opts.callbackURL ?? afterSignUpUrl,
+            fetchOptions: hooks,
+          }),
+        );
+        setRetryAfterSeconds(null);
+      } catch (err) {
+        recordFailure(err);
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [client, afterSignUpUrl, recordFailure],
   );
 
   return {
-    signUp: { email: signUpEmail },
+    signUp: { email: signUpEmail, resendVerification },
     isLoading,
     error,
     clearError,

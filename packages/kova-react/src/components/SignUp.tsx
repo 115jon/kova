@@ -23,6 +23,7 @@
  */
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { authErrorMessage, emailLinkCallbackUrl } from "../auth-result";
 import { mergeAppearance, useKovaAuth } from "../context";
 import { useRateLimit } from "../hooks/use-rate-limit";
 import { useSignUp } from "../hooks/use-sign-up";
@@ -150,6 +151,8 @@ export function SignUp({
     afterSignUpUrl: providerUrl,
     oauthProviders,
     authUrl,
+    publishableKey,
+    authError,
     isAppearanceLoaded,
     appearanceError,
     retryAppearance,
@@ -169,8 +172,14 @@ export function SignUp({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [resent, setResent] = useState(false);
 
-  const absCallbackUrl = resolveAbsoluteUrl(authUrl, resolvedUrl);
+  // The verification link is opened outside this page; see emailLinkCallbackUrl.
+  const absCallbackUrl = emailLinkCallbackUrl(
+    authUrl,
+    publishableKey,
+    resolveAbsoluteUrl(authUrl, resolvedUrl),
+  );
 
   if (!isAppearanceLoaded) {
     return (
@@ -247,18 +256,22 @@ export function SignUp({
           elements={el}
         />
         <CardBody elements={el}>
+          {error && <Alert variant="error">{error}</Alert>}
+          {resent && !error && (
+            <Alert variant="success">Verification email sent again.</Alert>
+          )}
           <Alert variant="info">
             Didn&apos;t get it? Check your spam folder, or{" "}
             <button
               type="button"
-              onClick={() =>
-                void signUp.email({
-                  name,
-                  email,
-                  password,
-                  callbackURL: absCallbackUrl,
-                })
-              }
+              disabled={isLoading}
+              onClick={() => {
+                setResent(false);
+                signUp
+                  .resendVerification({ email, callbackURL: absCallbackUrl })
+                  .then(() => setResent(true))
+                  .catch(() => null);
+              }}
               style={{
                 background: "none",
                 border: "none",
@@ -290,6 +303,7 @@ export function SignUp({
       />
 
       <CardBody elements={el}>
+        {authError && <Alert variant="error">{authErrorMessage(authError)}</Alert>}
         {oauthProviders.length > 0 && (
           <SocialButtons
             callbackURL={resolvedUrl}
