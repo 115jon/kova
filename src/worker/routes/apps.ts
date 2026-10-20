@@ -10,6 +10,8 @@ import {
   validateApplicationPolicy,
 } from "../applications";
 import { createAuth } from "../auth";
+import { sessionExpiresAtMs } from "../lib/app-session";
+import { appAssetKey, CDN_APP, isFileLike, scanUpload, sniffImageType } from "../lib/cdn";
 import { syncPlanFeatures } from "../lib/plan-limits";
 import { hasAdminRole } from "../lib/roles";
 import { verifyStripeWebhookSignature } from "../lib/stripe-webhook";
@@ -30,7 +32,7 @@ const appsRouter = new Hono<{ Bindings: Env }>();
 // POST   /:id/suspend              → platform-level suspend
 // POST   /:id/unsuspend            → remove suspension
 // GET    /:id/stats                → user/org/login counts (AppCounter DO + D1 fallback)
-// POST   /:id/logo                 → upload logo (multipart → R2 → update logo_url → KV invalidate)
+// POST   /:id/logo                 → upload logo (multipart → CDN, new immutable URL per upload → update logo_url → KV invalidate)
 // DELETE /:id/logo                 → remove logo
 // POST   /:id/favicon              → upload favicon
 // DELETE /:id/favicon              → remove favicon
@@ -312,7 +314,7 @@ appsRouter.get("/:id/stats", async (c) => {
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM app_user WHERE app_id = ?").bind(id).first<{ n: number }>(),
     c.env.DB.prepare("SELECT COUNT(*) AS n FROM organization WHERE app_id = ?").bind(id).first<{ n: number }>(),
     c.env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM session WHERE app_id = ? AND expiresAt > ?"
+      `SELECT COUNT(*) AS n FROM session WHERE app_id = ? AND ${sessionExpiresAtMs()} > ?`
     ).bind(id, Date.now()).first<{ n: number }>(),
   ]);
 
@@ -347,6 +349,30 @@ appsRouter.get("/:id/stats", async (c) => {
 });
 
 // ── LOGO UPLOAD ───────────────────────────────────────────────────────────────
+//
+// Every upload gets its own CDN key and is stored as the CDN's direct URL, which
+// the CDN serves as `public, max-age=31536000, immutable`. The key is the cache
+// buster: a new logo is a new URL, so browsers never revalidate an old one and
+// the applications list can render hundreds of rows without touching Kova.
+// (Share links, which logos used before, are `max-age=300, must-revalidate` and
+// cost the CDN a KV write per view.)
+
+async function deleteCdnObject(env: Env, key: string): Promise<void> {
+  await fetch(`${env.CDN_URL}/files/${key}`, {
+    method: "DELETE",
+    headers: { "CDN-API-Key": env.CDN_API_KEY },
+  }).catch(() => { });
+}
+
+/**
+ * Best-effort removal of a replaced or removed logo. A stored URL is data, so
+ * only a key inside this app's own folder is ever deleted; share-link logos
+ * have no known key and stay.
+ */
+async function deleteAppLogo(env: Env, appId: string, logoUrl: string | null): Promise<void> {
+  const key = appAssetKey(env.CDN_URL, appId, logoUrl);
+  if (key) await deleteCdnObject(env, key);
+}
 
 appsRouter.post("/:id/logo", async (c) => {
   const session = await requireAdmin(c);
@@ -357,19 +383,29 @@ appsRouter.post("/:id/logo", async (c) => {
   if (!app) return Response.json({ error: "Not found" }, { status: 404 });
 
   const formData = await c.req.raw.formData().catch(() => null);
-  const file = formData?.get("file") as File | null;
-  if (!file) return Response.json({ error: "No file uploaded" }, { status: 400 });
+  const file = formData?.get("file");
+  if (!isFileLike(file)) return Response.json({ error: "No file uploaded" }, { status: 400 });
 
   // Validate size (max 2 MB)
   if (file.size > APP_LOGO_MAX_BYTES) {
     return Response.json({ error: "File too large (max 2 MB)" }, { status: 400 });
   }
 
-  // Upload to CDN via multipart form
+  // The bytes decide the type; the client's Content-Type is only a claim.
+  const bytes = await file.arrayBuffer();
+  const type = sniffImageType(new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 12)));
+  if (!type) {
+    return Response.json({ error: "Only JPEG, PNG and WebP images are accepted" }, { status: 400 });
+  }
+
+  const key = `apps/${id}/logo-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}.webp`;
   const uploadForm = new FormData();
-  uploadForm.append("file", file);
-  uploadForm.append("app", "kova-auth");
-  uploadForm.append("key", `apps/${id}/logo.webp`);
+  uploadForm.append("file", new File([bytes], "logo.webp", { type }));
+  uploadForm.append("app", CDN_APP);
+  uploadForm.append("key", key);
+  uploadForm.append("uploader", session.user.id);
+  uploadForm.append("tags", "app-logo");
+  uploadForm.append("cacheControl", "immutable");
 
   const cdnRes = await fetch(`${c.env.CDN_URL}/upload`, {
     method: "POST",
@@ -381,18 +417,22 @@ appsRouter.post("/:id/logo", async (c) => {
     return Response.json({ error: `CDN upload failed: ${await cdnErrorMessage(cdnRes)}` }, { status: 502 });
   }
 
-  const { key } = await cdnRes.json<{ key: string }>();
-  let logoUrl: string;
-  try {
-    logoUrl = await createCdnShareUrl(c.env, key, `${app.name} logo`, session.user.id);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : "Unknown error";
-    return Response.json({ error: `CDN share creation failed: ${detail}` }, { status: 502 });
+  const { url: logoUrl } = await cdnRes.json<{ url?: string }>();
+  if (!logoUrl) {
+    return Response.json({ error: "CDN upload response did not include a URL" }, { status: 502 });
+  }
+
+  // Same content scan as avatars. The upload is already public at its URL, so a
+  // rejected image is deleted right away and never stored on the application.
+  if (!(await scanUpload(c.env.CDN_URL, c.env.CDN_API_KEY, `${CDN_APP}/${key}`))) {
+    c.executionCtx.waitUntil(deleteCdnObject(c.env, `${CDN_APP}/${key}`));
+    return Response.json({ error: "Image rejected: content policy violation" }, { status: 422 });
   }
 
   // Persist URL + invalidate KV appearance cache
   await updateApplication(c.env.DB, id, { logo_url: logoUrl });
   invalidateAppKv(c.env.KV, app.publishable_key, id);
+  c.executionCtx.waitUntil(deleteAppLogo(c.env, id, app.logo_url));
 
   return Response.json({ logoUrl });
 });
@@ -407,6 +447,7 @@ appsRouter.delete("/:id/logo", async (c) => {
 
   await updateApplication(c.env.DB, id, { logo_url: null });
   invalidateAppKv(c.env.KV, app.publishable_key, id);
+  c.executionCtx.waitUntil(deleteAppLogo(c.env, id, app.logo_url));
 
   return Response.json({ ok: true });
 });

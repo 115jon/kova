@@ -30,6 +30,17 @@ export function sessionExpiryMs(expiresAt: unknown): number | null {
   return null;
 }
 
+/**
+ * `session.expiresAt` as epoch milliseconds, for SQL that compares it to a
+ * number. Better Auth writes integers, but insertAppScopedSession writes ISO
+ * text, and SQLite sorts every TEXT value above every INTEGER, so a bare
+ * `expiresAt > ?` counts expired app sessions as live forever. The SQL twin of
+ * sessionExpiryMs.
+ */
+export function sessionExpiresAtMs(column = "expiresAt"): string {
+  return `(CASE WHEN typeof(${column}) = 'text' THEN CAST(strftime('%s', ${column}) AS INTEGER) * 1000 ELSE ${column} END)`;
+}
+
 export function isSessionUnexpired(expiresAt: unknown, now = Date.now()): boolean {
   const ms = sessionExpiryMs(expiresAt);
   return ms !== null && ms > now;

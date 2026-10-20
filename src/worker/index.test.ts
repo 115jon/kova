@@ -139,6 +139,7 @@ describe("composed Worker boundary", () => {
     for (const path of [
       "/api/admin/apps",
       "/api/admin/apps/app-1/users",
+      "/api/admin/stats",
       "/api/admin/users/user-1",
       "/api/org/avatar/org-1",
       "/api/webhooks/endpoints",

@@ -19,6 +19,7 @@
 
 import { Hono } from "hono";
 import { createAuth } from "../../auth";
+import { sessionExpiresAtMs } from "../../lib/app-session";
 import { hasAdminRole } from "../../lib/roles";
 import { isFileLike } from "../../lib/cdn";
 
@@ -120,7 +121,7 @@ appUsersRouter.get("/:userId", async (c) => {
         u.emailVerified, u.createdAt,
         (SELECT COUNT(*) FROM session s WHERE s.userId = u.id AND s.app_id = ?1) AS sessionCount,
         (SELECT COUNT(*) FROM session s WHERE s.userId = u.id AND s.app_id = ?1
-           AND s.expiresAt > ?3) AS activeSessions
+           AND ${sessionExpiresAtMs("s.expiresAt")} > ?3) AS activeSessions
       FROM app_user au
       JOIN "user" u ON u.id = au.user_id
       WHERE au.app_id = ?1 AND au.user_id = ?2
@@ -255,7 +256,7 @@ appUsersRouter.get("/:userId/detail", async (c) => {
 
   // Active sessions for this app
   const sessionsRow = await c.env.DB
-    .prepare(`SELECT COUNT(*) as count FROM session WHERE userId = ? AND app_id = ? AND expiresAt > ?`)
+    .prepare(`SELECT COUNT(*) as count FROM session WHERE userId = ? AND app_id = ? AND ${sessionExpiresAtMs()} > ?`)
     .bind(userId, appId, nowMs)
     .first<{ count: number }>();
 

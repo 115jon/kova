@@ -10,6 +10,7 @@ import type { AuditAction } from "../audit";
 import { logAudit, queryAuditLogs } from "../audit";
 import { createAuth } from "../auth";
 import { parseDevice, parseGeo } from "../device";
+import { sessionExpiresAtMs } from "../lib/app-session";
 import { ALLOWED_IMAGE_TYPES, isFileLike, scanUpload } from "../lib/cdn";
 import { hasAdminRole } from "../lib/roles";
 import {
@@ -99,7 +100,7 @@ adminRouter.get("/users/:userId", async (c) => {
     .all<{ id: string; providerId: string; accountId: string; createdAt: number }>();
 
   const sessionsRow = await env.DB.prepare(
-    `SELECT COUNT(*) as count FROM session WHERE userId = ? AND expiresAt > ?`
+    `SELECT COUNT(*) as count FROM session WHERE userId = ? AND ${sessionExpiresAtMs()} > ?`
   )
     .bind(targetId, Date.now())
     .first<{ count: number }>();
@@ -339,6 +340,37 @@ adminRouter.patch("/users/:userId/fields", async (c) => {
   return Response.json({ fields });
 });
 
+// ── Platform stats ────────────────────────────────────────────────────────────
+//
+// GET /api/admin/stats
+// Platform-wide numbers for the overview. Better Auth's list-sessions cannot
+// stand in: it only lists the caller's own sessions, and it refuses any
+// session older than freshAge, which is why the overview used to show 0.
+adminRouter.get("/stats", async (c) => {
+  const { env } = c;
+  const request = c.req.raw;
+  const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session?.user) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+  if (!hasAdminRole((session.user as { role?: string }).role)) {
+    return Response.json({ error: "Admin access required" }, { status: 403 });
+  }
+
+  const row = await env.DB.prepare(
+    `SELECT (SELECT COUNT(*) FROM session WHERE ${sessionExpiresAtMs()} > ?) AS activeSessions,
+            (SELECT COUNT(*) FROM "user" WHERE banned = 1) AS bannedUsers`
+  )
+    .bind(Date.now())
+    .first<{ activeSessions: number; bannedUsers: number }>();
+
+  return Response.json(
+    { activeSessions: row?.activeSessions ?? 0, bannedUsers: row?.bannedUsers ?? 0 },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
+});
+
 // ── Sessions list ─────────────────────────────────────────────────────────────
 //
 // GET /api/admin/sessions   ?userId=
@@ -368,11 +400,11 @@ adminRouter.get("/sessions", async (c) => {
   if (filterUserId) {
     sessionsResult = await env.DB.prepare(
       `SELECT s.id, s.userId, s.userAgent, s.ipAddress,
-              s.createdAt, s.updatedAt, s.expiresAt,
+              s.createdAt, s.updatedAt, ${sessionExpiresAtMs("s.expiresAt")} AS expiresAt,
               u.name as userName, u.email as userEmail, u.image as userImage
        FROM session s
        JOIN "user" u ON u.id = s.userId
-       WHERE s.expiresAt > ? AND s.userId = ?
+       WHERE ${sessionExpiresAtMs("s.expiresAt")} > ? AND s.userId = ?
        ORDER BY s.updatedAt DESC`
     )
       .bind(nowMs, filterUserId)
@@ -380,11 +412,11 @@ adminRouter.get("/sessions", async (c) => {
   } else {
     sessionsResult = await env.DB.prepare(
       `SELECT s.id, s.userId, s.userAgent, s.ipAddress,
-              s.createdAt, s.updatedAt, s.expiresAt,
+              s.createdAt, s.updatedAt, ${sessionExpiresAtMs("s.expiresAt")} AS expiresAt,
               u.name as userName, u.email as userEmail, u.image as userImage
        FROM session s
        JOIN "user" u ON u.id = s.userId
-       WHERE s.expiresAt > ?
+       WHERE ${sessionExpiresAtMs("s.expiresAt")} > ?
        ORDER BY s.updatedAt DESC
        LIMIT 500`
     )
@@ -464,7 +496,7 @@ adminRouter.post("/sessions/revoke-all-others", async (c) => {
   }
 
   const nowMs = Date.now();
-  const result = await env.DB.prepare(`DELETE FROM session WHERE id != ? AND expiresAt > ?`)
+  const result = await env.DB.prepare(`DELETE FROM session WHERE id != ? AND ${sessionExpiresAtMs()} > ?`)
     .bind(exceptSessionId, nowMs)
     .run();
 
