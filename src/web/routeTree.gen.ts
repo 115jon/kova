@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WebhooksRouteImport } from './routes/webhooks'
 import { Route as UsersRouteImport } from './routes/users'
+import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionsRouteImport } from './routes/sessions'
@@ -37,6 +38,11 @@ const WebhooksRoute = WebhooksRouteImport.update({
 const UsersRoute = UsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignInRoute = SignInRouteImport.update({
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/users': typeof UsersRoute
   '/webhooks': typeof WebhooksRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
@@ -159,6 +166,7 @@ export interface FileRoutesByTo {
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/users': typeof UsersRoute
   '/webhooks': typeof WebhooksRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
@@ -181,6 +189,7 @@ export interface FileRoutesById {
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/users': typeof UsersRoute
   '/webhooks': typeof WebhooksRoute
   '/accept-invitation/$invitationId': typeof AcceptInvitationInvitationIdRoute
@@ -204,6 +213,7 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/sign-in'
+    | '/sign-up'
     | '/users'
     | '/webhooks'
     | '/accept-invitation/$invitationId'
@@ -225,6 +235,7 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/sign-in'
+    | '/sign-up'
     | '/users'
     | '/webhooks'
     | '/accept-invitation/$invitationId'
@@ -246,6 +257,7 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/sign-in'
+    | '/sign-up'
     | '/users'
     | '/webhooks'
     | '/accept-invitation/$invitationId'
@@ -268,6 +280,7 @@ export interface RootRouteChildren {
   SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
+  SignUpRoute: typeof SignUpRoute
   UsersRoute: typeof UsersRoute
   WebhooksRoute: typeof WebhooksRoute
   AcceptInvitationInvitationIdRoute: typeof AcceptInvitationInvitationIdRoute
@@ -293,6 +306,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/users'
       preLoaderRoute: typeof UsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-in': {
@@ -428,6 +448,7 @@ const rootRouteChildren: RootRouteChildren = {
   SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
+  SignUpRoute: SignUpRoute,
   UsersRoute: UsersRoute,
   WebhooksRoute: WebhooksRoute,
   AcceptInvitationInvitationIdRoute: AcceptInvitationInvitationIdRoute,

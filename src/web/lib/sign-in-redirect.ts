@@ -9,6 +9,11 @@ export type SignInRouteSearch = {
   add_account?: string;
   /** App nonce echoed back to redirect_url unchanged. */
   state?: string;
+  /**
+   * Better Auth's code when an emailed link or provider sign-in failed and sent
+   * the browser back here. Never carried onward; see canContinueWithSession.
+   */
+  error?: string;
 };
 
 export { safeOauthContinuePath };
@@ -25,6 +30,27 @@ export function searchParamString(value: unknown): string | undefined {
 
 export function isAddAccount(value: unknown): boolean {
   return value === "1" || value === "true" || value === "yes" || value === 1 || value === true;
+}
+
+/** Search handling shared by the sign-in and sign-up routes. */
+export function validateSignInSearch(search: Record<string, unknown>): SignInRouteSearch {
+  return {
+    pk: searchParamString(search.pk),
+    redirect_url: searchParamString(search.redirect_url),
+    native_handoff: searchParamString(search.native_handoff),
+    add_account: isAddAccount(search.add_account) ? "1" : undefined,
+    state: searchParamString(search.state),
+    error: searchParamString(search.error),
+  };
+}
+
+/**
+ * Whether the page may carry on with the session already in the browser. After
+ * a failed link that session belongs to someone else, so the page stops and
+ * says what went wrong instead of continuing as them.
+ */
+export function canContinueWithSession(search: Pick<SignInRouteSearch, "error">): boolean {
+  return !search.error;
 }
 
 export function safeApproveReturnPath(redirectUrl: string | undefined): string | null {
@@ -62,7 +88,10 @@ export function buildNativeHandoffPath(
   return `/api/hosted/oauth-complete?${params.toString()}`;
 }
 
-export function buildSignInReturnPath(search: SignInRouteSearch): string {
+export type AuthPage = "sign-in" | "sign-up";
+
+/** Path of the sign-in or sign-up page carrying the app context along. */
+export function buildAuthPagePath(page: AuthPage, search: SignInRouteSearch): string {
   const params = new URLSearchParams();
 
   if (search.pk) params.set("pk", search.pk);
@@ -74,7 +103,11 @@ export function buildSignInReturnPath(search: SignInRouteSearch): string {
   if (search.state) params.set("state", search.state);
 
   const query = params.toString();
-  return query ? `/sign-in?${query}` : "/sign-in";
+  return query ? `/${page}?${query}` : `/${page}`;
+}
+
+export function buildSignInReturnPath(search: SignInRouteSearch): string {
+  return buildAuthPagePath("sign-in", search);
 }
 
 export function buildSignInReturnUrl(

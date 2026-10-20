@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { appSignInUrl } from "../../worker/lib/sign-in-url";
 import {
+  buildAuthPagePath,
+  canContinueWithSession,
+  validateSignInSearch,
   buildNativeHandoffPath,
   buildSignInReturnUrl,
   isAddAccount,
@@ -51,6 +54,27 @@ describe("sign-in redirect helpers", () => {
     expect(buildSignInReturnUrl(search, "https://auth.example")).toBe(
       "https://auth.example/sign-in?pk=pk_dev_float&redirect_url=float%3A%2F%2Fauth&state=nonce-1",
     );
+  });
+
+  it("links sign-in and sign-up to each other with the app context intact", () => {
+    const search = { pk: "pk_dev_float", redirect_url: "float://auth", state: "nonce-1" };
+    expect(buildAuthPagePath("sign-up", search)).toBe(
+      "/sign-up?pk=pk_dev_float&redirect_url=float%3A%2F%2Fauth&state=nonce-1",
+    );
+    expect(buildAuthPagePath("sign-in", search)).toBe(
+      "/sign-in?pk=pk_dev_float&redirect_url=float%3A%2F%2Fauth&state=nonce-1",
+    );
+    expect(buildAuthPagePath("sign-up", {})).toBe("/sign-up");
+  });
+
+  it("stops carrying on with the browser's session after a failed link", () => {
+    const failed = validateSignInSearch({ pk: "pk_dev_float", redirect_url: "float://auth", error: "INVALID_TOKEN" });
+    expect(failed.error).toBe("INVALID_TOKEN");
+    expect(canContinueWithSession(failed)).toBe(false);
+    expect(canContinueWithSession(validateSignInSearch({ pk: "pk_dev_float" }))).toBe(true);
+    // The error is for this page view only: links between pages drop it.
+    expect(buildAuthPagePath("sign-in", failed)).not.toContain("error");
+    expect(buildNativeHandoffPath(failed)).not.toContain("error");
   });
 
   it("builds the app sign-in URL the dashboard shows and the hosted alias forwards to", () => {

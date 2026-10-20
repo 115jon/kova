@@ -10,13 +10,15 @@ import {
 import { describe, expect, it } from "vitest";
 import { parseSearch, stringifySearch } from "../lib/router-search";
 import { Route as signInRoute } from "./sign-in";
+import { Route as signUpRoute } from "./sign-up";
 
-async function renderSignIn(search: string) {
+async function renderSignIn(search: string, page: "sign-in" | "sign-up" = "sign-in") {
   const root = createRootRoute({ component: Outlet });
-  const route = signInRoute.update({ id: "/sign-in", path: "/sign-in", getParentRoute: () => root } as never);
+  const base = page === "sign-in" ? signInRoute : signUpRoute;
+  const route = base.update({ id: `/${page}`, path: `/${page}`, getParentRoute: () => root } as never);
   const router = createRouter({
     routeTree: root.addChildren([route]),
-    history: createMemoryHistory({ initialEntries: [`/sign-in${search}`] }),
+    history: createMemoryHistory({ initialEntries: [`/${page}${search}`] }),
     parseSearch,
     stringifySearch,
   });
@@ -36,5 +38,14 @@ describe("sign-in server render", () => {
     const html = await renderSignIn("?pk=pk_dev_x&redirect_url=float%3A%2F%2Fauth&state=1e5");
     expect(html).toContain("app-auth-placeholder");
     expect(html).not.toContain("<!--$!-->");
+  });
+
+  it("renders the sign-up page in the same frames", async () => {
+    const kova = await renderSignIn("", "sign-up");
+    expect(kova).toContain("app-auth-shell is-kova");
+    expect(kova).not.toContain("<!--$!-->");
+    const app = await renderSignIn("?pk=pk_dev_x&redirect_url=float%3A%2F%2Fauth", "sign-up");
+    expect(app).toContain("app-auth-placeholder");
+    expect(app).not.toContain("<!--$!-->");
   });
 });
