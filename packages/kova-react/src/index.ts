@@ -89,7 +89,7 @@ export type {
 
 
 // ── Key utilities ─────────────────────────────────────────────────────────────
-export { decodePublishableKey, encodePublishableKey } from "./key";
+export { KOVA_HOSTED_AUTH_URL, decodePublishableKey, encodePublishableKey } from "./key";
 export type { DecodedKey } from "./key";
 
 // ── Webhook verification ───────────────────────────────────────────────────────

@@ -1,22 +1,20 @@
 /**
  * Publishable key utilities.
  *
- * A publishable key is a **client-side URL encoding convenience** — it encodes
- * the auth server URL in a Clerk-compatible format so consumers don't have to
- * manage raw URLs directly:
+ * Kova issues opaque publishable keys: `pk_dev_<random>` or `pk_live_<random>`.
+ * The key identifies the application; it does not encode where Kova runs.
+ * The auth URL therefore comes from, in order:
  *
- *   pk_live_<base64(JSON.stringify(payload))>
- *   pk_test_<base64(JSON.stringify(payload))>
+ *   1. the `authUrl` prop,
+ *   2. a legacy self-describing key (`pk_live_|pk_test_` + base64 JSON
+ *      `{ v: 1, authUrl, appId? }`, produced by `encodePublishableKey`),
+ *   3. the hosted Kova service, {@link KOVA_HOSTED_AUTH_URL}.
  *
- * Payload: `{ v: 1, authUrl: string, appId?: string }`
- *
- * ⚠️  IMPORTANT: The kova-auth server does NOT validate, register, or enforce
- *    publishable keys. There is no key-generation API or key-lookup endpoint.
- *    The key is simply a way to encode the server URL into a single opaque string.
- *    It contains NO secrets and is safe to embed in client-side code.
- *
- * If you prefer simplicity, pass `authUrl` directly to `<KovaAuthProvider>`.
+ * Self-hosted or local Kova instances must pass `authUrl`.
  */
+
+/** Hosted Kova service used when neither `authUrl` nor a self-describing key names one. */
+export const KOVA_HOSTED_AUTH_URL = "https://auth.115jon.site";
 
 const PREFIX_LIVE = "pk_live_";
 const PREFIX_TEST = "pk_test_";
@@ -33,13 +31,11 @@ interface KeyPayload {
 // ── Encode ────────────────────────────────────────────────────────────────────
 
 /**
- * Creates a publishable key from an auth server URL.
+ * Creates a legacy self-describing publishable key from an auth server URL.
+ * Kova's dashboard does not issue these; prefer the server-issued key plus
+ * `authUrl`.
  *
- * @example
- * ```ts
- * const key = encodePublishableKey("https://auth.example.com");
- * // → "pk_live_eyJ2IjoxLCJhdXRoVXJsIjoiaHR0cHM6Ly9hdXRoLmV4YW1wbGUuY29tIn0="
- * ```
+ * @deprecated Use the publishable key from the Kova dashboard.
  */
 export function encodePublishableKey(
   authUrl: string,
@@ -60,11 +56,10 @@ export interface DecodedKey {
 }
 
 /**
- * Decodes a publishable key back to its constituent parts.
- *
- * @throws {Error} If the key is malformed or has an unknown payload version.
+ * Decodes a legacy self-describing publishable key.
+ * Returns null for Kova's opaque server-issued keys or anything malformed.
  */
-export function decodePublishableKey(key: string): DecodedKey {
+export function decodePublishableKey(key: string): DecodedKey | null {
   let mode: "live" | "test";
   let encoded: string;
 
@@ -75,19 +70,14 @@ export function decodePublishableKey(key: string): DecodedKey {
     mode = "test";
     encoded = key.slice(PREFIX_TEST.length);
   } else {
-    throw new Error(
-      `[KovaAuth] Invalid publishable key: expected "pk_live_..." or "pk_test_...". ` +
-        `Got: "${key.slice(0, 20)}..."`,
-    );
+    return null;
   }
 
   let payload: unknown;
   try {
     payload = JSON.parse(atob(encoded));
   } catch {
-    throw new Error(
-      "[KovaAuth] Failed to decode publishable key — base64 decode or JSON parse error.",
-    );
+    return null;
   }
 
   if (
@@ -96,36 +86,23 @@ export function decodePublishableKey(key: string): DecodedKey {
     (payload as KeyPayload).v !== 1 ||
     typeof (payload as KeyPayload).authUrl !== "string"
   ) {
-    throw new Error(
-      "[KovaAuth] Publishable key payload is invalid. " +
-        "Please re-generate your key from the dashboard.",
-    );
+    return null;
   }
 
   const { authUrl, appId } = payload as KeyPayload;
-
-  return {
-    authUrl: authUrl.replace(/\/$/, ""), // strip trailing slash
-    appId,
-    mode,
-  };
+  return { authUrl: authUrl.replace(/\/$/, ""), appId, mode };
 }
 
 // ── Resolve ───────────────────────────────────────────────────────────────────
 
-/**
- * Resolves the auth URL from either a publishable key or a direct URL.
- * Throws a descriptive error if neither is provided.
- */
+/** Resolves the Kova base URL for a provider; see the module comment for precedence. */
 export function resolveAuthUrl(opts: {
   publishableKey?: string;
   authUrl?: string;
 }): string {
-  if (opts.authUrl) {
-    return opts.authUrl.replace(/\/$/, "");
-  }
+  if (opts.authUrl) return opts.authUrl.replace(/\/$/, "");
   if (opts.publishableKey) {
-    return decodePublishableKey(opts.publishableKey).authUrl;
+    return decodePublishableKey(opts.publishableKey)?.authUrl ?? KOVA_HOSTED_AUTH_URL;
   }
   throw new Error(
     "[KovaAuth] You must provide either `publishableKey` or `authUrl` to <KovaAuthProvider>.",

@@ -207,14 +207,14 @@ export interface PluginConfig {
 export interface KovaAuthConfig {
   /**
    * Publishable key from your kova-auth dashboard.
-   * Format: `pk_live_<base64>` or `pk_test_<base64>`.
-   * Encodes the auth server URL — no need to pass `authUrl` separately.
+   * Format: `pk_dev_<random>` or `pk_live_<random>`. It identifies the
+   * application only; it does not encode the auth server URL.
    */
   publishableKey?: string;
 
   /**
-   * Auth server base URL.
-   * Required when `publishableKey` is not provided.
+   * Auth server base URL. Defaults to the hosted Kova service
+   * (`https://auth.115jon.site`); set it for a self-hosted or local Kova.
    * @example "https://auth.115jon.site"
    */
   authUrl?: string;
