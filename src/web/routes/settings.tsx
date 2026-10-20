@@ -439,7 +439,10 @@ function PasskeysSection({ hasCredential, providers }: { hasCredential: boolean;
           twoFactorEnabled={!!(session.user as any).twoFactorEnabled}
           providers={providers}
           hasPasskey={passkeys.length > 0}
-          onConfirmed={() => setSuccess("You're confirmed. Select Add passkey to finish.")}
+          onConfirmed={() => {
+            setSuccess("You're confirmed. Select Add passkey to finish.");
+            authClient.$store.notify("$sessionSignal");
+          }}
           onClose={() => setConfirming(false)}
         />
       )}

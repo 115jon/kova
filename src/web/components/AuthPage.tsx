@@ -126,7 +126,7 @@ function KovaAuthPage({ search, mode }: { search: SignInRouteSearch; mode: AuthP
             <FailedLinkNotice error={search.error} />
             {mode === "sign-up"
               ? <SignUp afterSignUpUrl={signInReturnPath} signInUrl={signInReturnPath} />
-              : <SignIn afterSignInUrl={signInReturnPath} signUpUrl={buildAuthPagePath("sign-up", search)} />}
+              : <SignIn afterSignInUrl={signInReturnPath} signUpUrl={buildAuthPagePath("sign-up", search)} forgotPasswordUrl={buildAuthPagePath("reset-password", search)} />}
           </KovaAuthProvider>
         ) : (
           <div className="app-auth-placeholder" role="status" aria-label="Loading sign-in" />
@@ -310,7 +310,11 @@ function AppAuthPage({ pk, search, mode }: { pk: string; search: SignInRouteSear
                 )}
                 {mode === "sign-up"
                   ? <SignUp afterSignUpUrl={signInPath} signInUrl={signInPath} />
-                  : <SignIn afterSignInUrl={afterSignInUrl} signUpUrl={buildAuthPagePath("sign-up", { ...search, add_account: undefined })} />}
+                  : <SignIn
+                      afterSignInUrl={afterSignInUrl}
+                      signUpUrl={buildAuthPagePath("sign-up", { ...search, add_account: undefined })}
+                      forgotPasswordUrl={buildAuthPagePath("reset-password", { ...search, add_account: undefined })}
+                    />}
               </>
             )}
           </KovaAuthProvider>

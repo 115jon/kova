@@ -311,6 +311,11 @@ function render(config: HostedBootstrap): void {
     card.appendChild(legal);
   }
   card.appendChild(footer);
+  if (!isSignUp) {
+    const forgot = el("p", { class: "ra-foot" });
+    forgot.appendChild(el("a", { href: `${config.mainAuthUrl}/reset-password?pk=${encodeURIComponent(config.publishableKey)}` }, "Forgot password?"));
+    card.appendChild(forgot);
+  }
 
   if (!config.hideBranding) {
     card.appendChild(el("p", { class: "ra-brand" }, "Secured by Kova"));
@@ -438,7 +443,7 @@ async function submitPassword(
     );
     if (!result.ok) {
       if (needsTwoFactor(result.status, result.data)) {
-        input.showError("This account requires two-factor authentication. Enable it from the dashboard, then try again.");
+        input.showError("This account uses two-factor authentication, which this page can't complete. Continue with a provider above.");
       } else {
         input.showError(errorMessage(
           result.data,

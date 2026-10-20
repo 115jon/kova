@@ -819,7 +819,7 @@ function DashboardRoot() {
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const menuToggleRef = React.useRef<HTMLButtonElement>(null);
-  const isPublic = ["/sign-in", "/sign-up", "/auth-error", "/oauth/continue"].some(p => location.pathname === p)
+  const isPublic = ["/sign-in", "/sign-up", "/auth-error", "/reset-password", "/oauth/continue"].some(p => location.pathname === p)
     || location.pathname.startsWith("/accept-invitation")
     || location.pathname.startsWith("/approve/")
     || (location.pathname === "/" && !session);

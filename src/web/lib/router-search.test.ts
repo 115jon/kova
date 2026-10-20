@@ -9,6 +9,10 @@ describe("opaque sign-in search values", () => {
     expect(parseSearch(`?${search}`)).toMatchObject({ pk: "pk_dev_x", redirect_url: "float://auth", state });
   });
 
+  it.each(["123456", "1e5", "true"])("keeps reset token %s as typed", (token) => {
+    expect(parseSearch(`?token=${token}`)).toMatchObject({ token });
+  });
+
   it("still parses other values the way the router does", () => {
     expect(parseSearch("?add_account=1&page=2&flag=true&name=abc")).toEqual({
       add_account: 1,

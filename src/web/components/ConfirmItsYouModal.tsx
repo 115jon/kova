@@ -2,17 +2,18 @@
  * "Confirm it's you": the way out of Better Auth's SESSION_NOT_FRESH (see
  * lib/fresh-session.ts). A fresh session only comes from signing in again, so
  * this signs in again on top of the current one, with whatever the account has:
- * a password, a linked provider, a passkey, or, when it has none of those, an
- * emailed link. It never signs out first, so cancelling or failing costs nothing.
+ * a password (plus a code when 2FA is on), a linked provider, a passkey, or,
+ * when it has none of those, an emailed link. It never signs out first, so
+ * cancelling or failing costs nothing.
  *
- * Accounts with two-factor never take the password path. Better Auth's
- * two-factor plugin answers a password sign-in on such an account by deleting
- * the new session and expiring the browser's session cookies until a code is
- * verified, and the dashboard sends a signed-out browser to /sign-in, so a code
- * step could not even stay on screen. See confirmMethods. If the server asks for
- * a code anyway (the 2FA flag was stale), the previous session is switched back
- * on with multiSession.setActive, which needs no session: it only reads the
- * signed `_multi-<token>` cookie the old session still has.
+ * On a 2FA account a password sign-in deletes the new session and expires the
+ * browser's session cookies until a code is verified, so there is a short window
+ * with no session. The password and the code are collected on one form and the
+ * two requests go back to back, through a separate client (lib/reauth-client.ts)
+ * so the dashboard's useSession never sees the gap and redirects to /sign-in.
+ * If anything fails inside the window, multiSession.setActive switches the
+ * previous session back on from its signed `_multi-<token>` cookie. If that
+ * restore itself fails the browser is signed out, the pre-existing worst case.
  *
  * Password and passkey finish in place. Better Auth's multi-session hook
  * deletes the browser's other sessions of the same user whenever a new one is
@@ -26,11 +27,12 @@
 
 import { ProviderIcon } from "@/components/BrandIcons";
 import { Modal, ModalHeader, useModalClose } from "@/components/Modal";
-import { getSession, multiSession, signIn } from "@/lib/auth-client";
-import { confirmMethods } from "@/lib/fresh-session";
+import { getSession, signIn } from "@/lib/auth-client";
+import { classifySecondFactor, confirmMethods, normalizeBackupCode } from "@/lib/fresh-session";
+import { createReauthClient } from "@/lib/reauth-client";
 import { SOCIAL_PROVIDERS } from "@/lib/providers";
 import { AlertCircle, CheckCircle, Fingerprint, Mail, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const RETURN_TO = "/settings";
 
@@ -67,7 +69,10 @@ function ConfirmForm({ email, hasPassword, twoFactorEnabled, providers, hasPassk
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const [code, setCode] = useState("");
   const methods = confirmMethods({ hasPassword, twoFactorEnabled, hasPasskey, providers });
+  const reauth = useMemo(createReauthClient, []);
+  const [needsCode, setNeedsCode] = useState(methods.code);
   const social = SOCIAL_PROVIDERS.filter((p) => p.configured && methods.providers.includes(p.id));
 
   const attempt = async (action: () => Promise<void>) => {
@@ -90,19 +95,36 @@ function ConfirmForm({ email, hasPassword, twoFactorEnabled, providers, hasPassk
   const withPassword = (e: React.FormEvent) => {
     e.preventDefault();
     void attempt(async () => {
-      // Read the 2FA flag from the database, not the cached cookie: a password sign-in on a
-      // 2FA account signs this browser out, so it must not start on a stale answer.
+      // Read the 2FA flag from the database, not the cached cookie.
       const current = (await getSession({ query: { disableCookieCache: true } })).data;
-      if (current?.user.twoFactorEnabled) {
-        throw new Error("This account uses two-factor authentication. Confirm another way.");
-      }
       const previousToken = current?.session.token;
-      const res = await signIn.email({ email, password });
+      const kind = classifySecondFactor(code);
+      if (current?.user.twoFactorEnabled && !kind) {
+        setNeedsCode(true);
+        throw new Error("Enter the code from your authenticator app, or a backup code.");
+      }
+      const res = await reauth.signIn.email({ email, password });
       if (res.error) throw new Error(res.error.message || "That password isn't right.");
-      if ((res.data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect) {
-        // The plugin has just signed this browser out. Put the previous session back.
-        if (previousToken) await multiSession.setActive({ sessionToken: previousToken }).catch(() => { });
-        throw new Error("This account uses two-factor authentication. Confirm another way.");
+      if (!(res.data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect) {
+        finish();
+        return;
+      }
+      const restore = () =>
+        previousToken
+          ? reauth.multiSession.setActive({ sessionToken: previousToken }).then(() => {}, () => {})
+          : Promise.resolve();
+      if (!kind) {
+        await restore();
+        setNeedsCode(true);
+        throw new Error("This account uses two-factor authentication. Enter your code too.");
+      }
+      const verified =
+        kind === "totp"
+          ? await reauth.twoFactor.verifyTotp({ code: code.replace(/\s+/g, ""), trustDevice: false })
+          : await reauth.twoFactor.verifyBackupCode({ code: normalizeBackupCode(code), trustDevice: false });
+      if (verified.error) {
+        await restore();
+        throw new Error(verified.error.message || "That code isn't right.");
       }
       finish();
     });
@@ -166,6 +188,22 @@ function ConfirmForm({ email, hasPassword, twoFactorEnabled, providers, hasPassk
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+          </div>
+        )}
+
+        {methods.password && needsCode && (
+          <div className="form-group">
+            <label className="form-label" htmlFor="reauth-code">Authenticator or backup code</label>
+            <input
+              id="reauth-code"
+              className="input"
+              type="text"
+              autoComplete="one-time-code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              required
+            />
+            <p className="text-sm text-tertiary">6 digits from your authenticator app, or one of your backup codes</p>
           </div>
         )}
 

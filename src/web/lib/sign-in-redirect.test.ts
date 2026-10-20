@@ -4,6 +4,7 @@ import {
   buildAuthPagePath,
   canContinueWithSession,
   validateSignInSearch,
+  validateResetPasswordSearch,
   buildNativeHandoffPath,
   buildSignInReturnUrl,
   isAddAccount,
@@ -182,6 +183,22 @@ describe("sign-in redirect helpers", () => {
 
       const handoffPath = buildNativeHandoffPath(webSearch);
       expect(handoffPath).toBeNull();
+    });
+  });
+});
+
+describe("reset-password page helpers", () => {
+  it("builds the reset path carrying app context", () => {
+    expect(buildAuthPagePath("reset-password", { pk: "pk_x", redirect_url: "float://auth", state: "n1" }))
+      .toBe("/reset-password?pk=pk_x&redirect_url=float%3A%2F%2Fauth&state=n1");
+    expect(buildAuthPagePath("reset-password", {})).toBe("/reset-password");
+  });
+
+  it("keeps only string search values", () => {
+    expect(validateResetPasswordSearch({ pk: "pk_x", token: "abc", error: "INVALID_TOKEN", state: 5, redirect_url: {} }))
+      .toEqual({ pk: "pk_x", token: "abc", error: "INVALID_TOKEN", state: "5", redirect_url: undefined });
+    expect(validateResetPasswordSearch({ token: ["a"], error: null })).toEqual({
+      pk: undefined, redirect_url: undefined, state: undefined, token: undefined, error: undefined,
     });
   });
 });

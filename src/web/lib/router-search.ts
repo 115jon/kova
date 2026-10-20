@@ -6,7 +6,7 @@ import { defaultParseSearch, defaultStringifySearch } from "@tanstack/react-rout
  * app gets back unchanged, so they skip JSON in both directions. Both halves
  * are needed: the router rewrites the URL from what it parsed.
  */
-const OPAQUE_KEYS = new Set(["state", "redirect_url"]);
+const OPAQUE_KEYS = new Set(["state", "redirect_url", "token"]);
 
 export function parseSearch(searchStr: string): Record<string, unknown> {
   const search = defaultParseSearch(searchStr) as Record<string, unknown>;

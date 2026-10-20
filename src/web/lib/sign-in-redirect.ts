@@ -53,6 +53,21 @@ export function canContinueWithSession(search: Pick<SignInRouteSearch, "error">)
   return !search.error;
 }
 
+export type ResetPasswordSearch = Pick<SignInRouteSearch, "pk" | "redirect_url" | "state"> & {
+  token?: string;
+  error?: string;
+};
+
+export function validateResetPasswordSearch(search: Record<string, unknown>): ResetPasswordSearch {
+  return {
+    pk: searchParamString(search.pk),
+    redirect_url: searchParamString(search.redirect_url),
+    state: searchParamString(search.state),
+    token: searchParamString(search.token),
+    error: searchParamString(search.error),
+  };
+}
+
 export function safeApproveReturnPath(redirectUrl: string | undefined): string | null {
   if (!redirectUrl) return null;
   const trimmed = redirectUrl.trim();
@@ -88,9 +103,9 @@ export function buildNativeHandoffPath(
   return `/api/hosted/oauth-complete?${params.toString()}`;
 }
 
-export type AuthPage = "sign-in" | "sign-up";
+export type AuthPage = "sign-in" | "sign-up" | "reset-password";
 
-/** Path of the sign-in or sign-up page carrying the app context along. */
+/** Path of the sign-in, sign-up or reset-password page carrying the app context along. */
 export function buildAuthPagePath(page: AuthPage, search: SignInRouteSearch): string {
   const params = new URLSearchParams();
 

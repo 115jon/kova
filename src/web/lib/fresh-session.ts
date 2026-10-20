@@ -14,11 +14,11 @@ export function isSessionNotFresh(error: unknown): boolean {
 /**
  * Which ways "Confirm it's you" offers for an account.
  *
- * A password sign-in on a 2FA account is the one to avoid: Better Auth's
- * two-factor plugin deletes the new session and expires the browser's own
- * session cookies until a code is verified, and the dashboard sends a signed-out
- * browser to /sign-in. Providers, passkeys and email links do not go through
- * that hook, so 2FA accounts use those instead.
+ * A password sign-in on a 2FA account deletes the new session and expires the
+ * browser's session cookies until a code is verified, so the modal collects the
+ * password and the code on one form and sends both requests back to back. That
+ * makes `code` true for password accounts with 2FA. Accounts with no password,
+ * passkey or provider get an emailed link as the last resort.
  */
 export function confirmMethods(account: {
   hasPassword: boolean;
@@ -26,12 +26,25 @@ export function confirmMethods(account: {
   hasPasskey: boolean;
   providers: readonly string[];
 }) {
-  const password = account.hasPassword && !account.twoFactorEnabled;
   return {
-    password,
+    password: account.hasPassword,
+    code: account.hasPassword && account.twoFactorEnabled,
     passkey: account.hasPasskey,
     providers: account.providers,
-    // The last resort, so there is always a way through.
-    emailLink: !password && !account.hasPasskey && account.providers.length === 0,
+    emailLink: !account.hasPassword && !account.hasPasskey && account.providers.length === 0,
   };
+}
+
+/** Tells an authenticator code from a backup code. */
+export function classifySecondFactor(code: string): "totp" | "backup" | null {
+  const trimmed = code.trim();
+  if (/^\d{6}$/.test(trimmed.replace(/\s+/g, ""))) return "totp";
+  if (/^[A-Za-z0-9]{5}-?[A-Za-z0-9]{5}$/.test(trimmed)) return "backup";
+  return null;
+}
+
+/** Backup codes are stored as `xxxxx-xxxxx`. */
+export function normalizeBackupCode(code: string): string {
+  const raw = code.replace(/[\s-]+/g, "");
+  return `${raw.slice(0, 5)}-${raw.slice(5)}`;
 }

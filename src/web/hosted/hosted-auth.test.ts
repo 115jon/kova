@@ -78,7 +78,7 @@ class Node {
   addEventListener(event: string, listener: () => void) { this.listeners[event] = listener; }
 }
 function descendants(node: Node): Node[] { return [node, ...node.children.flatMap(descendants)]; }
-function renderPage(returnPath?: string, enabledProviders = ["google", "github"]) {
+function renderPage(returnPath?: string, enabledProviders = ["google", "github"], page = "sign-in") {
   const root = new Node("main");
   root.id = "root";
   const head = new Node("head");
@@ -92,7 +92,7 @@ function renderPage(returnPath?: string, enabledProviders = ["google", "github"]
     location: { assign },
     __KOVA_AUTH_HOSTED__: {
       publishableKey: "pk_test", authUrl: "https://test.auth.example", mainAuthUrl: "https://auth.example",
-      redirectUri: "", state: "", mode: "live", page: "sign-in", oauthCtx: "signed.context",
+      redirectUri: "", state: "", mode: "live", page, oauthCtx: "signed.context",
       appearance: { primaryColor: "#5865f2", backgroundColor: "#070709", theme: "dark", logoUrl: null },
       app: { id: "app", name: "Ralph Meet", homeUrl: null, termsUrl: "https://app.example/terms", privacyUrl: null },
       hideBranding: true, enabledProviders: enabledProviders as string[], returnPath,
@@ -116,6 +116,15 @@ describe("hosted sign-in rendering", () => {
     expect(url.searchParams.get("ctx")).toBe("signed.context");
     github!.listeners.click!();
     expect(new URL(assign.mock.calls[1]?.[0] as string).searchParams.get("provider")).toBe("github");
+  });
+  it("links to the reset page on the main auth origin", () => {
+    const { nodes } = renderPage();
+    const link = nodes.find(node => node.tag === "a" && node.textContent === "Forgot password?");
+    expect(link?.attributes.href).toBe("https://auth.example/reset-password?pk=pk_test");
+  });
+  it("has no reset link on the sign-up page", () => {
+    const { nodes } = renderPage(undefined, ["google", "github"], "sign-up");
+    expect(nodes.find(node => node.tag === "a" && node.textContent === "Forgot password?")).toBeUndefined();
   });
   it("omits providers when none are enabled", () => {
     expect(renderPage(undefined, []).nodes.some(node => node.textContent.includes("Continue with"))).toBe(false);

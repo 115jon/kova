@@ -15,6 +15,7 @@ import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionsRouteImport } from './routes/sessions'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as OrganizationsRouteImport } from './routes/organizations'
 import { Route as OauthAppsRouteImport } from './routes/oauth-apps'
 import { Route as AuthErrorRouteImport } from './routes/auth-error'
@@ -58,6 +59,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SessionsRoute = SessionsRouteImport.update({
   id: '/sessions',
   path: '/sessions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrganizationsRoute = OrganizationsRouteImport.update({
@@ -141,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/auth-error': typeof AuthErrorRoute
   '/oauth-apps': typeof OauthAppsRoute
   '/organizations': typeof OrganizationsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/auth-error': typeof AuthErrorRoute
   '/oauth-apps': typeof OauthAppsRoute
   '/organizations': typeof OrganizationsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
@@ -186,6 +194,7 @@ export interface FileRoutesById {
   '/auth-error': typeof AuthErrorRoute
   '/oauth-apps': typeof OauthAppsRoute
   '/organizations': typeof OrganizationsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
@@ -210,6 +219,7 @@ export interface FileRouteTypes {
     | '/auth-error'
     | '/oauth-apps'
     | '/organizations'
+    | '/reset-password'
     | '/sessions'
     | '/settings'
     | '/sign-in'
@@ -232,6 +242,7 @@ export interface FileRouteTypes {
     | '/auth-error'
     | '/oauth-apps'
     | '/organizations'
+    | '/reset-password'
     | '/sessions'
     | '/settings'
     | '/sign-in'
@@ -254,6 +265,7 @@ export interface FileRouteTypes {
     | '/auth-error'
     | '/oauth-apps'
     | '/organizations'
+    | '/reset-password'
     | '/sessions'
     | '/settings'
     | '/sign-in'
@@ -277,6 +289,7 @@ export interface RootRouteChildren {
   AuthErrorRoute: typeof AuthErrorRoute
   OauthAppsRoute: typeof OauthAppsRoute
   OrganizationsRoute: typeof OrganizationsRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
@@ -334,6 +347,13 @@ declare module '@tanstack/react-router' {
       path: '/sessions'
       fullPath: '/sessions'
       preLoaderRoute: typeof SessionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/organizations': {
@@ -445,6 +465,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthErrorRoute: AuthErrorRoute,
   OauthAppsRoute: OauthAppsRoute,
   OrganizationsRoute: OrganizationsRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
