@@ -14,7 +14,10 @@ import {
   type Application, type AppOAuthProvider,
 } from "@/hooks/use-applications";
 import { useSession } from "@/lib/auth-client";
+import { CONFIGURED_PROVIDERS } from "@/lib/providers";
 import { relativeTime } from "@/lib/utils";
+import { appSignInLook } from "@/lib/app-sign-in";
+import { appSignInUrl } from "../../worker/lib/sign-in-url";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle, AlertTriangle, ArrowLeft, Ban, CheckCircle,
@@ -145,40 +148,70 @@ function OverviewTab({ app }: { app: Application }) {
         </div>
       </div>
 
-      {/* Auth subdomain panel */}
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <div className="panel-header"><p className="panel-title">Auth Domain</p></div>
-        <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
-          {app.auth_slug ? (
-            <>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.73rem", color: "var(--color-text-secondary)", flexShrink: 0 }}>Sign-in URL</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                  <code style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 280 }}>
-                    {app.auth_slug}.auth.115jon.site
-                  </code>
-                  <CopyBtn value={`https://${app.auth_slug}.auth.115jon.site`} label="Copy URL" />
-                  <a
-                    href={`https://${app.auth_slug}.auth.115jon.site/sign-in`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-ghost"
-                    style={{ padding: "3px 7px", fontSize: "0.72rem" }}
-                  >
-                    <Globe size={11} /> Open
-                  </a>
-                </div>
-              </div>
-              <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", margin: 0 }}>
-                Auth slug is <strong style={{ color: "var(--color-text-secondary)" }}>immutable</strong> — changing it would break existing redirect configs. Custom domains can be set in Settings.
-              </p>
-            </>
-          ) : (
-            <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.73rem", color: "var(--color-text-tertiary)", margin: 0 }}>
-              Auth slug not yet assigned. Recreate the app or apply migration 0018.
+      <SignInUrlsPanel app={app} />
+    </div>
+  );
+}
+
+function UrlRow({ label, url, open = true }: { label: string; url: string; open?: boolean }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)" }}>{label}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        <code style={{
+          flex: 1, minWidth: 0, fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-primary)",
+          background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: 4,
+          padding: "6px 9px", overflowWrap: "anywhere",
+        }}>
+          {url}
+        </code>
+        <CopyBtn value={url} />
+        {open && (
+          <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ padding: "3px 7px", fontSize: "0.72rem" }}>
+            <Globe size={11} /> Open
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// The dashboard is served from AUTH_URL, so its origin is the auth URL integrators use.
+function SignInUrlsPanel({ app }: { app: Application }) {
+  if (typeof window === "undefined") return null;
+  const authOrigin = window.location.origin;
+  const aliasHost = app.custom_domain ?? (app.auth_slug ? `${app.auth_slug}.${window.location.host}` : null);
+  const muted: React.CSSProperties = { fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)", margin: 0, lineHeight: 1.6 };
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div className="panel-header"><p className="panel-title">Sign-in URL</p></div>
+      <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <p style={muted}>
+          Send users to this page. It shows this app&apos;s Appearance and Providers settings, then returns
+          to the redirect URL with <code>?kova_auth_code=…</code>. Exchange the code once at{" "}
+          <code>POST /api/pub/apps/{"{pk}"}/exchange-code</code>; <code>@115jon/kova-react</code> does this for you.
+        </p>
+        {app.redirect_uris.length > 0 ? (
+          app.redirect_uris.map(uri => (
+            <UrlRow key={uri} label={`Returns to ${uri}`} url={appSignInUrl(authOrigin, app.publishable_key, uri)} />
+          ))
+        ) : (
+          <p style={{ ...muted, color: "var(--color-amber)" }}>
+            No redirect URIs yet. Add your app&apos;s callback (for example https://app.example.com/auth/callback or myapp://auth) in Settings to get a working URL.
+          </p>
+        )}
+        <UrlRow label="Preview (no redirect)" url={appSignInUrl(authOrigin, app.publishable_key)} />
+        <UrlRow label="Auth URL (SDK authUrl, KOVA_AUTH_URL)" url={authOrigin} open={false} />
+        {aliasHost && (
+          <>
+            <UrlRow label="Hosted alias" url={`https://${aliasHost}/sign-in`} />
+            <p style={muted}>
+              A short per-app address that forwards to the sign-in page above. Append{" "}
+              <code>?redirect_url=…</code> to return to your app.
             </p>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -511,7 +544,7 @@ function AppearanceTab({ app, isPlatformAdmin = false, onFormChange }: { app: Ap
           )}
         </div>
         <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)", margin: 0 }}>
-          When enabled, a "Powered by kova-auth" badge appears in the sign-in footer. Disable it on paid plans.
+          Shows "Secured by Kova" in the sign-in footer. Paid plans can hide it.
         </p>
         <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: canHideBranding ? "pointer" : "not-allowed", opacity: canHideBranding ? 1 : 0.45, userSelect: "none" }}>
           <div
@@ -530,7 +563,7 @@ function AppearanceTab({ app, isPlatformAdmin = false, onFormChange }: { app: Ap
             }} />
           </div>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)" }}>
-            {form.hide_branding ? "Branding hidden" : 'Show "Powered by kova-auth"'}
+            {form.hide_branding ? "Branding hidden" : 'Show "Secured by Kova"'}
           </span>
         </label>
       </div>
@@ -743,167 +776,96 @@ const PREV_ICONS: Record<string, React.ReactElement> = {
   ),
 };
 
-const PREV_PROVIDER_LABEL: Record<string, string> = {
-  google: "Google", github: "GitHub", discord: "Discord",
-  microsoft: "Microsoft", apple: "Apple", facebook: "Facebook",
-};
-
-function LoginPreview({ app, primaryColor, backgroundColor, logoUrl, displayName, enabledProviders, hideBranding = false, isDevMode = false }: {
+// Mirrors the app-branded /sign-in?pk=… page (src/web/routes/sign-in.tsx) with
+// unsaved form values, using the same colors, so edits show before they are saved.
+function LoginPreview({ app, primaryColor, backgroundColor, theme, logoUrl, displayName, enabledProviders, hideBranding = false, isDevMode = false }: {
   app: Application;
   primaryColor: string;
   backgroundColor: string;
+  theme: "dark" | "light" | "auto";
   logoUrl: string | null;
   displayName: string;
   enabledProviders: string[];
   hideBranding?: boolean;
   isDevMode?: boolean;
 }) {
-  const [activeTab, setActiveTab] = useState("email");
-  const bg = backgroundColor || "#0a0a0a";
-  const primary = primaryColor || "#3b82f6";
-  const surf = "#111111";
-  const surfRaised = "#1a1a1a";
-  const border = "rgba(255,255,255,0.08)";
-  const borderStrong = "rgba(255,255,255,0.14)";
-  const textP = "#f5f5f5";
-  const textS = "#a0a0a0";
-  const textT = "#606060";
-  const mono = "'JetBrains Mono', 'Fira Code', monospace";
+  const prefersDark = typeof window === "undefined" || window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const look = appSignInLook({ primaryColor, backgroundColor, theme }, prefersDark);
+  const v = look.variables;
   const name = displayName || app.name;
-  const providers = enabledProviders.length > 0
-    ? enabledProviders
-    : ["google", "github", "discord", "microsoft"];
+  const providers = CONFIGURED_PROVIDERS.filter(p => enabledProviders.includes(p.id));
+  const font = "var(--font-sans)";
+  const field: React.CSSProperties = {
+    background: v.colorSurfaceRaised, border: `1px solid ${v.colorBorder}`, borderRadius: 6,
+    padding: "7px 9px", fontSize: "0.64rem", color: v.colorTextTertiary,
+  };
+  const fieldLabel: React.CSSProperties = { fontSize: "0.6rem", fontWeight: 500, color: v.colorTextSecondary, margin: "0 0 4px" };
 
   return (
     <div style={{ flex: "0 0 300px", position: "sticky", top: 20, alignSelf: "flex-start" }}>
-      <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Live preview</p>
-      {/* Outer bg shell — matches SDK's data-ra-root background */}
-      <div style={{ background: bg, borderRadius: 14, padding: "28px 18px", border: "1px solid rgba(255,255,255,0.06)", boxShadow: "0 24px 64px rgba(0,0,0,0.7)" }}>
-        {/* Card shell — matches [data-ra-element="card"] */}
-        <div style={{ background: surf, border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", maxWidth: 380, margin: "0 auto", boxShadow: "0 24px 48px rgba(0,0,0,0.45)" }}>
-
-          {/* CardHeader */}
-          <div style={{ padding: "22px 22px 0" }}>
+      <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Sign-in page preview</p>
+      <div style={{
+        background: `radial-gradient(ellipse 90% 55% at 50% -18%, color-mix(in oklab, ${look.primary} ${look.backdrop === "dark" ? 16 : 10}%, transparent), transparent 72%), ${look.background}`,
+        borderRadius: 10, padding: "24px 16px 14px", border: "1px solid var(--color-border)", fontFamily: font,
+      }}>
+        <div style={{ background: v.colorSurface, border: `1px solid ${v.colorBorder}`, borderRadius: 10, padding: "20px 16px 12px" }}>
+          <div style={{ textAlign: "center", marginBottom: 14 }}>
             {logoUrl ? (
-              <img src={logoUrl} alt="" style={{ width: 32, height: 32, objectFit: "contain", marginBottom: 12, borderRadius: 6 }} />
+              <img src={logoUrl} alt="" style={{ width: 32, height: 32, objectFit: "contain", borderRadius: 8, display: "block", margin: "0 auto 10px" }} />
             ) : (
-              <div style={{ width: 32, height: 32, borderRadius: 6, background: `color-mix(in srgb, ${primary} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${primary} 25%, transparent)`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                <Globe size={15} color={primary} />
+              <div style={{ width: 32, height: 32, borderRadius: 8, margin: "0 auto 10px", background: `color-mix(in oklab, ${look.primary} 16%, transparent)`, border: `1px solid color-mix(in oklab, ${look.primary} 40%, transparent)`, color: look.primary, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: "0.9rem" }}>
+                {name.trim().charAt(0).toUpperCase() || "?"}
               </div>
             )}
-            <p style={{ fontFamily: mono, fontWeight: 700, fontSize: "0.95rem", color: textP, margin: "0 0 5px", letterSpacing: "-0.025em" }}>Sign in</p>
-            <p style={{ fontFamily: mono, fontSize: "0.72rem", color: textS, margin: "0 0 18px", lineHeight: 1.6 }}>
-              Welcome back. Choose your sign-in method.
-            </p>
+            <p style={{ fontWeight: 600, fontSize: "0.86rem", color: v.colorText, margin: 0, overflowWrap: "anywhere" }}>Sign in to {name}</p>
+            <p style={{ fontSize: "0.62rem", color: v.colorTextSecondary, margin: "3px 0 0" }}>Welcome back. Choose your sign-in method.</p>
           </div>
 
-          {/* CardBody */}
-          <div style={{ padding: "0 22px 18px" }}>
-            {/* Social buttons */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 16 }}>
-              {providers.slice(0, 4).map(pid => (
-                <div key={pid} style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 12px", background: surfRaised, border: `1px solid ${border}`, borderRadius: 5, cursor: "default" }}>
-                  {PREV_ICONS[pid] ?? <div style={{ width: 16, height: 16, borderRadius: 3, background: primary, opacity: 0.6 }} />}
-                  <span style={{ fontFamily: mono, fontSize: "0.76rem", fontWeight: 500, color: textP }}>
-                    Continue with {PREV_PROVIDER_LABEL[pid] ?? pid}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Divider */}
-            <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 16 }}>
-              <div style={{ flex: 1, height: 1, background: border }} />
-              <span style={{ fontFamily: mono, fontSize: "0.65rem", color: textT }}>or</span>
-              <div style={{ flex: 1, height: 1, background: border }} />
-            </div>
-
-            {/* Method tabs */}
-            <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${border}`, marginBottom: 16 }}>
-              {[{ id: "email", label: "Password" }, { id: "magic", label: "Magic Link" }, { id: "passkey", label: "Passkey" }].map(t => (
-                <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
-                  flex: 1, background: "transparent", border: "none",
-                  borderBottom: `2px solid ${activeTab === t.id ? primary : "transparent"}`,
-                  padding: "7px 8px", cursor: "pointer",
-                  fontFamily: mono, fontSize: "0.72rem", fontWeight: 500,
-                  color: activeTab === t.id ? primary : textT,
-                  transition: "color 0.15s, border-color 0.15s",
-                }}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Email+password form */}
-            {activeTab === "email" && (
-              <>
-                <div style={{ marginBottom: 12 }}>
-                  <p style={{ fontFamily: mono, fontSize: "0.72rem", fontWeight: 500, color: textS, marginBottom: 5, letterSpacing: "-0.01em" }}>Email address</p>
-                  <div style={{ background: surfRaised, border: `1px solid ${border}`, borderRadius: 5, padding: "8px 11px", fontFamily: mono, fontSize: "0.8rem", color: textT }}>you@example.com</div>
-                </div>
-                <div style={{ marginBottom: 14 }}>
-                  <p style={{ fontFamily: mono, fontSize: "0.72rem", fontWeight: 500, color: textS, marginBottom: 5, letterSpacing: "-0.01em" }}>Password</p>
-                  <div style={{ background: surfRaised, border: `1px solid ${border}`, borderRadius: 5, padding: "8px 11px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontFamily: mono, fontSize: "0.82rem", color: textT }}>••••••••••••</span>
-                    <Lock size={11} color={textT} />
+          {providers.length > 0 && (
+            <>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {providers.map(p => (
+                  <div key={p.id} style={{ ...field, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: v.colorText, fontWeight: 500 }}>
+                    {PREV_ICONS[p.id]}
+                    Continue with {p.name}
                   </div>
-                </div>
-                <div style={{ background: primary, color: "#fff", borderRadius: 5, padding: "9px 14px", fontFamily: mono, fontSize: "0.82rem", fontWeight: 600, textAlign: "center", cursor: "default", letterSpacing: "-0.01em" }}>
-                  Continue
-                </div>
-              </>
-            )}
-
-            {activeTab === "magic" && (
-              <>
-                <div style={{ marginBottom: 14 }}>
-                  <p style={{ fontFamily: mono, fontSize: "0.72rem", fontWeight: 500, color: textS, marginBottom: 5 }}>Email address</p>
-                  <div style={{ background: surfRaised, border: `1px solid ${border}`, borderRadius: 5, padding: "8px 11px", fontFamily: mono, fontSize: "0.8rem", color: textT }}>you@example.com</div>
-                </div>
-                <div style={{ background: primary, color: "#fff", borderRadius: 5, padding: "9px 14px", fontFamily: mono, fontSize: "0.82rem", fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, cursor: "default" }}>
-                  <Mail size={14} /> Send sign-in link
-                </div>
-              </>
-            )}
-
-            {activeTab === "passkey" && (
-              <div style={{ background: surfRaised, border: `1px solid ${border}`, borderRadius: 5, padding: "9px 14px", fontFamily: mono, fontSize: "0.82rem", fontWeight: 600, color: textP, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, cursor: "default" }}>
-                <span style={{ fontSize: "1rem" }}>🪪</span> Sign in with passkey
+                ))}
               </div>
-            )}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0" }}>
+                <div style={{ flex: 1, height: 1, background: v.colorBorder }} />
+                <span style={{ fontSize: "0.56rem", color: v.colorTextTertiary }}>or</span>
+                <div style={{ flex: 1, height: 1, background: v.colorBorder }} />
+              </div>
+            </>
+          )}
+
+          <div style={{ display: "flex", borderBottom: `1px solid ${v.colorBorder}`, marginBottom: 10 }}>
+            {["Password", "Magic Link", "Passkey"].map((tab, i) => (
+              <span key={tab} style={{ flex: 1, textAlign: "center", fontSize: "0.58rem", fontWeight: 500, padding: "5px 0", color: i === 0 ? v.colorText : v.colorTextTertiary, borderBottom: `2px solid ${i === 0 ? look.primary : "transparent"}` }}>{tab}</span>
+            ))}
           </div>
-
-          {/* CardFooter */}
-          <div style={{ padding: "10px 22px 16px", textAlign: "center", borderTop: `1px solid ${borderStrong}`, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-            <div>
-              <span style={{ fontFamily: mono, fontSize: "0.74rem", color: textT }}>Don't have an account? </span>
-              <span style={{ fontFamily: mono, fontSize: "0.74rem", color: primary, cursor: "default" }}>Sign up</span>
-            </div>
-            {/* Branding badge */}
-            {!hideBranding && (
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6, opacity: 0.7 }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10" fill={primary} opacity="0.9" />
-                  <path d="M8 16V8h5a3 3 0 0 1 0 6H8" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-                <span style={{ fontFamily: mono, fontSize: "0.64rem", color: textT }}>Secured by kova-auth</span>
-              </div>
-            )}
-            {/* Dev instance badge */}
-            {isDevMode && (
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 6, paddingTop: 6, borderTop: `1px dashed rgba(255,255,255,0.1)`, width: "100%", justifyContent: "center" }}>
-                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#f59e0b", display: "inline-block" }} />
-                <span style={{ fontFamily: mono, fontSize: "0.6rem", color: "#f59e0b", letterSpacing: "0.05em", fontWeight: 600 }}>DEVELOPMENT INSTANCE</span>
-              </div>
-            )}
+          <p style={fieldLabel}>Email address</p>
+          <div style={{ ...field, marginBottom: 7 }}>you@example.com</div>
+          <p style={fieldLabel}>Password</p>
+          <div style={{ ...field, marginBottom: 9, display: "flex", justifyContent: "space-between" }}>
+            ••••••••<Lock size={10} />
           </div>
+          <div style={{ background: look.primary, color: "#fff", borderRadius: 6, padding: "7px", fontSize: "0.66rem", fontWeight: 500, textAlign: "center" }}>
+            Continue
+          </div>
+          {!hideBranding && (
+            <p style={{ textAlign: "center", fontSize: "0.56rem", color: v.colorTextTertiary, margin: "10px 0 0" }}>Secured by Kova</p>
+          )}
         </div>
+        {isDevMode && (
+          <p style={{ textAlign: "center", margin: "10px 0 0", fontSize: "0.54rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--color-amber)" }}>
+            Development
+          </p>
+        )}
       </div>
     </div>
   );
 }
-
-
 
 // Providers that our platform has actually configured OAuth credentials for.
 // Apple and Facebook are shown in the list but default to OFF since we haven't
@@ -953,7 +915,7 @@ function ProvidersTab({ app, onProvidersChange }: { app: Application; onProvider
     const providers = PROVIDER_META.map(p => ({ id: p.id, enabled: local[p.id] ?? PLATFORM_CONFIGURED_PROVIDERS.has(p.id) }));
     try {
       await setProviders.mutateAsync({ appId: app.id, providers });
-      setOk("Provider settings saved. Changes appear in the SDK within 5 minutes (KV cache TTL).");
+      setOk("Provider settings saved.");
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); }
   };
 
@@ -965,8 +927,8 @@ function ProvidersTab({ app, onProvidersChange }: { app: Application; onProvider
         <div>
           <p className="panel-title" style={{ margin: 0 }}><SlidersHorizontal size={14} />OAuth Providers</p>
           <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)", marginTop: 4 }}>
-            Controls which sign-in buttons appear in the SDK. If none are enabled, all are shown (fallback).
-            Changes take effect within 5 minutes (KV cache).
+            Controls which social buttons appear on the app&apos;s sign-in page and in the SDK.
+            Turning all of them off leaves email, passkey, and email-link sign-in.
           </p>
         </div>
 
@@ -1196,6 +1158,12 @@ function AppDetailPage() {
   // Live form state — bubbled up from AppearanceTab / ProvidersTab for the preview
   const [liveAppearance, setLiveAppearance] = useState<AppearanceForm | null>(null);
   const [liveProviders, setLiveProviders] = useState<string[] | null>(null);
+  // Saved provider state, so the Appearance preview is right before the
+  // Providers tab has been opened.
+  const { data: savedProviderRows } = useAppOAuthProviders(appId);
+  const savedProviders = PROVIDER_META
+    .filter(p => savedProviderRows?.find(r => r.id === p.id)?.enabled ?? PLATFORM_CONFIGURED_PROVIDERS.has(p.id))
+    .map(p => p.id);
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "overview", label: "Overview", icon: TrendingUp },
@@ -1280,9 +1248,10 @@ function AppDetailPage() {
             app={app}
             primaryColor={liveAppearance?.primary_color ?? app.primary_color ?? "#3b82f6"}
             backgroundColor={liveAppearance?.background_color ?? app.background_color ?? "#0a0a0a"}
+            theme={liveAppearance?.theme ?? app.theme ?? "dark"}
             logoUrl={app.logo_url}
             displayName={liveAppearance?.display_name || app.display_name || app.name}
-            enabledProviders={liveProviders ?? []}
+            enabledProviders={liveProviders ?? savedProviders}
             hideBranding={liveAppearance?.hide_branding ?? app.hide_branding ?? false}
             isDevMode={app.environment === "development"}
           />
@@ -1297,9 +1266,10 @@ function AppDetailPage() {
             app={app}
             primaryColor={liveAppearance?.primary_color ?? app.primary_color ?? "#3b82f6"}
             backgroundColor={liveAppearance?.background_color ?? app.background_color ?? "#0a0a0a"}
+            theme={liveAppearance?.theme ?? app.theme ?? "dark"}
             logoUrl={app.logo_url}
             displayName={liveAppearance?.display_name || app.display_name || app.name}
-            enabledProviders={liveProviders ?? []}
+            enabledProviders={liveProviders ?? savedProviders}
             hideBranding={liveAppearance?.hide_branding ?? app.hide_branding ?? false}
             isDevMode={app.environment === "development"}
           />
