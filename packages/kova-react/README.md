@@ -43,7 +43,7 @@ import App from "./App";
 
 createRoot(document.getElementById("root")!).render(
   <KovaAuthProvider
-    publishableKey="pk_live_eyJ2Ij..."  // from your kova-auth dashboard
+    publishableKey="pk_live_..."         // from your app's Overview tab in the Kova dashboard
     afterSignInUrl="/dashboard"
     afterSignUpUrl="/onboarding"
     afterSignOutUrl="/sign-in"
@@ -53,10 +53,11 @@ createRoot(document.getElementById("root")!).render(
 );
 ```
 
-Or, if you don't have a publishable key yet, pass `authUrl` directly:
+The provider talks to the hosted Kova service (`https://auth.115jon.site`) by
+default. For a self-hosted or local Kova, also pass `authUrl`:
 
 ```tsx
-<KovaAuthProvider authUrl="https://auth.example.com">
+<KovaAuthProvider authUrl="https://auth.lvh.me" publishableKey="pk_dev_...">
   <App />
 </KovaAuthProvider>
 ```
@@ -193,18 +194,12 @@ All elements are also addressable via the `data-ra-element` attribute in plain C
 
 ## Publishable Key
 
-Generate a key for your auth server URL:
+Kova issues opaque keys (`pk_dev_...` for development apps, `pk_live_...` for
+production apps). A key identifies your application; it is not a secret and it
+does not encode the auth server URL. Copy it from the app's Overview tab.
 
-```ts
-import { encodePublishableKey, decodePublishableKey } from "@115jon/kova-react";
-
-// Encode
-const key = encodePublishableKey("https://auth.example.com", { mode: "live" });
-// → "pk_live_eyJ2IjoxLCJhdXRoVXJsIjoiaHR0cHM6Ly9hdXRoLmV4YW1wbGUuY29tIn0="
-
-// Decode
-const { authUrl, mode } = decodePublishableKey(key);
-```
+`encodePublishableKey` / `decodePublishableKey` remain for older self-describing
+keys only. `decodePublishableKey` returns `null` for keys Kova issues.
 
 ---
 

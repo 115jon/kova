@@ -119,13 +119,15 @@ export function AppRoot() {
 }
 ```
 
-The publishable key encodes the auth URL in normal Kova usage, so this is also valid:
+Publishable keys are opaque (`pk_dev_*` / `pk_live_*`) and do not encode the auth URL. `authUrl` defaults to the hosted service, `https://auth.115jon.site`, so this is also valid against hosted Kova:
 
 ```tsx
 <KovaAuthProvider publishableKey={import.meta.env.VITE_KOVA_AUTH_PUBLISHABLE_KEY}>
   <App />
 </KovaAuthProvider>
 ```
+
+Pass `authUrl` for a self-hosted or local Kova (for example `https://auth.lvh.me`).
 
 Use the supplied components for the normal flow:
 
@@ -221,17 +223,21 @@ The transfer code is high-entropy, publishable-key-bound, single-use, and short-
 
 The SDK removes `kova_auth_code` from browser history immediately. Custom integrations must do the same to reduce URL/referrer leakage.
 
-### Hosted per-application authentication
+### Kova-hosted sign-in page
 
-For an auth experience isolated on a Kova-managed host, use the application's generated auth slug:
+Every application has one sign-in URL. The app's Overview tab in the dashboard shows it, with one copyable URL per registered redirect URI:
 
 ```text
-https://{auth_slug}.auth.example.com/sign-in
+{KOVA_AUTH_URL}/sign-in?pk={publishable_key}&redirect_url={registered redirect URI}
 ```
 
-Hosted pages use cookies scoped to the exact application subdomain. This prevents session cookies from bleeding across sibling applications. Hosted sign-in can issue an authorization ticket, which the application backend exchanges using its secret key.
+- The page uses the app's Appearance settings (display name, logo, primary and background colors, theme, terms/privacy links, "Secured by Kova") and its enabled Providers.
+- `redirect_url` must exactly match a registered redirect URI. The page refuses an unregistered one before showing the form, and the handoff re-checks it.
+- After sign-in Kova redirects to `redirect_url?kova_auth_code=...` (also sent as `code=`, plus `state=` when the link carried one). Exchange the code once with `POST {KOVA_AUTH_URL}/api/pub/apps/{pk}/exchange-code` and body `{ "code": "..." }`. The response holds the app-scoped session token. `@kova/react` does this automatically.
+- `native_handoff=1` is a legacy hint. It is accepted and not required.
+- `https://{auth_slug}.auth.115jon.site/sign-in?redirect_url=...` (or the app's custom domain) is a short alias that forwards to the same page. It also accepts `redirect_uri`, and passes `state` through.
 
-Use hosted auth when you need Kova-controlled UI/branding or a central login domain. Use the embedded SDK when the application owns the login page composition.
+Use the hosted page when you want Kova to own the login UI, and for native apps. Use the embedded SDK components when the application owns the login page composition. Both read the same Appearance and Providers settings.
 
 ## Backend Authentication
 
@@ -363,11 +369,11 @@ Native clients cannot rely on a browser cookie in the same way as a web app. Use
 Recommended flow:
 
 ```text
-Native app opens https://app.example.com/sign-in?redirect_url=exampleapp://auth&native_handoff=1
+Native app opens {KOVA_AUTH_URL}/sign-in?pk={pk}&redirect_url=exampleapp://auth
 User signs in in the system browser
 Kova redirects to exampleapp://auth?kova_auth_code=...
 Native app receives the deep link
-Native app exchanges the code or lets @kova/react consume it
+Native app POSTs the code to /api/pub/apps/{pk}/exchange-code, or lets @kova/react consume it
 Native app stores the app-scoped token in OS-protected storage
 Native API calls send Authorization: Bearer <token>
 ```
