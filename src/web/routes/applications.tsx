@@ -1,3 +1,4 @@
+import { AppLogo } from "@/components/AppLogo";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { Modal, ModalHeader, ModalScrollBody } from "@/components/Modal";
 import {
@@ -233,9 +234,7 @@ function AppCard({ app, onDelete }: { app: Application; onDelete: (id: string, n
         />
       )}
 
-      <span className={`icon-tile icon-tile-lg ${isProd ? "tone-success" : ""}`} aria-hidden="true">
-        <Layers />
-      </span>
+      <AppLogo name={app.name} logoUrl={app.logo_url} />
 
       {/* Name + key: the name opens the detail page */}
       <div className="list-row-main stack-sm" style={{ gap: 4 }}>

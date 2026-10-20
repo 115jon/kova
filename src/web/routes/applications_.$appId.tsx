@@ -1,3 +1,4 @@
+import { AppLogo } from "@/components/AppLogo";
 import { ProviderIcon } from "@/components/BrandIcons";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { Modal, ModalHeader } from "@/components/Modal";
@@ -39,6 +40,8 @@ export const Route = createFileRoute("/applications_/$appId")({
 
 type Tab = "overview" | "users" | "appearance" | "providers" | "email" | "billing" | "settings";
 
+// Same list the server accepts for logos.
+const LOGO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const APP_LOGO_MAX_BYTES = 2 * 1024 * 1024;
 const APP_FAVICON_MAX_BYTES = 512 * 1024;
 const APP_LOGO_MAX_LABEL = "2 MB";
@@ -440,8 +443,12 @@ function AppearanceTab({ app, isPlatformAdmin = false, onFormChange }: { app: Ap
       setErr(`${kind === "logo" ? "Logo" : "Favicon"} is too large. Maximum size is ${maxLabel}.`);
       return;
     }
-    if (!file.type.startsWith("image/") && !(kind === "favicon" && file.name.toLowerCase().endsWith(".ico"))) {
-      setErr(`${kind === "logo" ? "Logo" : "Favicon"} must be an image file.`);
+    if (kind === "logo" && !LOGO_TYPES.includes(file.type)) {
+      setErr("Logo must be a JPEG, PNG or WebP image.");
+      return;
+    }
+    if (kind === "favicon" && !file.type.startsWith("image/") && !file.name.toLowerCase().endsWith(".ico")) {
+      setErr("Favicon must be an image file.");
       return;
     }
     try {
@@ -484,7 +491,7 @@ function AppearanceTab({ app, isPlatformAdmin = false, onFormChange }: { app: Ap
               </button>
               {app.logo_url && <button type="button" className="btn btn-danger btn-sm btn-icon" aria-label="Remove logo" title="Remove logo" onClick={() => deleteLogo.mutate({ id: app.id })}><Trash2 /></button>}
             </div>
-            <input ref={logoRef} type="file" accept="image/*" aria-label="Upload logo" style={{ display: "none" }}
+            <input ref={logoRef} type="file" accept={LOGO_TYPES.join(",")} aria-label="Upload logo" style={{ display: "none" }}
               onChange={e => { const f = e.target.files?.[0]; if (f) void uploadAsset("logo", f); e.currentTarget.value = ""; }} />
           </div>
 
@@ -1198,11 +1205,7 @@ function AppDetailPage() {
         <div className="page-header-main">
           <p className="section-label">Application</p>
           <div className="row" style={{ gap: 12 }}>
-            {app.logo_url ? (
-              <img src={app.logo_url} alt="" style={{ width: 40, height: 40, borderRadius: "var(--radius-md)", objectFit: "contain", flexShrink: 0 }} />
-            ) : (
-              <span className="icon-tile icon-tile-lg" aria-hidden="true"><Globe /></span>
-            )}
+            <AppLogo name={app.display_name ?? app.name} logoUrl={app.logo_url} />
             <div className="min-w-0">
               <h1 className="page-title">{app.display_name ?? app.name}</h1>
               <p className="page-subtitle">

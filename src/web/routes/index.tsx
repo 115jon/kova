@@ -50,7 +50,7 @@ function OverviewPage() {
       </header>
 
       <div className="stat-grid">
-        {isLoading || isError || !stats ? (
+        {isLoading ? (
           [0, 1, 2, 3].map(i => (
             <div key={i} className="card stat-card" aria-hidden="true">
               <span className="skeleton" style={{ width: 36, height: 36, borderRadius: "var(--radius-md)" }} />
@@ -62,9 +62,10 @@ function OverviewPage() {
           ))
         ) : (
           <>
-            <StatCard label="Total users" value={stats.totalUsers} icon={Users} />
-            <StatCard label="Active sessions" value={stats.activeSessions} icon={Activity} tone="tone-success" />
-            <StatCard label="Banned users" value={stats.bannedUsers} icon={Shield} tone="tone-danger" />
+            {/* A failed request shows dashes, never a number that could be mistaken for a real zero. */}
+            <StatCard label="Total users" value={stats?.totalUsers ?? "—"} icon={Users} />
+            <StatCard label="Active sessions" value={stats?.activeSessions ?? "—"} icon={Activity} tone="tone-success" />
+            <StatCard label="Banned users" value={stats?.bannedUsers ?? "—"} icon={Shield} tone="tone-danger" />
             <StatCard label="Providers" value="2 active" icon={Globe} />
           </>
         )}
@@ -82,6 +83,12 @@ function OverviewPage() {
         {isLoading ? (
           <div className="skeleton-rows" aria-label="Loading recent signups" role="status">
             <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
+          </div>
+        ) : isError ? (
+          <div className="empty-state">
+            <span className="empty-state-icon" aria-hidden="true"><Users /></span>
+            <p className="empty-state-title">Couldn't load recent signups</p>
+            <p className="empty-state-body">Refresh to try again.</p>
           </div>
         ) : recentUsers.length === 0 ? (
           <div className="empty-state">

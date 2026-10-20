@@ -324,7 +324,8 @@ export function useUploadLogo() {
       if (!res.ok) throw new Error(data.error ?? "Upload failed");
       return { logoUrl: data.logoUrl! };
     },
-    onSuccess: (_v, { id }) => void qc.invalidateQueries({ queryKey: appKeys.detail(id) }),
+    // The list shows the logo too.
+    onSuccess: () => void qc.invalidateQueries({ queryKey: appKeys.all }),
   });
 }
 
@@ -335,7 +336,8 @@ export function useDeleteLogo() {
       const res = await fetch(`/api/admin/apps/${id}/logo`, { method: "DELETE", credentials: "include" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     },
-    onSuccess: (_v, { id }) => void qc.invalidateQueries({ queryKey: appKeys.detail(id) }),
+    // The list shows the logo too.
+    onSuccess: () => void qc.invalidateQueries({ queryKey: appKeys.all }),
   });
 }
 

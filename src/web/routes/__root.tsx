@@ -5,7 +5,8 @@ import { OrgAvatar } from "@/components/OrgAvatar";
 import { KovaLogo } from "@/components/KovaLogo";
 import { multiSession, organization, signOut, useActiveOrganization, useListOrganizations, useSession } from "@/lib/auth-client";
 import { queryClient } from "@/lib/query-client";
-import { THEME_BOOT_SCRIPT, toggleTheme, useTheme } from "@/lib/theme";
+import { useSearchShortcut } from "@/lib/shortcut";
+import { setThemePreference, THEME_BOOT_SCRIPT, THEME_OPTIONS, useTheme, type ThemePreference } from "@/lib/theme";
 import { createRootRoute, HeadContent, Link, Outlet, Scripts, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
@@ -21,6 +22,7 @@ import {
   Layers,
   LogOut,
   Menu,
+  Monitor,
   Moon,
   PlusCircle,
   RefreshCw,
@@ -31,6 +33,7 @@ import {
   UserCircle,
   Users,
   Webhook,
+  X,
 } from "lucide-react";
 import React from "react";
 import appCss from "../styles.css?url";
@@ -84,8 +87,16 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, EBSta
   }
 }
 
+const THEME_ICONS = { light: Sun, dark: Moon, system: Monitor } as const satisfies Record<ThemePreference, React.ElementType>;
+const THEME_ACTIONS: Record<ThemePreference, string> = {
+  light: "Switch to light theme",
+  dark: "Switch to dark theme",
+  system: "Follow system theme",
+};
+
 // ── Command Palette (Cmd+K) ───────────────────────────────────────────────────
 // Opens and closes without animation: it is keyboard-driven and used constantly.
+// Below 640px it becomes a sheet pinned to the top of the visual viewport.
 
 interface PaletteItem {
   id: string;
@@ -117,12 +128,57 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
   const [copied, setCopied] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const searchTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { resolved: theme } = useTheme();
+  const { preference } = useTheme();
+  const overlayRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     const trigger = document.activeElement as HTMLElement | null;
     inputRef.current?.focus();
     return () => { trigger?.focus?.(); };
+  }, []);
+
+  // Phones only: the page behind stays put, and the sheet follows the visual
+  // viewport, because the on-screen keyboard shrinks that but not the layout
+  // viewport, which would leave the list behind the keys. It re-evaluates if
+  // the screen crosses the breakpoint while open (rotation, a resized window).
+  React.useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    const phone = window.matchMedia("(max-width: 640px)");
+    const viewport = window.visualViewport;
+    let release = () => {};
+
+    const apply = () => {
+      release();
+      release = () => {};
+      if (!phone.matches) {
+        overlay.style.removeProperty("--vv-top");
+        overlay.style.removeProperty("--vv-height");
+        return;
+      }
+      const overflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      const sync = () => {
+        if (!viewport) return;
+        overlay.style.setProperty("--vv-top", `${viewport.offsetTop}px`);
+        overlay.style.setProperty("--vv-height", `${viewport.height}px`);
+      };
+      sync();
+      viewport?.addEventListener("resize", sync);
+      viewport?.addEventListener("scroll", sync);
+      release = () => {
+        viewport?.removeEventListener("resize", sync);
+        viewport?.removeEventListener("scroll", sync);
+        document.body.style.overflow = overflow;
+      };
+    };
+
+    apply();
+    phone.addEventListener("change", apply);
+    return () => {
+      phone.removeEventListener("change", apply);
+      release();
+    };
   }, []);
 
   React.useEffect(() => {
@@ -161,16 +217,18 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
       action: () => { window.location.href = `/users/${u.id}`; onClose(); },
     }));
 
-    const extras: PaletteItem[] = [];
-    if (!q || "toggle theme dark light".includes(q)) {
-      extras.push({
-        id: "toggle-theme",
-        label: "Toggle theme",
-        sublabel: theme === "dark" ? "Switch to light" : "Switch to dark",
-        icon: theme === "dark" ? <Sun /> : <Moon />,
-        action: () => { toggleTheme(); onClose(); },
+    // Only the choices that would change something; the topbar menu shows the current one.
+    const extras: PaletteItem[] = THEME_OPTIONS
+      .filter(({ value, label }) => value !== preference && (!q || `theme appearance ${label}`.toLowerCase().includes(q)))
+      .map(({ value }) => {
+        const Icon = THEME_ICONS[value];
+        return {
+          id: `theme:${value}`,
+          label: THEME_ACTIONS[value],
+          icon: <Icon />,
+          action: () => { setThemePreference(value); onClose(); },
+        };
       });
-    }
     if (currentUserId && (!q || "copy id".includes(q))) {
       extras.push({
         id: "copy-id",
@@ -186,7 +244,7 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
     }
 
     return [...navItems, ...userItems, ...extras];
-  }, [query, userResults, currentUserId, copied, navigate, onClose, theme]);
+  }, [query, userResults, currentUserId, copied, navigate, onClose, preference]);
 
   React.useEffect(() => { setActiveIdx(0); }, [items.length]);
 
@@ -201,7 +259,7 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
   const activeId = items[activeIdx] ? `palette-${items[activeIdx]!.id}` : undefined;
 
   return (
-    <div className="palette-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div ref={overlayRef} className="palette-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="palette" role="dialog" aria-modal="true" aria-label="Command palette">
         <div className="palette-search">
           <Search aria-hidden="true" />
@@ -220,6 +278,9 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
           />
           {searching && <RefreshCw className="spin" aria-label="Searching" />}
           <kbd>esc</kbd>
+          <button type="button" className="palette-close btn btn-subtle btn-icon btn-sm" aria-label="Close search" onClick={onClose}>
+            <X />
+          </button>
         </div>
 
         <div className="palette-list" id="palette-list" role="listbox">
@@ -633,18 +694,121 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function ThemeToggle() {
-  const { resolved } = useTheme();
-  const next = resolved === "dark" ? "light" : "dark";
+function ThemeMenu() {
+  const { preference } = useTheme();
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  // Where focus lands on open: the active choice by default, the first or last row from the arrow keys.
+  const landOn = React.useRef<"selected" | "first" | "last">("selected");
+  const close = React.useCallback(() => setOpen(false), []);
+  useDismiss(open, ref, close);
+
+  const items = () => Array.from(ref.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const rows = items();
+    const target = landOn.current === "first" ? rows[0]
+      : landOn.current === "last" ? rows[rows.length - 1]
+      : rows.find((row) => row.getAttribute("aria-checked") === "true");
+    target?.focus();
+    landOn.current = "selected";
+  }, [open]);
+
+  const choose = (value: ThemePreference) => {
+    setThemePreference(value);
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const onTriggerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    if (open) {
+      const rows = items();
+      (e.key === "ArrowDown" ? rows[0] : rows[rows.length - 1])?.focus();
+    } else {
+      landOn.current = e.key === "ArrowDown" ? "first" : "last";
+      setOpen(true);
+    }
+  };
+
+  const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Tab hands focus back to the trigger first, so it moves on from there instead of from a removed item.
+    if (e.key === "Escape" || e.key === "Tab") {
+      triggerRef.current?.focus();
+      if (e.key === "Tab") close();
+      return;
+    }
+    const rows = items();
+    const index = rows.indexOf(document.activeElement as HTMLElement);
+    const next =
+      e.key === "ArrowDown" ? rows[(index + 1) % rows.length]
+      : e.key === "ArrowUp" ? rows[(index - 1 + rows.length) % rows.length]
+      : e.key === "Home" ? rows[0]
+      : e.key === "End" ? rows[rows.length - 1]
+      : undefined;
+    if (!next) return;
+    e.preventDefault();
+    next.focus();
+  };
+
+  const label = THEME_OPTIONS.find((option) => option.value === preference)?.label ?? "System";
+
   return (
-    <button
-      type="button"
-      className="btn btn-subtle btn-icon"
-      onClick={toggleTheme}
-      aria-label={`Switch to ${next} theme`}
-      title={`Switch to ${next} theme`}
-    >
-      {resolved === "dark" ? <Sun /> : <Moon />}
+    <div ref={ref} className="popover-anchor">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="btn btn-subtle btn-icon"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Theme: ${label}`}
+        title={`Theme: ${label}`}
+        onClick={() => setOpen(v => !v)}
+        onKeyDown={onTriggerKeyDown}
+      >
+        {/* All three render; html[data-theme] CSS shows the one that matches, so nothing swaps after hydration. */}
+        <Sun className="theme-icon theme-icon-light" aria-hidden="true" />
+        <Moon className="theme-icon theme-icon-dark" aria-hidden="true" />
+        <Monitor className="theme-icon theme-icon-system" aria-hidden="true" />
+      </button>
+
+      {open && (
+        <div className="menu menu-below menu-end" role="menu" aria-label="Theme" onKeyDown={onMenuKeyDown}>
+          {THEME_OPTIONS.map(({ value, label }) => {
+            const ItemIcon = THEME_ICONS[value];
+            const selected = preference === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="menuitemradio"
+                aria-checked={selected}
+                className="menu-item"
+                onClick={() => choose(value)}
+              >
+                <ItemIcon aria-hidden="true" />
+                <span className="item-text">{label}</span>
+                {selected && <Check aria-hidden="true" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The search field in the topbar; the shortcut hint only shows where a keyboard makes it useful. */
+function SearchTrigger({ onOpen }: { onOpen: () => void }) {
+  const shortcut = useSearchShortcut();
+  return (
+    <button type="button" className="dashboard-search" onClick={onOpen} aria-label="Search" aria-keyshortcuts="Control+K Meta+K">
+      <Search aria-hidden="true" />
+      <span>Search…</span>
+      {shortcut && <kbd aria-hidden="true">{shortcut}</kbd>}
     </button>
   );
 }
@@ -663,7 +827,7 @@ function DashboardRoot() {
   React.useEffect(() => {
     if (isPublic) return;
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPaletteOpen(v => !v);
       }
@@ -735,13 +899,9 @@ function DashboardRoot() {
             >
               <Menu />
             </button>
-            <button type="button" className="dashboard-search" onClick={() => setPaletteOpen(true)} aria-label="Search (Ctrl K)">
-              <Search aria-hidden="true" />
-              <span>Search…</span>
-              <kbd aria-hidden="true">⌘K</kbd>
-            </button>
+            <SearchTrigger onOpen={() => setPaletteOpen(true)} />
             <div className="topbar-actions">
-              <ThemeToggle />
+              <ThemeMenu />
             </div>
           </header>
 

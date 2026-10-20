@@ -1,10 +1,12 @@
 import { AvatarUpload } from "@/components/AvatarUpload";
 import { ProviderIcon } from "@/components/BrandIcons";
+import { ConfirmItsYouModal } from "@/components/ConfirmItsYouModal";
 import { CustomFieldsSection } from "@/components/CustomFieldsSection";
 import { AUTH_URL, authClient, listAccounts, passkey, signOut, twoFactor, updateUser, useSession } from "@/lib/auth-client";
+import { isSessionNotFresh } from "@/lib/fresh-session";
 import { validatePassword } from "@/lib/password";
 import { sentenceCase } from "@/lib/utils";
-import { setThemePreference, useTheme, type ThemePreference } from "@/lib/theme";
+import { setThemePreference, THEME_OPTIONS, useTheme } from "@/lib/theme";
 import type { ProviderId } from "@/lib/providers";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
@@ -359,8 +361,10 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
 
 type PasskeyEntry = { id: string; name?: string | null; createdAt?: number | null; deviceType?: string };
 
-function PasskeysSection() {
+function PasskeysSection({ hasCredential, providers }: { hasCredential: boolean; providers: string[] }) {
+  const { data: session } = useSession();
   const [passkeys, setPasskeys] = useState<PasskeyEntry[]>([]);
+  const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
@@ -378,7 +382,12 @@ function PasskeysSection() {
     setError(""); setSuccess(""); setAdding(true);
     try {
       const res = await passkey.addPasskey({ name: "My passkey" });
-      if ((res as any)?.error) throw new Error((res as any).error?.message ?? "Registration failed");
+      const failure = (res as any)?.error;
+      if (failure) {
+        // Registering a passkey is one of the few calls that wants a recent sign-in.
+        if (isSessionNotFresh(failure)) { setConfirming(true); return; }
+        throw new Error(failure.message ?? "Registration failed");
+      }
       setSuccess("Passkey registered successfully!");
       setTick(t => t + 1);
     } catch (e: any) {
@@ -422,6 +431,18 @@ function PasskeysSection() {
 
       {error && <p className="alert alert-danger" role="alert"><AlertCircle /> {error}</p>}
       {success && <p className="alert alert-success" role="status"><CheckCircle /> {success}</p>}
+
+      {confirming && session && (
+        <ConfirmItsYouModal
+          email={session.user.email}
+          hasPassword={hasCredential}
+          twoFactorEnabled={!!(session.user as any).twoFactorEnabled}
+          providers={providers}
+          hasPasskey={passkeys.length > 0}
+          onConfirmed={() => setSuccess("You're confirmed. Select Add passkey to finish.")}
+          onClose={() => setConfirming(false)}
+        />
+      )}
 
       {passkeys.length === 0 ? (
         <div className="empty-state" style={{ padding: "var(--space-6)" }}>
@@ -638,12 +659,6 @@ function CredentialsSection({ hasCredential, userId, onPasswordSet }: {
 
 // ── Appearance ────────────────────────────────────────────────────────────────
 
-const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
-];
-
 function AppearanceSection() {
   const { preference } = useTheme();
   return (
@@ -662,7 +677,7 @@ function AppearanceSection() {
           </button>
         ))}
       </div>
-      <p className="form-hint">System follows your device. Hosted sign-in pages use each app's own theme.</p>
+      <p className="form-hint">System, the default, follows your device. Hosted sign-in pages use each app's own theme.</p>
     </div>
   );
 }
@@ -796,7 +811,7 @@ function SettingsPage() {
 
         {/* Passkeys */}
         <SectionCard icon={<Fingerprint />} title="Passkeys">
-          <PasskeysSection />
+          <PasskeysSection hasCredential={ready ? hasCredential : false} providers={oauthProviders.map(a => a.providerId)} />
         </SectionCard>
 
         {/* Password first — 2FA enable needs a credential account */}
