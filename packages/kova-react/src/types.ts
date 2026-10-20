@@ -5,6 +5,9 @@
  * without pulling in any React dependencies.
  */
 
+import type { ServerAppearance } from "./context";
+
+
 // ── Appearance API ────────────────────────────────────────────────────────────
 
 /**
@@ -265,6 +268,13 @@ export interface KovaAuthConfig {
   appearance?: Appearance;
 
   /**
+   * Application branding to use instead of fetching it by `publishableKey`.
+   * For hosts that already loaded `/api/pub/apps/:pk/appearance`, such as
+   * Kova's own sign-in page, which must not send the key with auth requests.
+   */
+  appAppearance?: ServerAppearance;
+
+  /**
    * When true, the SDK updates the host document's favicon from application
    * appearance. Defaults to false so embedded sign-in components do not
    * override the containing site's favicon.
@@ -396,8 +406,8 @@ export type SignUpTab = "email";
 export interface SignInProps {
   /** Override the URL the user is sent to on success. Inherits from provider. */
   afterSignInUrl?: string;
-  /** Override the sign-up link href. @default "/sign-up" */
-  signUpUrl?: string;
+  /** Override the sign-up link href; `null` hides the link. @default "/sign-up" */
+  signUpUrl?: string | null;
   /** Initial tab shown. @default "email" */
   defaultTab?: SignInTab;
   /** Custom appearance for this instance. Merged with provider appearance. */

@@ -170,6 +170,7 @@ export function KovaAuthProvider({
   authUrl,
   plugins,
   appearance,
+  appAppearance,
   oauthProviders,
   manageFavicon = false,
   sessionOptions,
@@ -347,8 +348,9 @@ export function KovaAuthProvider({
   }, [sessionToken]);
 
   // ── Server appearance ─────────────────────────────────────────────────────
-  const [serverAppearance, setServerAppearance] =
+  const [fetchedAppearance, setServerAppearance] =
     useState<ServerAppearance | null>(null);
+  const serverAppearance = appAppearance ?? fetchedAppearance;
   const [appearanceError, setAppearanceError] = useState<string | null>(null);
   const [appearanceRetry, setAppearanceRetry] = useState(0);
   const retryAppearance = useCallback(() => {
@@ -357,7 +359,7 @@ export function KovaAuthProvider({
   }, []);
 
   useEffect(() => {
-    if (!publishableKey) return;
+    if (!publishableKey || appAppearance) return;
     let cancelled = false;
     // Public endpoint — KV-cached server-side (5 min TTL).
     // cache: "no-store" bypasses the browser cache so we always reflect the
@@ -382,7 +384,7 @@ export function KovaAuthProvider({
     return () => {
       cancelled = true;
     };
-  }, [resolvedAuthUrl, publishableKey, appearanceRetry]);
+  }, [resolvedAuthUrl, publishableKey, appAppearance, appearanceRetry]);
 
   // Inject/update favicon from server only when explicitly enabled.
   // Embedded SDK components should not overwrite the host site's favicon.

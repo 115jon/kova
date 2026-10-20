@@ -453,7 +453,7 @@ function KovaAuthBranding() {
           strokeLinecap="round"
         />
       </svg>
-      Secured by kova-auth
+      Secured by Kova
     </a>
   );
 }

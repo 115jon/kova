@@ -349,9 +349,13 @@ export function SignIn({
     isAppearanceLoaded,
     appearanceError,
     retryAppearance,
+    serverAppearance,
   } = useKovaAuth();
 
   const merged = mergeAppearance(providerAppearance, instanceAppearance);
+  const title = serverAppearance?.displayName
+    ? `Sign in to ${serverAppearance.displayName}`
+    : "Sign in";
   const el = merged.elements ?? {};
   const resolvedUrl = afterSignInUrl ?? providerAfterSignIn;
 
@@ -403,7 +407,7 @@ export function SignIn({
   return (
     <Card elements={el} className={className}>
       <CardHeader
-        title="Sign in"
+        title={title}
         subtitle="Welcome back. Choose your sign-in method."
         elements={el}
       />
@@ -441,10 +445,14 @@ export function SignIn({
       </CardBody>
 
       <CardFooter elements={el}>
-        <span style={{ color: "var(--ra-color-text-tertiary)" }}>
-          Don&apos;t have an account?{" "}
-        </span>
-        <a href={signUpUrl}>Sign up</a>
+        {signUpUrl !== null && (
+          <>
+            <span style={{ color: "var(--ra-color-text-tertiary)" }}>
+              Don&apos;t have an account?{" "}
+            </span>
+            <a href={signUpUrl}>Sign up</a>
+          </>
+        )}
       </CardFooter>
     </Card>
   );
