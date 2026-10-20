@@ -15,7 +15,7 @@ import {
 } from "@/lib/sign-in-redirect";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AlertCircle } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 export const Route = createFileRoute("/sign-in")({
   validateSearch: (search: Record<string, unknown>): SignInRouteSearch => ({
@@ -36,12 +36,23 @@ function SignInPage() {
 /**
  * Runs `onComplete` once the SDK's own session store sees a user. The SDK
  * client, not the dashboard client, is the one its sign-in forms update.
+ * With `skipInitialUser` (add_account), the account already signed in when
+ * the page loaded does not count; a newly signed-in one does.
  */
-function CompleteOnSession({ enabled, onComplete }: { enabled: boolean; onComplete: () => void }) {
-  const { isSignedIn: signedIn } = useSession();
+function CompleteOnSession({ enabled, skipInitialUser = false, onComplete }: {
+  enabled: boolean;
+  skipInitialUser?: boolean;
+  onComplete: () => void;
+}) {
+  const { session, isLoaded } = useSession();
+  const userId = session?.user?.id ?? null;
+  const initialUserId = useRef<string | null | undefined>(undefined);
+  if (isLoaded && initialUserId.current === undefined) initialUserId.current = userId;
   useEffect(() => {
-    if (enabled && signedIn) onComplete();
-  }, [enabled, onComplete, signedIn]);
+    if (!enabled || !userId) return;
+    if (skipInitialUser && userId === initialUserId.current) return;
+    onComplete();
+  }, [enabled, onComplete, skipInitialUser, userId]);
   return null;
 }
 
@@ -228,13 +239,15 @@ function AppSignInPage({ pk, search }: { pk: string; search: SignInRouteSearch }
   );
   const nativeHandoffPath = buildNativeHandoffPath(search);
   // Without a redirect_url this is a dashboard preview: signing in lands in Kova.
-  const afterSignInUrl = nativeHandoffPath ? buildSignInReturnPath(search) : "/";
+  // add_account only skips the session present on arrival, so the page a
+  // sign-in method returns to drops it and continues with the new account.
+  const afterSignInUrl = nativeHandoffPath ? buildSignInReturnPath({ ...search, add_account: undefined }) : "/";
   const isDevelopment = pk.startsWith("pk_dev_");
   const addAccount = isAddAccount(search.add_account);
 
   // An existing session continues only to a redirect the app registered.
   // handleSdkBounce re-checks it; this is not the security boundary.
-  const canComplete = ctx.status === "ready" && !!nativeHandoffPath && !addAccount;
+  const canComplete = ctx.status === "ready" && !!nativeHandoffPath;
   const completeSignIn = useCallback(() => {
     if (nativeHandoffPath) window.location.assign(nativeHandoffPath);
   }, [nativeHandoffPath]);
@@ -277,7 +290,7 @@ function AppSignInPage({ pk, search }: { pk: string; search: SignInRouteSearch }
               </div>
             ) : (
               <>
-                <CompleteOnSession enabled={canComplete} onComplete={completeSignIn} />
+                <CompleteOnSession enabled={canComplete} skipInitialUser={addAccount} onComplete={completeSignIn} />
                 {!search.redirect_url && (
                   <p className="app-auth-notice">
                     Preview. This link has no redirect_url, so signing in opens the Kova dashboard instead of the app.
