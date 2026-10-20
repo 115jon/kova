@@ -7,8 +7,10 @@
  *
  * What an app-scoped token may still reach under /api/auth, because the SDK and
  * the hosted pages use it: get-session, sign-out, update-user, revoke-session,
- * list-accounts, link-social, multi-session/*, and the organization reads and
- * set-active that OrgSwitcher and useOrganization call.
+ * list-accounts, multi-session/*, and the organization reads and
+ * set-active that OrgSwitcher and useOrganization call. link-social is not
+ * among them: linking an account changes the platform identity, so it needs the
+ * platform session, and SDK apps send users to Kova settings instead.
  */
 import { parseCookies } from "better-auth/cookies";
 import type { MiddlewareHandler } from "hono";
@@ -35,6 +37,7 @@ const PLATFORM_ONLY_AUTH_PATHS = new Set([
   "change-email",
   "change-password",
   "unlink-account",
+  "link-social",
   "list-sessions",
   "revoke-sessions",
   "revoke-other-sessions",

@@ -150,6 +150,7 @@ describe("app-scoped sessions on Better Auth endpoints", () => {
     "/api/auth/api-key/create",
     "/api/auth/change-password",
     "/api/auth/list-sessions",
+    "/api/auth/link-social",
   ])("refuses %s", async (path) => {
     authHandler.mockClear();
     const response = await call(path, db, { authorization: "Bearer app-token" });

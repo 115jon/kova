@@ -33,6 +33,10 @@ describe("sign-in method configuration", () => {
     }
   });
 
+  it("keeps the OAuth state cookie check on, so a callback URL cannot be replayed into another browser", () => {
+    expect((options.account as { skipStateCookieCheck?: boolean } | undefined)?.skipStateCookieCheck).toBeFalsy();
+  });
+
   it("keeps the plugins the sign-in methods need", () => {
     const ids = (options.plugins ?? []).map((plugin) => plugin.id);
     expect(ids).toEqual(expect.arrayContaining(["passkey", "magic-link", "two-factor", "bearer", "multi-session"]));

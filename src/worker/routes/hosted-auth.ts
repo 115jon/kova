@@ -34,7 +34,7 @@ import type { KVNamespace } from "@cloudflare/workers-types";
 import { type Application, isRedirectUriAllowed, validateSecretKey } from "../applications";
 import { createAuth } from "../auth";
 import { rejectDisallowedOrigin } from "../lib/app-origin";
-import { APP_SESSION_TTL_MS, insertAppScopedSession } from "../lib/app-session";
+import { APP_SESSION_TTL_MS, insertAppScopedSession, sessionMayActForApp } from "../lib/app-session";
 import { createAuthTicket, createSessionTransferCode, exchangeAuthTicket } from "../lib/auth-ticket";
 import {
   decideDeviceLogin,
@@ -281,6 +281,9 @@ hostedAuthRouter.post("/api/hosted/create-ticket", async (c) => {
 
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
   if (!session?.user || !session?.session) {
+    return c.json({ error: "Not authenticated" }, 401);
+  }
+  if (!(await sessionMayActForApp(c.env.DB, session.session.id, app.id))) {
     return c.json({ error: "Not authenticated" }, 401);
   }
 
@@ -611,7 +614,7 @@ async function hostedUser(c: HC) {
     `https://${host}`,
   );
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  if (!session?.user?.id) {
+  if (!session?.user?.id || !(await sessionMayActForApp(c.env.DB, session.session.id, app.id))) {
     return { error: c.json({ error: "Not authenticated" }, 401) };
   }
   return { app, userId: session.user.id };

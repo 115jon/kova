@@ -212,17 +212,11 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
             ],
           },
 
-          // ── OAuth state cookie check ────────────────────────────
-          //
-          // Better Auth validates OAuth state with TWO checks:
-          //   1. DB verification value (via KV secondaryStorage) ← always works
-          //   2. Signed "state" cookie on the auth domain        ← unreliable cross-origin
-          //
-          // In cross-origin SDK flows (e.g. localhost:5180 → auth.lvh.me), Chrome
-          // may drop the SameSite=None signed state cookie during the Google
-          // OAuth round-trip, causing "State not persisted correctly" on callback.
-          // Check #1 (DB verification) is sufficient — skip the cookie check.
-          skipStateCookieCheck: true,
+          // The OAuth state cookie check stays on. Every provider flow starts from a
+          // same-origin page on this host (/api/pub/apps/:pk/oauth/start,
+          // /api/hosted/oauth-start, the dashboard), so the cookie is set where the
+          // callback lands. Skipping it would let anyone replay their own callback
+          // URL into another browser and sign it in as them.
         },
 
         // ── Error page ───────────────────────────────────────────

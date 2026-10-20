@@ -234,8 +234,8 @@ describe("SDK handoff platform session restore", () => {
   ];
   const sdkRedirect = "https://consumer.example/callback";
 
-  function handoff() {
-    const query = new URLSearchParams({ mode: "sdk", pk: "pk_test", redirect_uri: sdkRedirect, state: "nonce" });
+  function handoff(extra: Record<string, string> = {}) {
+    const query = new URLSearchParams({ mode: "sdk", pk: "pk_test", redirect_uri: sdkRedirect, state: "nonce", ...extra });
     return main.request(`/bounce?${query}`, { headers: { cookie: "better-auth.session_token=signed" } }, environment() as never);
   }
   function deviceSessions(sessions: unknown[] = savedSessions) {
@@ -279,6 +279,41 @@ describe("SDK handoff platform session restore", () => {
       "better-auth.session_token=restored; Path=/",
       "better-auth.session_data=; Path=/; Max-Age=0",
     ]);
+  });
+
+  it("refuses a fresh=1 handoff for a session this link did not create", async () => {
+    insertSession.mockClear();
+    getSession.mockResolvedValueOnce({
+      user: { id: "user-1" },
+      session: { id: "main-session", createdAt: new Date(Date.now() - 60 * 60 * 1000) },
+    });
+    const response = await handoff({ fresh: "1" });
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get("location")!);
+    expect(location.searchParams.get("kova_auth_error")).toBe("ALREADY_USED");
+    expect(location.searchParams.get("state")).toBe("nonce");
+    expect(location.searchParams.has("kova_auth_code")).toBe(false);
+    expect(insertSession).not.toHaveBeenCalled();
+  });
+
+  it("hands off a fresh=1 session created moments ago", async () => {
+    getSession.mockResolvedValueOnce({
+      user: { id: "user-1" },
+      session: { id: "main-session", createdAt: new Date(Date.now() - 10 * 1000) },
+    });
+    deviceSessions(savedSessions.slice(0, 1));
+    const response = await handoff({ fresh: "1" });
+    const location = new URL(response.headers.get("location")!);
+    expect(location.searchParams.get("code")).toMatch(/^xfr_/);
+    expect(location.searchParams.get("state")).toBe("nonce");
+  });
+
+  it("reports NO_SESSION when the browser has no session", async () => {
+    getSession.mockResolvedValueOnce(null as never);
+    const response = await handoff();
+    const location = new URL(response.headers.get("location")!);
+    expect(location.searchParams.get("kova_auth_error")).toBe("NO_SESSION");
+    expect(location.searchParams.get("state")).toBe("nonce");
   });
 
   it("does nothing when the fresh session is the only one on the device", async () => {

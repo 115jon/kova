@@ -3,11 +3,13 @@ import type { Application } from "../../applications";
 import { pubAppsRouter } from "./apps";
 
 const getSession = vi.fn(async () => ({ user: { id: "user-1" }, session: { id: "session-1" } }));
+const sessionMayActForApp = vi.fn(async (_db: unknown, _sessionId: unknown, _appId: unknown) => true);
 const resolveAppScopedSession = vi.fn(async (_db: unknown, _input: unknown) => ({ token: "app-token" }));
 
 vi.mock("../../auth", () => ({ createAuth: () => ({ api: { getSession } }) }));
 vi.mock("../../lib/app-session", () => ({
   resolveAppScopedSession: (db: unknown, input: unknown) => resolveAppScopedSession(db, input),
+  sessionMayActForApp: (db: unknown, sessionId: unknown, appId: unknown) => sessionMayActForApp(db, sessionId, appId),
 }));
 vi.mock("better-auth", () => ({ generateId: () => "generated" }));
 vi.mock("../../applications", async (original) => ({
@@ -53,6 +55,8 @@ beforeEach(() => {
   policyFails = false;
   getSession.mockClear();
   resolveAppScopedSession.mockClear();
+  sessionMayActForApp.mockReset();
+  sessionMayActForApp.mockResolvedValue(true);
 });
 
 describe.each(["/session-token", "/me"])("POST %s origin check", (path) => {
@@ -75,6 +79,22 @@ describe.each(["/session-token", "/me"])("POST %s origin check", (path) => {
   });
 });
 
+describe("session minted for another app", () => {
+  it("/session-token answers 401 and mints nothing", async () => {
+    sessionMayActForApp.mockResolvedValue(false);
+    const response = await post("/session-token");
+    expect(response.status).toBe(401);
+    expect(resolveAppScopedSession).not.toHaveBeenCalled();
+  });
+
+  it("/me answers no_session and registers nothing", async () => {
+    sessionMayActForApp.mockResolvedValue(false);
+    const response = await post("/me");
+    expect(await response.json()).toEqual({ ok: false, reason: "no_session" });
+    expect(resolveAppScopedSession).not.toHaveBeenCalled();
+  });
+});
+
 describe("GET /:pk/oauth/start provider policy", () => {
   const start = (provider: string) => {
     const query = new URLSearchParams({ provider, redirect_uri: "https://consumer.example/callback" });
@@ -85,6 +105,19 @@ describe("GET /:pk/oauth/start provider policy", () => {
     const response = await start("google");
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("/api/auth/sign-in/social");
+  });
+
+  it("carries the caller's state into the bounce URL", async () => {
+    const query = new URLSearchParams({ provider: "google", redirect_uri: "https://consumer.example/callback", state: "abc_123-x." });
+    const html = await (await pubAppsRouter.request(`/pk_test/oauth/start?${query}`, {}, env)).text();
+    expect(html).toMatch(/state=abc_123-x./);
+  });
+
+  it("rejects a state that is not a plain token", async () => {
+    const query = new URLSearchParams({ provider: "google", redirect_uri: "https://consumer.example/callback", state: "<script>" });
+    const response = await pubAppsRouter.request(`/pk_test/oauth/start?${query}`, {}, env);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_state" });
   });
 
   it("refuses a provider the app has switched off", async () => {

@@ -24,7 +24,7 @@ import type { KVNamespace } from "@cloudflare/workers-types";
 import { getApplicationByPublishableKey, isRedirectUriAllowed } from "../../applications";
 import { createAuth } from "../../auth";
 import { rejectDisallowedOrigin } from "../../lib/app-origin";
-import { resolveAppScopedSession } from "../../lib/app-session";
+import { resolveAppScopedSession, sessionMayActForApp } from "../../lib/app-session";
 import { pollDeviceLogin, startDeviceLogin } from "../../lib/device-login";
 import { hostedProviders } from "../../lib/hosted-providers";
 import { jsonForHtmlScript } from "../../lib/html";
@@ -156,6 +156,10 @@ pubAppsRouter.get("/:pk/oauth/start", async (c) => {
   const provider = c.req.query("provider") ?? "";
   const redirectUri = c.req.query("redirect_uri") ?? "";
   const errorCallbackURL = c.req.query("error_callback_url") || redirectUri;
+  const state = c.req.query("state") ?? "";
+  if (state && !/^[A-Za-z0-9._~-]{1,256}$/.test(state)) {
+    return Response.json({ error: "invalid_state" }, { status: 400 });
+  }
 
   const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
   if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
@@ -182,6 +186,7 @@ pubAppsRouter.get("/:pk/oauth/start", async (c) => {
   bounceUrl.searchParams.set("mode", "sdk");
   bounceUrl.searchParams.set("pk", pk);
   bounceUrl.searchParams.set("redirect_uri", redirectUri);
+  if (state) bounceUrl.searchParams.set("state", state);
 
   const body = JSON.stringify({
     provider,
@@ -214,7 +219,9 @@ pubAppsRouter.get("/:pk/oauth/start", async (c) => {
         window.location.replace(data.url);
       } catch (error) {
         const target = new URL(${jsonForHtmlScript(errorCallbackURL)});
-        target.searchParams.set("error", "oauth_start_failed");
+        target.searchParams.set("kova_auth_error", "OAUTH_START_FAILED");
+        const state = ${jsonForHtmlScript(state)};
+        if (state) target.searchParams.set("state", state);
         window.location.replace(target.toString());
       }
     })();
@@ -250,6 +257,10 @@ pubAppsRouter.post("/:pk/me", async (c) => {
   const sessionData = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
 
   if (!sessionData?.user?.id) {
+    return Response.json({ ok: false, reason: "no_session" });
+  }
+  const meSessionId = sessionData.session?.id;
+  if (!meSessionId || !(await sessionMayActForApp(c.env.DB, meSessionId, app.id))) {
     return Response.json({ ok: false, reason: "no_session" });
   }
 
@@ -304,6 +315,9 @@ pubAppsRouter.post("/:pk/session-token", async (c) => {
   const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
   const sessionData = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
   if (!sessionData?.user?.id || !sessionData?.session) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+  if (!(await sessionMayActForApp(c.env.DB, sessionData.session.id, app.id))) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
 

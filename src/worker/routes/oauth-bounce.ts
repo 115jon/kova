@@ -407,13 +407,17 @@ async function handleSdkBounce(
   // Better Auth with `error`. No sign-in happened, so any session cookie in
   // this browser belongs to someone else: minting for it would hand the app
   // the wrong account. Report the failure to the app instead.
+  const rawState = c.req.query("state") ?? "";
+  const appState = /^[A-Za-z0-9._~-]{1,256}$/.test(rawState) ? rawState : "";
+  const failTo = (code: string) => {
+    const failed = new URL(redirectUri);
+    failed.searchParams.set("kova_auth_error", code);
+    if (appState) failed.searchParams.set("state", appState);
+    return Response.redirect(failed.toString(), 302);
+  };
   const failure = c.req.query("error");
   if (failure) {
-    const failed = new URL(redirectUri);
-    failed.searchParams.set("kova_auth_error", /^[A-Za-z0-9_.-]{1,64}$/.test(failure) ? failure : "auth_failed");
-    const failedState = c.req.query("state") ?? "";
-    if (failedState) failed.searchParams.set("state", failedState);
-    return Response.redirect(failed.toString(), 302);
+    return failTo(/^[A-Za-z0-9_.-]{1,64}$/.test(failure) ? failure : "auth_failed");
   }
 
   // Read the session that Better Auth just created (we are ON the main auth domain)
@@ -424,8 +428,15 @@ async function handleSdkBounce(
   );
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
   if (!session?.session) {
-    // OAuth completed but no session — send back to app so SDK shows sign-in form
-    return Response.redirect(redirectUri, 302);
+    return failTo("NO_SESSION");
+  }
+
+  // An emailed link sets fresh=1. A verify-email link that was already consumed
+  // (double click, mail scanner) redirects here without signing anyone in, so
+  // the cookie in this browser may be another account. Only a session this link
+  // just created may be handed off.
+  if (c.req.query("fresh") === "1" && !isFreshSignInSession(session.session.createdAt)) {
+    return failTo("ALREADY_USED");
   }
 
   // Extract the raw session token.
@@ -452,7 +463,6 @@ async function handleSdkBounce(
   const dest = new URL(redirectUri);
   dest.searchParams.set("code", code);
   dest.searchParams.set("kova_auth_code", code);
-  const appState = c.req.query("state") ?? "";
   if (appState) dest.searchParams.set("state", appState);
 
   // ── Restore previous platform session (Bug 2 mitigation) ─────────────────

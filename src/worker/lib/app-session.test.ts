@@ -7,6 +7,7 @@ import {
   pickActiveAppSession,
   sdkCookieProvesIdentity,
   sessionExpiryMs,
+  sessionMayActForApp,
 } from "./app-session";
 
 describe("sessionExpiryMs", () => {
@@ -75,5 +76,38 @@ describe("appSessionTimestampValues", () => {
     expect(stamps.expiresAt).toBe(now + APP_SESSION_TTL_MS);
     expect(stamps.createdAtIso).toBe("2026-09-19T09:40:00.000Z");
     expect(Date.parse(stamps.expiresAtIso)).toBe(now + APP_SESSION_TTL_MS);
+  });
+});
+
+describe("sessionMayActForApp", () => {
+  const dbReturning = (row: { app_id: string | null } | null) =>
+    ({
+      prepare: () => ({ bind: () => ({ first: async () => row }) }),
+    }) as unknown as D1Database;
+
+  it("lets a platform session act for any app", async () => {
+    expect(await sessionMayActForApp(dbReturning({ app_id: null }), "s1", "app_a")).toBe(true);
+  });
+
+  it("lets an app's own session act for that app", async () => {
+    expect(await sessionMayActForApp(dbReturning({ app_id: "app_a" }), "s1", "app_a")).toBe(true);
+  });
+
+  it("refuses a session minted for another app", async () => {
+    expect(await sessionMayActForApp(dbReturning({ app_id: "app_b" }), "s1", "app_a")).toBe(false);
+  });
+
+  it("fails closed on a missing row or a database error", async () => {
+    expect(await sessionMayActForApp(dbReturning(null), "s1", "app_a")).toBe(false);
+    const throwing = {
+      prepare: () => ({
+        bind: () => ({
+          first: async () => {
+            throw new Error("boom");
+          },
+        }),
+      }),
+    } as unknown as D1Database;
+    expect(await sessionMayActForApp(throwing, "s1", "app_a")).toBe(false);
   });
 });

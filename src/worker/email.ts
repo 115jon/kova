@@ -172,7 +172,7 @@ export function verificationEmail(url: string) {
     subject: "Verify your email — kova-auth",
     html: emailShell(cardPadding(`
       ${heading("Verify your email")}
-      ${subtext("Click the button below to verify your email address and activate your account. This link expires in <strong style=\"color:${T.textPrimary}\">24 hours</strong>.")}
+      ${subtext("Click the button below to verify your email address and activate your account. This link expires in <strong style=\"color:${T.textPrimary}\">1 hour</strong>.")}
       ${ctaButton(url, "Verify email →")}
       ${footerNote("If you didn't create an account, you can safely ignore this email.")}
     `)),

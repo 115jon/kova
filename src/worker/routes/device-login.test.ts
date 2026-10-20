@@ -33,6 +33,7 @@ vi.mock("../lib/app-session", () => ({
   APP_SESSION_TTL_MS: 1,
   insertAppScopedSession: (db: unknown, input: unknown) => insertAppScopedSession(db, input),
   resolveAppScopedSession: vi.fn(),
+  sessionMayActForApp: vi.fn(async () => true),
 }));
 
 vi.mock("../applications", () => ({

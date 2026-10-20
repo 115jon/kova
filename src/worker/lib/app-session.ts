@@ -175,3 +175,24 @@ export async function insertAppScopedSession(
     )
     .run();
 }
+
+/**
+ * Better Auth's bearer plugin accepts any session token, including one minted
+ * for another app. Only a platform session (no app_id) or this app's own session
+ * may act for `appId`. Fails closed.
+ */
+export async function sessionMayActForApp(
+  db: D1Database,
+  sessionId: string,
+  appId: string,
+): Promise<boolean> {
+  try {
+    const row = await db
+      .prepare("SELECT app_id FROM session WHERE id = ? LIMIT 1")
+      .bind(sessionId)
+      .first<{ app_id: string | null }>();
+    return row ? !row.app_id || row.app_id === appId : false;
+  } catch {
+    return false;
+  }
+}

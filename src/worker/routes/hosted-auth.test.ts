@@ -8,6 +8,7 @@ const session = {
 
 const getSession = vi.fn(async () => session);
 const insertAppScopedSession = vi.fn(async (_db: unknown, _input: unknown) => undefined);
+const sessionMayActForApp = vi.fn(async (_db: unknown, _sessionId: unknown, _appId: unknown) => true);
 const createAuthTicket = vi.fn(async (_kv: unknown, _payload: unknown) => "ticket_https");
 const createSessionTransferCode = vi.fn(async (
   _kv: unknown,
@@ -23,6 +24,7 @@ vi.mock("../auth", () => ({
 vi.mock("../lib/app-session", () => ({
   APP_SESSION_TTL_MS: 1,
   insertAppScopedSession: (db: unknown, input: unknown) => insertAppScopedSession(db, input),
+  sessionMayActForApp: (db: unknown, sessionId: unknown, appId: unknown) => sessionMayActForApp(db, sessionId, appId),
 }));
 
 vi.mock("../lib/auth-ticket", () => ({
@@ -134,6 +136,18 @@ describe("hosted password create-ticket", () => {
       "pk_live_mira",
       "null",
     );
+  });
+
+  it("refuses a session minted for another app", async () => {
+    createAuthTicket.mockClear();
+    insertAppScopedSession.mockClear();
+    sessionMayActForApp.mockResolvedValueOnce(false);
+
+    const response = await postTicket("https://app.example.com/callback");
+    expect(response.status).toBe(401);
+    expect(sessionMayActForApp).toHaveBeenLastCalledWith({}, "sess_cookie", "app_mira");
+    expect(insertAppScopedSession).not.toHaveBeenCalled();
+    expect(createAuthTicket).not.toHaveBeenCalled();
   });
 
   it("keeps an https redirect on the hosted ticket hop", async () => {
