@@ -296,7 +296,7 @@ export function KovaAuthProvider({
   // ── Detect OAuth transfer code on mount ──────────────────────────────────
   // After the cross-origin OAuth flow lands at the consumer app with
   // ?kova_auth_code=xfr_..., we clean the URL immediately (prevents Referer
-  // leakage) then exchange the 30s single-use code for the raw session token.
+  // leakage) then exchange the 60s single-use code for the raw session token.
   useEffect(() => {
     if (typeof window === "undefined" || !publishableKey) return;
     const params = new URLSearchParams(window.location.search);

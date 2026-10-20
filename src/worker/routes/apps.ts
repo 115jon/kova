@@ -4,6 +4,7 @@ import {
   createApplication,
   getApplicationById,
   listApplications,
+  parseBrandingFields,
   rotateSecretKey,
   updateApplication,
   validateApplicationPolicy,
@@ -166,18 +167,22 @@ appsRouter.patch("/:id", async (c) => {
   if (policyError) {
     return Response.json({ error: policyError }, { status: 400 });
   }
+  const branding = parseBrandingFields(body);
+  if ("error" in branding) {
+    return Response.json({ error: branding.error }, { status: 400 });
+  }
   const app = await updateApplication(c.env.DB, id, {
     name: body.name as string | undefined,
     allowed_origins: body.allowed_origins as string[] | undefined,
     redirect_uris: body.redirect_uris as string[] | undefined,
     display_name: body.display_name as string | null | undefined,
-    primary_color: body.primary_color as string | undefined,
-    background_color: body.background_color as string | undefined,
+    primary_color: branding.values.primary_color,
+    background_color: branding.values.background_color,
     theme: body.theme as "dark" | "light" | "auto" | undefined,
     hide_branding: body.hide_branding as boolean | undefined,
-    home_url: body.home_url as string | null | undefined,
-    terms_url: body.terms_url as string | null | undefined,
-    privacy_url: body.privacy_url as string | null | undefined,
+    home_url: branding.values.home_url,
+    terms_url: branding.values.terms_url,
+    privacy_url: branding.values.privacy_url,
     from_name: body.from_name as string | null | undefined,
     from_email: body.from_email as string | null | undefined,
     support_email: body.support_email as string | null | undefined,

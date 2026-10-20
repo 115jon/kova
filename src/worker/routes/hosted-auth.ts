@@ -33,6 +33,7 @@ import { parseCookies } from "better-auth/cookies";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { type Application, isRedirectUriAllowed, validateSecretKey } from "../applications";
 import { createAuth } from "../auth";
+import { rejectDisallowedOrigin } from "../lib/app-origin";
 import { APP_SESSION_TTL_MS, insertAppScopedSession } from "../lib/app-session";
 import { createAuthTicket, createSessionTransferCode, exchangeAuthTicket } from "../lib/auth-ticket";
 import {
@@ -46,6 +47,7 @@ import {
 } from "../lib/device-login";
 import { escapeHtml, jsonForHtmlScript } from "../lib/html";
 import { hostedProviders } from "../lib/hosted-providers";
+import { isPlatformOnlyAuthPath, rejectAppScopedSession } from "../lib/platform-session";
 import { appSignInUrl } from "../lib/sign-in-url";
 import { RALPH_RADIO_SVG, resolveHostedAppearance, type HostedProvider } from "../../shared/hosted-brand";
 import { findMFAEnforcedOrgBlockingUser } from "../org-settings";
@@ -238,6 +240,10 @@ hostedAuthRouter.get("/sign-up", (c) => hostedSignIn(c, "sign-up"));
 hostedAuthRouter.all("/api/auth/*", async (c) => {
   const app = getApp(c);
   if (app.suspended_at) return c.json({ error: "Application suspended" }, 403);
+  if (isPlatformOnlyAuthPath(new URL(c.req.url).pathname)) {
+    const rejection = await rejectAppScopedSession(c.env.DB, c.req.raw.headers);
+    if (rejection) return rejection;
+  }
   const host = getHost(c);
   const subdomainUrl = `https://${host}`;
   const auth = createAuth(
@@ -259,6 +265,11 @@ hostedAuthRouter.post("/api/hosted/create-ticket", async (c) => {
   if (app.suspended_at) return c.json({ error: "Application suspended" }, 403);
   const host = getHost(c);
   const subdomainUrl = `https://${host}`;
+
+  // The hosted page posts from this host. Another app's origin must not be able
+  // to mint a ticket for this one from a session it can reach.
+  const disallowed = rejectDisallowedOrigin(c.env, app, c.req.header("Origin"), subdomainUrl);
+  if (disallowed) return disallowed;
 
   const auth = createAuth(
     c.env,

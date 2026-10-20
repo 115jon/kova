@@ -12,9 +12,12 @@ const cookies = getCookies({ baseURL: "https://test-app.auth.example", advanced:
   defaultCookieAttributes: { sameSite: "none", secure: true },
 } });
 const insertSession = vi.fn(async (_db: unknown, _input: unknown) => undefined);
-const getSession = vi.fn(async () => ({ user: { id: "user-1" }, session: { id: "main-session" } }));
+const getSession = vi.fn(async (): Promise<{ user: { id: string }; session: { id: string; createdAt?: Date } }> => (
+  { user: { id: "user-1" }, session: { id: "main-session" } }
+));
+const authHandler = vi.fn(async (_request: Request) => new Response(null, { status: 404 }));
 vi.mock("../auth", () => ({ createAuth: () => ({
-  api: { getSession }, $context: Promise.resolve({ authCookies: cookies, secret }),
+  api: { getSession }, handler: authHandler, $context: Promise.resolve({ authCookies: cookies, secret }),
 }) }));
 vi.mock("../lib/app-session", async (original) => ({
   ...await original<typeof import("../lib/app-session")>(),
@@ -63,6 +66,7 @@ beforeEach(() => {
   providerRows = [];
   databaseFails = false;
   insertSession.mockReset().mockResolvedValue(undefined);
+  authHandler.mockReset();
 });
 
 async function start(provider: string, overrides: Partial<typeof context> & { returnPath?: string } = {}) {
@@ -184,5 +188,73 @@ describe("main host to hosted device completion", () => {
     const finished = await complete(env, response.headers.get("location")!);
     expect(finished.status).toBe(302);
     expect(new URL(finished.headers.get("location")!).searchParams.get("code")).toMatch(/^ticket_/);
+  });
+});
+
+describe("SDK handoff platform session restore", () => {
+  const savedSessions = [
+    { session: { id: "main-session", token: "token-new", updatedAt: "2026-10-20T10:00:00.000Z" } },
+    { session: { id: "saved-old", token: "token-old", updatedAt: "2026-09-01T10:00:00.000Z" } },
+    { session: { id: "saved-recent", token: "token-recent", updatedAt: "2026-10-19T10:00:00.000Z" } },
+  ];
+  const sdkRedirect = "https://consumer.example/callback";
+
+  function handoff() {
+    const query = new URLSearchParams({ mode: "sdk", pk: "pk_test", redirect_uri: sdkRedirect, state: "nonce" });
+    return main.request(`/bounce?${query}`, { headers: { cookie: "better-auth.session_token=signed" } }, environment() as never);
+  }
+  function deviceSessions(sessions: unknown[] = savedSessions) {
+    authHandler.mockImplementation(async (request) => {
+      if (request.url.endsWith("/multi-session/list-device-sessions")) return Response.json(sessions);
+      const headers = new Headers();
+      headers.append("set-cookie", "better-auth.session_token=restored; Path=/");
+      headers.append("set-cookie", "better-auth.session_data=; Path=/; Max-Age=0");
+      return new Response("{}", { headers });
+    });
+  }
+  const setActiveCalls = () => authHandler.mock.calls.filter(([request]) => request.url.endsWith("/multi-session/set-active"));
+
+  it("leaves the active account alone when the user arrived already signed in", async () => {
+    getSession.mockResolvedValueOnce({
+      user: { id: "user-1" },
+      session: { id: "main-session", createdAt: new Date(Date.now() - 60 * 60 * 1000) },
+    });
+    deviceSessions();
+    const response = await handoff();
+    expect(response.status).toBe(302);
+    expect(authHandler).not.toHaveBeenCalled();
+    const location = new URL(response.headers.get("location")!);
+    expect(location.origin + location.pathname).toBe(sdkRedirect);
+    expect(location.searchParams.get("code")).toMatch(/^xfr_/);
+    expect(location.searchParams.get("state")).toBe("nonce");
+  });
+
+  it("restores the most recently updated other session after a fresh sign-in", async () => {
+    getSession.mockResolvedValueOnce({
+      user: { id: "user-1" },
+      session: { id: "main-session", createdAt: new Date(Date.now() - 20 * 1000) },
+    });
+    deviceSessions();
+    const response = await handoff();
+    expect(response.status).toBe(302);
+    const request = setActiveCalls()[0]![0];
+    expect(await request.json()).toEqual({ sessionToken: "token-recent" });
+    expect(new URL(response.headers.get("location")!).searchParams.get("code")).toMatch(/^xfr_/);
+    expect(response.headers.getSetCookie()).toEqual([
+      "better-auth.session_token=restored; Path=/",
+      "better-auth.session_data=; Path=/; Max-Age=0",
+    ]);
+  });
+
+  it("does nothing when the fresh session is the only one on the device", async () => {
+    getSession.mockResolvedValueOnce({
+      user: { id: "user-1" },
+      session: { id: "main-session", createdAt: new Date() },
+    });
+    deviceSessions(savedSessions.slice(0, 1));
+    const response = await handoff();
+    expect(response.status).toBe(302);
+    expect(setActiveCalls()).toHaveLength(0);
+    expect(response.headers.getSetCookie()).toEqual([]);
   });
 });

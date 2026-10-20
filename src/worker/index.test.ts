@@ -121,6 +121,38 @@ describe("composed Worker boundary", () => {
     expect(await customHostResponse.text()).toBe("hono");
   });
 
+  it("keeps app-scoped session tokens off the platform routes", async () => {
+    const composed = createWorker(handler("start"));
+    const db = {
+      prepare: () => ({
+        bind: (...tokens: string[]) => ({ first: async () => (tokens.includes("app-token") ? { scoped: 1 } : null) }),
+      }),
+    };
+    const platformEnv = { ...env, DB: db, KV: {} } as unknown as Env;
+    const call = (path: string, token: string) =>
+      composed.fetch(
+        new Request(`https://auth.lvh.me${path}`, { headers: { authorization: `Bearer ${token}` } }),
+        platformEnv,
+        ctx,
+      );
+
+    for (const path of [
+      "/api/admin/apps",
+      "/api/admin/apps/app-1/users",
+      "/api/admin/users/user-1",
+      "/api/org/avatar/org-1",
+      "/api/webhooks/endpoints",
+      "/api/device-challenges/dc_abc/approve",
+      "/api/user/set-initial-password",
+    ]) {
+      expect((await call(path, "app-token")).status, path).toBe(403);
+    }
+
+    // Profile routes stay reachable for the SDK, and platform tokens are untouched.
+    expect((await call("/api/user/fields/schema", "app-token")).status).toBe(200);
+    expect((await call("/api/admin/apps", "platform-token")).status).not.toBe(403);
+  });
+
   it("keeps the queue handler and AppCounter export on the Worker", () => {
     expect(worker.queue).toBeTypeOf("function");
     expect(AppCounter).toBeTypeOf("function");

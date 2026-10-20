@@ -29,6 +29,7 @@
 import { Hono } from "hono";
 import startHandler from "@tanstack/react-start/server-entry";
 import { AppCounter } from "./do/app-counter";
+import { platformSessionOnly } from "./lib/platform-session";
 import { resolveAppByHost } from "./lib/subdomain";
 import { corsMiddleware } from "./middleware/cors";
 import { handleQueueBatch } from "./queue-consumer";
@@ -144,6 +145,16 @@ app.all("/.well-known/*", async (c) => {
   url.pathname = `/api/auth${url.pathname}`;
   return authRouter.fetch(new Request(url, c.req.raw), c.env, c.executionCtx);
 });
+
+// ── Platform-only routes ──────────────────────────────────────────────────────
+// SDK apps hold app-scoped bearer tokens that Better Auth treats like any other
+// session. Everything that manages the platform refuses them up front.
+app.use("/api/admin/*", platformSessionOnly);
+app.use("/api/org/*", platformSessionOnly);
+app.use("/api/webhooks/*", platformSessionOnly);
+app.use("/api/device-challenges/:id/approve", platformSessionOnly);
+app.use("/api/device-challenges/:id/deny", platformSessionOnly);
+app.use("/api/user/set-initial-password", platformSessionOnly);
 
 // ── Route modules ─────────────────────────────────────────────────────────────
 app.route("/api/auth", authRouter);

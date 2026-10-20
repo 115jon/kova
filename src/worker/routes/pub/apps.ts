@@ -23,8 +23,10 @@ import { Hono } from "hono";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { getApplicationByPublishableKey, isRedirectUriAllowed } from "../../applications";
 import { createAuth } from "../../auth";
+import { rejectDisallowedOrigin } from "../../lib/app-origin";
 import { resolveAppScopedSession } from "../../lib/app-session";
 import { pollDeviceLogin, startDeviceLogin } from "../../lib/device-login";
+import { hostedProviders } from "../../lib/hosted-providers";
 import { jsonForHtmlScript } from "../../lib/html";
 
 const pubAppsRouter = new Hono<{ Bindings: Env }>();
@@ -165,6 +167,15 @@ pubAppsRouter.get("/:pk/oauth/start", async (c) => {
   if (!isRedirectUriAllowed(app, errorCallbackURL)) {
     return Response.json({ error: "error_callback_url_not_allowed" }, { status: 400 });
   }
+  // The sign-in UI hides disabled providers, but this URL is directly callable.
+  try {
+    const providers = await hostedProviders(c.env, app.id);
+    if (!providers.some(available => available === provider)) {
+      return Response.json({ error: "provider_unavailable" }, { status: 403 });
+    }
+  } catch {
+    return Response.json({ error: "providers_unavailable" }, { status: 503 });
+  }
 
   const authOrigin = new URL(c.req.url).origin;
   const bounceUrl = new URL(`${authOrigin}/api/hosted/oauth-complete`);
@@ -230,6 +241,8 @@ pubAppsRouter.post("/:pk/me", async (c) => {
   const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
   if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
   if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+  const disallowed = rejectDisallowedOrigin(c.env, app, c.req.header("Origin"));
+  if (disallowed) return disallowed;
 
   // Resolve the current session using the same Better Auth instance as auth.ts.
   // This correctly reads HttpOnly session cookies regardless of name/prefix.
@@ -285,6 +298,8 @@ pubAppsRouter.post("/:pk/session-token", async (c) => {
   const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
   if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
   if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+  const disallowed = rejectDisallowedOrigin(c.env, app, c.req.header("Origin"));
+  if (disallowed) return disallowed;
 
   const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
   const sessionData = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
@@ -365,7 +380,7 @@ pubAppsRouter.post("/:pk/revoke-session", async (c) => {
 // Called by the SDK immediately after landing back at the consumer app from the
 // oauth-complete bounce (mode=sdk).  The SDK passes the `kova_auth_code` that
 // was appended to the redirect URI.  The server:
-//   1. Verifies the code exists in KV, was created for this pk, and is < 30s old.
+//   1. Verifies the code exists in KV, was created for this pk, and is < 60s old.
 //   2. Deletes the code (single-use).
 //   3. Returns the raw session token.
 //
@@ -376,7 +391,7 @@ pubAppsRouter.post("/:pk/revoke-session", async (c) => {
 //
 // Security:
 //   - No secret key required (equivalent security via code's TTL/binding/single-use).
-//   - The transfer code has 256-bit entropy — not brute-forceable in 30s.
+//   - The transfer code has 256-bit entropy — not brute-forceable in 60s.
 //   - CORS is enforced by the upstream corsMiddleware (origin must be in allowed_origins).
 //   - The session token IS the raw cookie value; once returned, it has the same
 //     lifetime as any other Better Auth session (default: 7 days with cookieCache).
@@ -400,7 +415,7 @@ pubAppsRouter.post("/:pk/exchange-code", async (c) => {
     return Response.json({ error: "code is required" }, { status: 400 });
   }
 
-  // Validate the transfer code (single-use, pk-bound, 30s TTL)
+  // Validate the transfer code (single-use, pk-bound, 60s TTL)
   const { exchangeSessionTransferCode } = await import("../../lib/auth-ticket");
   const result = await exchangeSessionTransferCode(
     c.env.KV,

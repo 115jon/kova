@@ -8,10 +8,16 @@ import {
   shouldOfferOidcAccountPicker,
 } from "../lib/oidc-account-picker";
 import { dashboardCanUseCookieSession, isSessionUnexpired, resolveAppScopedSession, sdkCookieProvesIdentity } from "../lib/app-session";
+import { isPlatformOnlyAuthPath, rejectAppScopedSession } from "../lib/platform-session";
 import { withHeaders } from "../middleware/cors";
 import { withWallpaper } from "./user-wallpaper";
 
 const authRouter = new Hono<{ Bindings: Env }>();
+
+/** D1 returns SQLite integers where Better Auth's own session response has booleans. */
+function sqliteBool(value: unknown): boolean {
+  return value === true || value === 1 || value === "1" || value === "true";
+}
 
 // -- Auth routes -- with per-app enforcement when X-Publishable-Key is set --
 //
@@ -99,14 +105,19 @@ authRouter.all("/*", async (c) => {
         .first<Record<string, unknown>>()
         .catch(() => null);
 
-      if (!userRow?.["id"]) {
+      if (!userRow?.["id"] || sqliteBool(userRow["banned"])) {
         return withHeaders(Response.json(null), request, db, env.KV);
       }
 
       return withHeaders(
         Response.json({
           session: sessionRow,
-          user: await withWallpaper(db, userRow),
+          user: await withWallpaper(db, {
+            ...userRow,
+            emailVerified: sqliteBool(userRow["emailVerified"]),
+            banned: false,
+            twoFactorEnabled: sqliteBool(userRow["twoFactorEnabled"]),
+          }),
         }),
         request,
         db,
@@ -258,6 +269,11 @@ authRouter.all("/*", async (c) => {
       // a short-lived auth ticket. Since we control the hosted page's HTML,
       // branding cannot be removed. This is the planned "dynamic domains" feature.
     }
+  }
+
+  if (isPlatformOnlyAuthPath(new URL(req.url).pathname)) {
+    const rejection = await rejectAppScopedSession(db, request.headers);
+    if (rejection) return withHeaders(rejection, request, db, env.KV);
   }
 
   const auth = createAuth(env, req.raw.cf as IncomingRequestCfProperties | undefined);

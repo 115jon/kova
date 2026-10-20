@@ -203,6 +203,19 @@ keys only. `decodePublishableKey` returns `null` for keys Kova issues.
 
 ---
 
+## Redirect URIs
+
+Register every URL Kova may send users back to under **Redirect URIs** in the
+app's settings. A `redirect_url` that isn't registered is refused.
+
+- `https://app.example.com/auth/callback` allows that path only (and, if you
+  registered a query string, only that query).
+- A bare origin with no query, `https://app.example.com/`, allows **any path**
+  on that origin. Register exact paths unless that is what you want.
+- Custom schemes such as `myapp://auth` match scheme, host and path.
+
+---
+
 ## Imperative Client
 
 For use outside React (e.g., loaders, middleware):

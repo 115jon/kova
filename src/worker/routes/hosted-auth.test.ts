@@ -17,7 +17,7 @@ const createSessionTransferCode = vi.fn(async (
 ) => "xfr_native");
 
 vi.mock("../auth", () => ({
-  createAuth: () => ({ api: { getSession } }),
+  createAuth: () => ({ api: { getSession }, handler: async () => new Response("proxied") }),
 }));
 
 vi.mock("../lib/app-session", () => ({
@@ -78,18 +78,19 @@ function app(redirectUris: string[]): Application {
   };
 }
 
-function request(redirectUri: string, state: string): Request {
+function request(redirectUri: string, state: string, origin?: string): Request {
   return new Request("https://mira.auth.115jon.site/api/hosted/create-ticket", {
     method: "POST",
     headers: {
       host: "mira.auth.115jon.site",
       "content-type": "application/json",
+      ...(origin ? { origin } : {}),
     },
     body: JSON.stringify({ redirect_uri: redirectUri, state }),
   });
 }
 
-async function postTicket(redirectUri: string) {
+async function postTicket(redirectUri: string, origin?: string) {
   const { hostedAuthRouter } = await import("./hosted-auth");
   const env = {
     __hostedApp: { app: app([redirectUri]) },
@@ -99,7 +100,7 @@ async function postTicket(redirectUri: string) {
     AUTH_URL: "https://auth.115jon.site",
   };
   return hostedAuthRouter.request(
-    request(redirectUri, "app-nonce"),
+    request(redirectUri, "app-nonce", origin),
     {},
     env as never,
   );
@@ -155,6 +156,61 @@ describe("hosted password create-ticket", () => {
         redirectUri: "https://app.example.com/callback",
       }),
     );
+  });
+});
+
+describe("hosted create-ticket origin", () => {
+  const redirect = "https://app.example.com/callback";
+
+  it.each([
+    "https://mira.auth.115jon.site",
+    "https://auth.115jon.site",
+  ])("accepts the hosted page itself and the auth server (%s)", async (origin) => {
+    expect((await postTicket(redirect, origin)).status).toBe(200);
+  });
+
+  it("refuses another app's origin before reading any session", async () => {
+    getSession.mockClear();
+    createAuthTicket.mockClear();
+
+    const response = await postTicket(redirect, "https://other-app.example");
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: "origin_not_allowed" });
+    expect(getSession).not.toHaveBeenCalled();
+    expect(createAuthTicket).not.toHaveBeenCalled();
+  });
+});
+
+describe("hosted Better Auth proxy", () => {
+  // Every session on this host is app-scoped, so platform endpoints stay shut.
+  async function proxy(path: string) {
+    const { hostedAuthRouter } = await import("./hosted-auth");
+    const db = { prepare: () => ({ bind: () => ({ first: async () => ({ scoped: 1 }) }) }) };
+    const env = {
+      __hostedApp: { app: app(["mira://auth"]) },
+      DB: db,
+      KV: {},
+      BETTER_AUTH_SECRET: "test-secret",
+      AUTH_URL: "https://auth.115jon.site",
+    };
+    return hostedAuthRouter.request(
+      new Request(`https://mira.auth.115jon.site${path}`, {
+        headers: { host: "mira.auth.115jon.site", cookie: "__Secure-better-auth.session_token=app-token.sig" },
+      }),
+      {},
+      env as never,
+    );
+  }
+
+  it("refuses platform endpoints for the app session cookie", async () => {
+    const response = await proxy("/api/auth/admin/list-users");
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: "platform_session_required" });
+  });
+
+  it("still proxies what the hosted pages use", async () => {
+    expect(await (await proxy("/api/auth/get-session")).text()).toBe("proxied");
+    expect(await (await proxy("/api/auth/sign-out")).text()).toBe("proxied");
   });
 });
 

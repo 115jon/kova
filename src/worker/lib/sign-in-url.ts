@@ -5,8 +5,10 @@
  *
  * The page renders the app's branding, and after sign-in hands an app-scoped
  * session back to `redirect_url` as `?kova_auth_code=…` (exchanged at
- * /api/pub/apps/:pk/exchange-code). `redirect_url` must exactly match one of the
- * app's registered redirect URIs. An optional `state` is echoed back unchanged.
+ * /api/pub/apps/:pk/exchange-code). `redirect_url` must match one of the app's
+ * registered redirect URIs: the same path, and the same query if the
+ * registration has one. A registration of just an origin and `/` (no query)
+ * allows any path on that origin. An optional `state` is echoed back unchanged.
  * `native_handoff=1` is accepted as a legacy hint and changes nothing.
  */
 export function appSignInUrl(

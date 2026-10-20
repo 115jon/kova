@@ -76,7 +76,7 @@ function _isCrossOriginDomain(authUrl: string): boolean {
  * Builds the intermediate `oauth-complete` bounce URL that avoids cross-domain
  * cookie sharing.  After the OAuth callback sets the session on the auth server,
  * the browser navigates to this URL (same auth server domain — no cross-site
- * restriction).  The handler reads the session, creates a 30s transfer code,
+ * restriction).  The handler reads the session, creates a 60s transfer code,
  * and redirects to `redirectUri?kova_auth_code=xxx`.
  */
 function buildSdkBounceUrl(

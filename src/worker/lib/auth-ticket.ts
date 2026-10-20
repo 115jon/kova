@@ -61,7 +61,7 @@ export interface ExchangeTicketResult {
 // Security properties:
 //   - 256-bit random code — not guessable
 //   - Single-use (deleted on exchange)
-//   - 30-second hard TTL — window for timing attacks shrunk to near-zero
+//   - 60-second hard TTL — window for timing attacks shrunk to near-zero
 //   - pk-bound — only the initiating app's pk can exchange it
 //   - origin-bound — stored origin must match the exchange Origin header
 //   - The returned sessionToken IS the raw Better Auth session token; it is

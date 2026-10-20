@@ -273,7 +273,7 @@ export async function handleOAuthBounce(
   // browser navigates here.  Because we are ON auth.115jon.site, the session
   // cookie IS available — no cross-domain cookie restriction.
   //
-  // We create a 30s single-use transfer code and redirect to the consumer app
+  // We create a 60s single-use transfer code and redirect to the consumer app
   // with ?kova_auth_code=xxx.  The SDK reads this on mount and exchanges it
   // for the raw session token via POST /api/pub/apps/:pk/exchange-code.
   const mode = c.req.query("mode");
@@ -342,6 +342,40 @@ export async function handleOAuthBounce(
 }
 
 // ── SDK bounce helper ─────────────────────────────────────────────────────────
+
+/** A session this young was created by the sign-in that led to this handoff. */
+const FRESH_SIGN_IN_MS = 2 * 60 * 1000;
+
+type DeviceSessionEntry = { session: Record<string, unknown> };
+
+function timestampMs(value: unknown): number {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return /^\d+$/.test(value) ? Number(value) : Date.parse(value);
+  return Number.NaN;
+}
+
+export function isFreshSignInSession(createdAt: unknown, now = Date.now()): boolean {
+  const created = timestampMs(createdAt);
+  return Number.isFinite(created) && now - created <= FRESH_SIGN_IN_MS;
+}
+
+/** Token of the most recently updated saved session other than the current one. */
+export function pickSessionToRestore(
+  deviceSessions: DeviceSessionEntry[] | null,
+  currentSessionId: string,
+): string | null {
+  if (!Array.isArray(deviceSessions)) return null;
+  let best: { token: string; updated: number } | null = null;
+  for (const { session } of deviceSessions) {
+    const token = session["token"];
+    if (session["id"] === currentSessionId || typeof token !== "string" || !token) continue;
+    const updated = timestampMs(session["updatedAt"] ?? session["createdAt"]);
+    const rank = Number.isFinite(updated) ? updated : 0;
+    if (!best || rank > best.updated) best = { token, updated: rank };
+  }
+  return best?.token ?? null;
+}
 
 async function handleSdkBounce(
   c: Context<{ Bindings: Env & { ASSETS: Fetcher } }>
@@ -418,6 +452,10 @@ async function handleSdkBounce(
   // those headers in our own 302. The browser processes Set-Cookie BEFORE
   // following Location, so the admin session is restored transparently.
   //
+  // Only a session this round trip created displaced the previous one. A user
+  // who arrives already signed in changed nothing, and restoring then would
+  // flip the dashboard to an arbitrary saved account.
+  //
   // Falls through to a plain redirect if anything goes wrong — the SDK user
   // is still authenticated via Bearer token regardless.
   try {
@@ -426,21 +464,11 @@ async function handleSdkBounce(
       method: "GET",
       headers: c.req.raw.headers,
     });
-    const listRes = await auth.handler(listReq);
+    const listRes = isFreshSignInSession(session.session.createdAt) ? await auth.handler(listReq) : null;
 
-    if (listRes.ok) {
-      const deviceSessions = (await listRes.json()) as Array<{
-        session: Record<string, unknown>;
-        user: Record<string, unknown>;
-      }>;
-      // Find any session that is NOT the one just created by OAuth
-      const prevSession = Array.isArray(deviceSessions)
-        ? deviceSessions.find(s => s.session["id"] !== session.session.id)
-        : null;
-
-      const prevToken = prevSession
-        ? (prevSession.session["token"] as string | undefined) ?? null
-        : null;
+    if (listRes?.ok) {
+      const deviceSessions = (await listRes.json()) as DeviceSessionEntry[];
+      const prevToken = pickSessionToRestore(deviceSessions, session.session.id);
 
       if (prevToken) {
         // 2. Call Better Auth's multi-session/set-active endpoint via auth.handler()

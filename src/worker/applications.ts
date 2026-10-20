@@ -329,8 +329,8 @@ export interface UpdateApplicationInput {
   display_name?: string | null;
   logo_url?: string | null;
   favicon_url?: string | null;
-  primary_color?: string;
-  background_color?: string;
+  primary_color?: string | null;
+  background_color?: string | null;
   theme?: "dark" | "light" | "auto";
   hide_branding?: boolean;
   home_url?: string | null;
@@ -547,6 +547,60 @@ export function validateApplicationPolicy(input: {
   return null;
 }
 
+const BRANDING_URL_FIELDS = ["home_url", "terms_url", "privacy_url"] as const;
+const BRANDING_COLOR_FIELDS = ["primary_color", "background_color"] as const;
+const HEX_COLOR = /^#[0-9a-f]{3,8}$/i;
+
+export type BrandingField = (typeof BRANDING_URL_FIELDS)[number] | (typeof BRANDING_COLOR_FIELDS)[number];
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validates the branding fields of an admin PATCH body. These reach hosted
+ * pages, inline styles and public links, so they cannot be free-form. A field
+ * left out stays out of `values`; an empty URL clears it.
+ */
+export function parseBrandingFields(
+  body: Record<string, unknown>,
+): { values: Partial<Record<BrandingField, string | null>> } | { error: string } {
+  const values: Partial<Record<BrandingField, string | null>> = {};
+
+  for (const field of BRANDING_URL_FIELDS) {
+    const raw = body[field];
+    if (raw === undefined) continue;
+    if (raw === null || raw === "") {
+      values[field] = null;
+      continue;
+    }
+    const url = typeof raw === "string" ? raw.trim() : "";
+    if (!isHttpUrl(url)) return { error: `${field} must be an http(s) URL` };
+    values[field] = url;
+  }
+
+  for (const field of BRANDING_COLOR_FIELDS) {
+    const raw = body[field];
+    if (raw === undefined) continue;
+    if (raw !== null && !(typeof raw === "string" && HEX_COLOR.test(raw))) {
+      return { error: `${field} must be a hex color like #3b82f6` };
+    }
+    values[field] = raw;
+  }
+
+  return { values };
+}
+
+/**
+ * http(s) redirects must match a registration's origin and path, and its query
+ * when it has one. A registration of only an origin and `/` (no query) allows
+ * any path and query on that origin. Custom schemes match scheme, host and path.
+ */
 export function isRedirectUriAllowed(app: Application, uri: string): boolean {
   if (isApplicationSuspended(app)) return false;
 
