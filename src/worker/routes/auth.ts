@@ -9,6 +9,7 @@ import {
 } from "../lib/oidc-account-picker";
 import { dashboardCanUseCookieSession, isSessionUnexpired, resolveAppScopedSession, sdkCookieProvesIdentity } from "../lib/app-session";
 import { withHeaders } from "../middleware/cors";
+import { withWallpaper } from "./user-wallpaper";
 
 const authRouter = new Hono<{ Bindings: Env }>();
 
@@ -52,7 +53,7 @@ authRouter.all("/*", async (c) => {
   const isAuthServerOrigin = (origin: string) => {
     if (!origin) return false;
     try {
-      return origin === new URL(c.req.url).origin;
+      return origin === new URL(env.AUTH_URL).origin;
     } catch {
       return false;
     }
@@ -105,7 +106,7 @@ authRouter.all("/*", async (c) => {
       return withHeaders(
         Response.json({
           session: sessionRow,
-          user: userRow,
+          user: await withWallpaper(db, userRow),
         }),
         request,
         db,
@@ -158,15 +159,22 @@ authRouter.all("/*", async (c) => {
         userAgent: req.header("User-Agent") ?? null,
       });
       return withHeaders(
-        Response.json({ session: appSession, user: sessionData.user }),
+        Response.json({
+          session: appSession,
+          user: await withWallpaper(db, sessionData.user),
+        }),
         request,
         db,
         env.KV
       );
     }
 
+    const dashboardSession = dashboardCanUseCookieSession(row?.app_id) ? sessionData : null;
+    const body = dashboardSession?.user
+      ? { ...dashboardSession, user: await withWallpaper(db, dashboardSession.user) }
+      : dashboardSession;
     return withHeaders(
-      Response.json(dashboardCanUseCookieSession(row?.app_id) ? sessionData : null),
+      Response.json(body),
       request,
       db,
       env.KV

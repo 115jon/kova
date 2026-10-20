@@ -51,13 +51,16 @@ import { getApplicationById, getApplicationByPublishableKey, isRedirectUriAllowe
 import { createAuth } from "../auth";
 import { insertAppScopedSession } from "../lib/app-session";
 import { createAuthTicket, createSessionTransferCode } from "../lib/auth-ticket";
-import { escapeHtml } from "../lib/html";
+import { escapeHtml, jsonForHtmlScript } from "../lib/html";
+import { isSafeDeviceReturnPath } from "../lib/device-login";
+import { hostedProviders } from "../lib/hosted-providers";
 
 export interface OAuthBounceCtx {
   slug: string;
   appId: string;
   redirect_uri: string;
   state: string;
+  returnPath?: string;
   exp?: number;
 }
 
@@ -107,6 +110,21 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/**
+ * `mira://auth` and other custom schemes cannot finish the hosted ticket hop:
+ * the edge exchanges an `xfr_` session-transfer code from the SDK bounce, not
+ * the `ticket_` code `/oauth-complete` appends. HTTP(S) apps stay on the
+ * signed-ctx hosted hop.
+ */
+export function oauthStartUsesSdkBounce(redirectUri: string): boolean {
+  try {
+    const protocol = new URL(redirectUri).protocol;
+    return protocol !== "http:" && protocol !== "https:";
+  } catch {
+    return false;
+  }
+}
+
 export async function encodeOAuthCtx(ctx: OAuthBounceCtx, secret: string): Promise<string> {
   const payload = base64UrlEncode(JSON.stringify({
     ...ctx,
@@ -123,12 +141,17 @@ export async function encodeOAuthCtx(ctx: OAuthBounceCtx, secret: string): Promi
 export async function decodeOAuthCtx(raw: string | null, secret: string): Promise<OAuthBounceCtx | null> {
   if (!raw) return null;
   try {
-    const [payload, sig] = raw.split(".");
-    if (!payload || !sig) return null;
+    const [payload, sig, extra] = raw.split(".");
+    if (!payload || !sig || extra !== undefined) return null;
     const expected = await hmacSha256Hex(secret, payload);
     if (!constantTimeEqual(expected, sig)) return null;
     const parsed = JSON.parse(base64UrlDecode(payload)) as OAuthBounceCtx;
-    if (!parsed.exp || parsed.exp < Date.now()) return null;
+    if (!parsed || typeof parsed !== "object"
+      || typeof parsed.slug !== "string" || !/^[a-z0-9-]+$/.test(parsed.slug)
+      || typeof parsed.appId !== "string" || !parsed.appId
+      || typeof parsed.redirect_uri !== "string" || typeof parsed.state !== "string"
+      || typeof parsed.exp !== "number" || !Number.isFinite(parsed.exp) || parsed.exp <= Date.now()) return null;
+    if (parsed.returnPath !== undefined && (!isSafeDeviceReturnPath(parsed.returnPath) || parsed.redirect_uri !== "")) return null;
     return parsed;
   } catch {
     return null;
@@ -144,6 +167,100 @@ export async function decodeOAuthCtx(raw: string | null, secret: string): Promis
  *
  * Must be mounted on the MAIN Hono app (index.ts), not on hostedAuthRouter.
  */
+/**
+ * GET /api/hosted/oauth-start?pk=&provider=&ctx=
+ *
+ * Same-origin bootstrap for the hosted sign-in page's social buttons.
+ * The page lives on `{slug}.auth.…` but Google's callback is registered on
+ * the main auth domain, so the OAuth state cookie must be set HERE. A
+ * cross-origin POST from the subdomain would store it on the wrong host and
+ * the callback would fail with `state_mismatch`.
+ *
+ * `ctx` is the signed bounce context the hosted page already holds.
+ * HTTP(S) redirects keep that ctx on the callbackURL so the hosted hop can
+ * finish. Custom-scheme redirects (mira://auth) switch the callback to the
+ * SDK bounce, which mints the xfr_ code the app edge exchanges, and carry
+ * the app-level state nonce separately from Better Auth's OAuth state.
+ * Mounted on the main app, next to oauth-complete.
+ */
+export async function handleOAuthStart(
+  c: Context<{ Bindings: Env & { ASSETS: Fetcher } }>
+): Promise<Response> {
+  const pk = c.req.query("pk") ?? "";
+  const provider = c.req.query("provider") ?? "";
+  const ctx = c.req.query("ctx") ?? "";
+
+  const app = pk ? await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null) : null;
+  if (!app || app.suspended_at || !provider || !ctx) {
+    return c.html(
+      `<p style="font-family:monospace;color:#f87171;padding:32px">OAuth start failed: invalid request.</p>`,
+      400
+    );
+  }
+
+  const bounce = await decodeOAuthCtx(ctx, c.env.BETTER_AUTH_SECRET);
+  if (!bounce || bounce.appId !== app.id || bounce.slug !== (app.auth_slug ?? "")) {
+    return c.html(
+      `<p style="font-family:monospace;color:#f87171;padding:32px">OAuth start failed: invalid request.</p>`,
+      400
+    );
+  }
+  if (bounce.redirect_uri && !isRedirectUriAllowed(app, bounce.redirect_uri)) {
+    return c.html(
+      `<p style="font-family:monospace;color:#f87171;padding:32px">OAuth start failed: redirect not allowed.</p>`,
+      400
+    );
+  }
+
+  try {
+    const providers = await hostedProviders(c.env, app.id);
+    if (!providers.some(available => available === provider)) {
+      return c.html("<p>That sign-in provider is unavailable for this application.</p>", 403);
+    }
+  } catch {
+    return c.html("<p>Sign-in providers could not be loaded. Please try again.</p>", 503);
+  }
+
+  const callbackURL = new URL("/api/hosted/oauth-complete", c.env.AUTH_URL);
+  if (oauthStartUsesSdkBounce(bounce.redirect_uri)) {
+    // Native clients (mira://auth) need the xfr_ code the SDK bounce mints.
+    // The app-level CSRF nonce still rides along; the client checks it.
+    callbackURL.searchParams.set("mode", "sdk");
+    callbackURL.searchParams.set("pk", pk);
+    callbackURL.searchParams.set("redirect_uri", bounce.redirect_uri);
+    if (bounce.state) callbackURL.searchParams.set("state", bounce.state);
+  } else {
+    callbackURL.searchParams.set("ctx", ctx);
+  }
+
+  const body = JSON.stringify({ provider, callbackURL: callbackURL.toString() });
+
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Redirecting...</title></head>
+<body><script>
+  (async () => {
+    try {
+      const response = await fetch("/api/auth/sign-in/social", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+          "x-publishable-key": ${jsonForHtmlScript(pk)}
+        },
+        body: ${jsonForHtmlScript(body)}
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.url) throw new Error(data?.message || data?.error || "OAuth start failed");
+      window.location.replace(data.url);
+    } catch (e) {
+      document.body.textContent = "Sign-in could not start. Please go back and try again.";
+    }
+  })();
+</script></body></html>`;
+
+  return c.html(html);
+}
+
 export async function handleOAuthBounce(
   c: Context<{ Bindings: Env & { ASSETS: Fetcher } }>
 ): Promise<Response> {
@@ -179,7 +296,7 @@ export async function handleOAuthBounce(
   }
 
   const app = await getApplicationById(c.env.DB, ctx.appId).catch(() => null);
-  if (!app || app.suspended_at || app.auth_slug !== ctx.slug || !isRedirectUriAllowed(app, ctx.redirect_uri)) {
+  if (!app || app.suspended_at || app.auth_slug !== ctx.slug || (ctx.redirect_uri && !isRedirectUriAllowed(app, ctx.redirect_uri))) {
     return c.html(
       `<p style="font-family:monospace;color:#f87171;padding:32px">OAuth bounce failed: invalid application context.</p>`,
       400
@@ -207,7 +324,7 @@ export async function handleOAuthBounce(
     userId: session.user.id,
     sessionId: session.session.id,
     appId: app.id,
-    redirectUri: ctx.redirect_uri,
+    redirectUri: ctx.returnPath ?? ctx.redirect_uri,
   });
 
   // Build subdomain URL — derive from AUTH_URL
@@ -218,6 +335,7 @@ export async function handleOAuthBounce(
   const bounceUrl = new URL(`${subdomainOrigin}/oauth-complete`);
   bounceUrl.searchParams.set("ticket", ticket);
   if (ctx.redirect_uri) bounceUrl.searchParams.set("redirect_uri", ctx.redirect_uri);
+  if (ctx.returnPath) bounceUrl.searchParams.set("returnPath", ctx.returnPath);
   if (ctx.state) bounceUrl.searchParams.set("state", ctx.state);
 
   return Response.redirect(bounceUrl.toString(), 302);
@@ -285,7 +403,10 @@ async function handleSdkBounce(
 
   // ── Build redirect URL ────────────────────────────────────────────────────
   const dest = new URL(redirectUri);
+  dest.searchParams.set("code", code);
   dest.searchParams.set("kova_auth_code", code);
+  const appState = c.req.query("state") ?? "";
+  if (appState) dest.searchParams.set("state", appState);
 
   // ── Restore previous platform session (Bug 2 mitigation) ─────────────────
   //

@@ -13,6 +13,9 @@
  *   ALL  /api/auth/*                       → Proxied to Better Auth (subdomain-scoped session)
  *   POST /api/hosted/create-ticket         → Issues short-lived auth code after sign-in
  *   POST /api/hosted/exchange-ticket       → Exchanges code for userId (requires sk_*)
+ *   GET  /device                           → Device-code approval (user code only)
+ *   POST /api/hosted/device/approve        → Mint an app session onto a pending device login
+ *   POST /api/hosted/device/deny           → Deny a pending device login
  *   *    (catch-all)                       → Branded 404
  *
  * ## Session isolation
@@ -25,14 +28,27 @@
  */
 
 import { Context, Hono } from "hono";
+import { generateCookie, generateSignedCookie } from "hono/cookie";
+import { parseCookies } from "better-auth/cookies";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { type Application, isRedirectUriAllowed, validateSecretKey } from "../applications";
 import { createAuth } from "../auth";
 import { APP_SESSION_TTL_MS, insertAppScopedSession } from "../lib/app-session";
-import { createAuthTicket, exchangeAuthTicket } from "../lib/auth-ticket";
+import { createAuthTicket, createSessionTransferCode, exchangeAuthTicket } from "../lib/auth-ticket";
+import {
+  decideDeviceLogin,
+  deviceReturnPath,
+  findDeviceLoginByUserCode,
+  formatUserCode,
+  isSafeDeviceReturnPath,
+  type DeviceLoginDecisionResult,
+  type DeviceLoginStatus,
+} from "../lib/device-login";
 import { escapeHtml, jsonForHtmlScript } from "../lib/html";
+import { hostedProviders } from "../lib/hosted-providers";
+import { RALPH_RADIO_SVG, resolveHostedAppearance, type HostedProvider } from "../../shared/hosted-brand";
 import { findMFAEnforcedOrgBlockingUser } from "../org-settings";
-import { encodeOAuthCtx } from "./oauth-bounce";
+import { encodeOAuthCtx, oauthStartUsesSdkBounce } from "./oauth-bounce";
 
 // ── Router ─────────────────────────────────────────────────────────────────────
 
@@ -68,8 +84,8 @@ type HostedPageMode = "sign-in" | "sign-up";
  * Generates the branded hosted auth page HTML shell.
  *
  * The page relies on `window.__KOVA_AUTH_HOSTED__` being consumed by the
- * JS bundle served from Workers Assets. Phase 1 uses the shared bundle;
- * a standalone hosted-auth build target is deferred to Tier 3 (see TASKS.md).
+ * JS bundle served from Workers Assets (`/assets/hosted-auth.js`, built by
+ * vite.hosted.config.ts from src/web/hosted/hosted-auth.ts).
  */
 async function buildHostedPage(opts: {
   app: Application;
@@ -79,12 +95,21 @@ async function buildHostedPage(opts: {
   authUrl: string;       // subdomain URL — used for non-OAuth auth endpoints
   mainAuthUrl: string;   // main platform URL — used for OAuth provider initiation
   signingSecret: string;
+  returnPath?: string;
+  enabledProviders: HostedProvider[];
 }): Promise<string> {
   const { app, mode, redirectUri, state, authUrl, mainAuthUrl } = opts;
   const title = mode === "sign-in"
     ? `Sign in to ${esc(app.display_name ?? app.name)}`
     : `Create account — ${esc(app.display_name ?? app.name)}`;
 
+  const appearance = resolveHostedAppearance(app.publishable_key, {
+    primaryColor: app.primary_color ?? "#3b82f6",
+    backgroundColor: app.background_color ?? "#0a0a0a",
+    theme: app.theme ?? "dark",
+    logoUrl: app.logo_url ?? null,
+    faviconUrl: app.favicon_url ?? null,
+  });
   const bootstrap = jsonForHtmlScript({
     publishableKey: app.publishable_key,
     // authUrl: subdomain — for session reading, sign-out, etc.
@@ -95,19 +120,18 @@ async function buildHostedPage(opts: {
     mainAuthUrl,
     redirectUri,
     state,
+    ...(isSafeDeviceReturnPath(opts.returnPath) ? { returnPath: opts.returnPath } : {}),
     mode: app.environment === "production" ? "live" : "test",
     page: mode,
-    appearance: {
-      primaryColor: app.primary_color ?? "#3b82f6",
-      backgroundColor: app.background_color ?? "#0a0a0a",
-      theme: app.theme ?? "dark",
-      logoUrl: app.logo_url ?? null,
-      faviconUrl: app.favicon_url ?? null,
-    },
+    appearance,
+    enabledProviders: opts.enabledProviders,
     app: {
       id: app.id,
       name: app.display_name ?? app.name,
-      homeUrl: app.home_url ?? null,
+      // Device sign-in has no ticket redirect. The current hosted bundle sends
+      // an empty redirectUri to homeUrl, so that value is the same-origin
+      // /device return. A rebuilt bundle prefers returnPath and skips the ticket.
+      homeUrl: isSafeDeviceReturnPath(opts.returnPath) ? opts.returnPath : (app.home_url ?? null),
       termsUrl: app.terms_url ?? null,
       privacyUrl: app.privacy_url ?? null,
     },
@@ -120,6 +144,7 @@ async function buildHostedPage(opts: {
       appId: app.id,
       redirect_uri: redirectUri,
       state,
+      ...(isSafeDeviceReturnPath(opts.returnPath) ? { returnPath: opts.returnPath } : {}),
     }, opts.signingSecret),
   });
 
@@ -131,22 +156,21 @@ async function buildHostedPage(opts: {
   <title>${title}</title>
   <meta name="robots" content="noindex" />
   ${app.favicon_url ? `<link rel="icon" href="${esc(app.favicon_url)}" />` : ""}
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       display: flex; min-height: 100svh;
       align-items: center; justify-content: center;
-      background: ${esc(app.background_color ?? "#0a0a0a")};
-      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      background: ${esc(appearance.backgroundColor)};
+      font-family: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
     }
     #root { width: 100%; max-width: 420px; padding: 24px; }
     .ra-skeleton {
       background: rgba(255,255,255,0.04); border-radius: 10px;
       padding: 32px 28px; border: 1px solid rgba(255,255,255,0.07);
       text-align: center; color: rgba(255,255,255,0.3); font-size: 0.8rem;
-      animation: ra-pulse 1.5s ease-in-out infinite;
     }
-    @keyframes ra-pulse { 0%,100% { opacity:0.5 } 50% { opacity:1 } }
   </style>
 </head>
 <body>
@@ -162,12 +186,22 @@ async function buildHostedPage(opts: {
 
 // ── GET /sign-in ───────────────────────────────────────────────────────────────
 
+function hostedPageQuery(c: HC): { redirectUri: string; state: string; returnPath?: string } {
+  const deviceReturn = c.req.query("device_return");
+  if (isSafeDeviceReturnPath(deviceReturn)) {
+    return { redirectUri: "", state: "", returnPath: deviceReturn };
+  }
+  return {
+    redirectUri: c.req.query("redirect_uri") ?? "",
+    state: c.req.query("state") ?? "",
+  };
+}
+
 hostedAuthRouter.get("/sign-in", async (c) => {
   const app = getApp(c);
   if (app.suspended_at) return c.html(`<p style="font-family:monospace;color:#f87171;padding:32px">Application suspended.</p>`, 403);
   const host = getHost(c);
-  const redirectUri = c.req.query("redirect_uri") ?? "";
-  const state = c.req.query("state") ?? "";
+  const { redirectUri, state, returnPath } = hostedPageQuery(c);
 
   if (redirectUri && !isRedirectUriAllowed(app, redirectUri)) {
     return c.html(
@@ -176,8 +210,11 @@ hostedAuthRouter.get("/sign-in", async (c) => {
     );
   }
 
+  const enabledProviders = await hostedProviders(c.env, app.id).catch(() => null);
+  if (!enabledProviders) return c.html(deviceMessagePage(app, "Sign-in providers could not be loaded. Please try again."), 503);
   return c.html(await buildHostedPage({
-    app, mode: "sign-in", redirectUri, state,
+    app, mode: "sign-in", redirectUri, state, returnPath,
+    enabledProviders,
     authUrl: `https://${host}`,
     mainAuthUrl: c.env.AUTH_URL,
     signingSecret: c.env.BETTER_AUTH_SECRET,
@@ -190,8 +227,7 @@ hostedAuthRouter.get("/sign-up", async (c) => {
   const app = getApp(c);
   if (app.suspended_at) return c.html(`<p style="font-family:monospace;color:#f87171;padding:32px">Application suspended.</p>`, 403);
   const host = getHost(c);
-  const redirectUri = c.req.query("redirect_uri") ?? "";
-  const state = c.req.query("state") ?? "";
+  const { redirectUri, state, returnPath } = hostedPageQuery(c);
 
   if (redirectUri && !isRedirectUriAllowed(app, redirectUri)) {
     return c.html(
@@ -200,8 +236,11 @@ hostedAuthRouter.get("/sign-up", async (c) => {
     );
   }
 
+  const enabledProviders = await hostedProviders(c.env, app.id).catch(() => null);
+  if (!enabledProviders) return c.html(deviceMessagePage(app, "Sign-in providers could not be loaded. Please try again."), 503);
   return c.html(await buildHostedPage({
-    app, mode: "sign-up", redirectUri, state,
+    app, mode: "sign-up", redirectUri, state, returnPath,
+    enabledProviders,
     authUrl: `https://${host}`,
     mainAuthUrl: c.env.AUTH_URL,
     signingSecret: c.env.BETTER_AUTH_SECRET,
@@ -259,6 +298,31 @@ hostedAuthRouter.post("/api/hosted/create-ticket", async (c) => {
     return c.json({ error: "redirect_uri not in allowlist" }, 403);
   }
 
+  // Custom-scheme clients (mira://auth) exchange an xfr_ session-transfer code
+  // at the public API, same as the Google SDK bounce. HTTP(S) apps keep the
+  // ticket_ hop, which their backend redeems with a secret key. The app-level
+  // state nonce is echoed back; it is not Better Auth's OAuth state.
+  if (oauthStartUsesSdkBounce(redirectUri)) {
+    const { generateId } = await import("better-auth");
+    const appSessionToken = generateId(32);
+    const appSessionId = generateId();
+    await insertAppScopedSession(c.env.DB, {
+      sessionId: appSessionId,
+      userId: session.user.id,
+      token: appSessionToken,
+      appId: app.id,
+      ipAddress: c.req.header("CF-Connecting-IP") ?? null,
+      userAgent: c.req.header("User-Agent") ?? null,
+    });
+    const code = await createSessionTransferCode(
+      c.env.KV,
+      appSessionToken,
+      app.publishable_key,
+      new URL(redirectUri).origin,
+    );
+    return c.json({ code, kova_auth_code: code, state });
+  }
+
   const code = await createAuthTicket(c.env.KV, {
     userId: session.user.id,
     sessionId: session.session.id,
@@ -306,14 +370,8 @@ hostedAuthRouter.post("/api/hosted/exchange-ticket", async (c) => {
 // auth domain (see routes/oauth-bounce.ts). Steps:
 //
 //   1. Exchange the ticket → get userId + sessionId (from main-domain OAuth)
-//   2. Sign the user into the SUBDOMAIN using signInWithCookie helper:
-//      Better Auth doesn't expose a direct "create session for userId" server
-//      API, so we call signIn.anonymous() then link — OR we use the bearer
-//      token approach: treat the sessionId from the main domain as a token
-//      and have Better Auth set a subdomain cookie via the email magic-link
-//      style setSession call.
-//      Simplest correct approach: use createSession from Better Auth's admin API.
-//   3. Redirect to redirect_uri (if set and allowed) or to the app home_url.
+//   2. Mint an app session and sign the exact-host cookie using auth.$context.
+//   3. Return to the ticket-bound device path, allowed redirect, or app home.
 
 hostedAuthRouter.get("/oauth-complete", async (c) => {
   const app = getApp(c);
@@ -324,6 +382,12 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
   const ticket = c.req.query("ticket") ?? "";
   const redirectUri = c.req.query("redirect_uri") ?? "";
   const state = c.req.query("state") ?? "";
+  const returnPath = c.req.query("returnPath");
+
+  if ((returnPath !== undefined && (!isSafeDeviceReturnPath(returnPath) || redirectUri !== ""))
+    || (redirectUri && !isRedirectUriAllowed(app, redirectUri))) {
+    return c.html(deviceMessagePage(app, "OAuth complete failed: invalid destination."), 400);
+  }
 
   if (!ticket) {
     return c.html(
@@ -333,7 +397,7 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
   }
 
   // Exchange the bounce ticket (issued by oauth-bounce.ts on the main domain)
-  const ticketResult = await exchangeAuthTicket(c.env.KV, ticket, app.id, redirectUri);
+  const ticketResult = await exchangeAuthTicket(c.env.KV, ticket, app.id, returnPath ?? redirectUri);
   if (!ticketResult) {
     return c.html(
       `<p style="font-family:monospace;color:#f87171;padding:32px">OAuth complete failed: ticket expired or invalid. Please sign in again.</p>`,
@@ -358,11 +422,16 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
     subdomainUrl
   );
 
-  // Mint a new subdomain-scoped session via Better Auth's admin API.
-  // Better Auth's session endpoint is /api/auth/admin/create-session.
-  // We call it server-side via auth.api (admin plugin registers this route).
-  let setCookieHeader = "";
+  const responseHeaders = new Headers();
   try {
+    const context = await auth.$context;
+    const attributes = {
+      ...context.authCookies.sessionToken.attributes,
+      domain: undefined,
+      httpOnly: true,
+      secure: true,
+      maxAge: Math.floor(APP_SESSION_TTL_MS / 1000),
+    };
     const { generateId } = await import("better-auth");
     const sessionId = generateId();
     const sessionToken = generateId(32);
@@ -375,13 +444,28 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
       userAgent: c.req.header("User-Agent") ?? null,
     });
 
-    // Better Auth session cookies are named "better-auth.session_token" and contain session.token.
-    // SameSite=None; Secure; HttpOnly — matches the advanced.defaultCookieAttributes in auth.ts.
-    // No Domain= attribute → cookie scoped to this exact subdomain hostname (RFC 6265 §5.2).
-    setCookieHeader = `better-auth.session_token=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=None; Max-Age=${Math.floor(APP_SESSION_TTL_MS / 1000)}`;
+    // Better Auth 1.6 uses token.base64(HMAC-SHA256(token)). Hono's signed
+    // serializer uses the same format; the name/attributes come from Better Auth.
+    responseHeaders.append("Set-Cookie", await generateSignedCookie(
+      context.authCookies.sessionToken.name, sessionToken, context.secret, attributes,
+    ));
+    // A previous cached session may describe another user. Expire it and its
+    // chunks so getSession reads the newly minted session from storage.
+    const cache = context.authCookies.sessionData;
+    const cacheNames = new Set([cache.name]);
+    for (const name of parseCookies(c.req.header("cookie") ?? "").keys()) {
+      if (name.startsWith(`${cache.name}.`)) cacheNames.add(name);
+    }
+    for (const name of cacheNames) responseHeaders.append("Set-Cookie", generateCookie(name, "", {
+      ...cache.attributes, domain: undefined, httpOnly: true, secure: true, maxAge: 0,
+    }));
   } catch {
-    // Non-fatal — user can still complete the redirect flow; they just won't
-    // have a local subdomain session cookie (OAuth session on main domain is still valid).
+    return c.html(deviceMessagePage(app, "Sign-in could not be completed. Please sign in again."), 503);
+  }
+
+  if (returnPath) {
+    responseHeaders.set("Location", new URL(returnPath, subdomainUrl).toString());
+    return new Response(null, { status: 302, headers: responseHeaders });
   }
 
   // If the app has a redirect_uri, issue a new ticket and send the user there
@@ -396,25 +480,241 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
     const dest = new URL(redirectUri);
     dest.searchParams.set("code", sdkTicket);
     if (state) dest.searchParams.set("state", state);
-    const res = Response.redirect(dest.toString(), 302);
-    if (setCookieHeader) {
-      const headers = new Headers(res.headers);
-      headers.append("Set-Cookie", setCookieHeader);
-      return new Response(res.body, { status: res.status, headers });
-    }
-    return res;
+    responseHeaders.set("Location", dest.toString());
+    return new Response(null, { status: 302, headers: responseHeaders });
   }
 
   // No redirect_uri — just show a success page (user is signed in on subdomain)
   const homeUrl = app.home_url ?? "/";
-  const res = Response.redirect(homeUrl, 302);
-  if (setCookieHeader) {
-    const headers = new Headers(res.headers);
-    headers.append("Set-Cookie", setCookieHeader);
-    return new Response(res.body, { status: res.status, headers });
-  }
-  return res;
+  responseHeaders.set("Location", new URL(homeUrl, subdomainUrl).toString());
+  return new Response(null, { status: 302, headers: responseHeaders });
 });
+
+// ── Device-code approval ───────────────────────────────────────────────────────
+//
+// The session cookie is scoped to this app host, so approval lives here and
+// not on the dashboard. The page never receives the device code or the
+// session token. A same-origin /device return is the only post-login hop.
+
+function deviceShell(app: Application, body: string): string {
+  const name = esc(app.display_name ?? app.name);
+  const bg = esc(app.background_color ?? "#0a0a0a");
+  const primary = esc(app.primary_color ?? "#3b82f6");
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>${name}</title>
+  <style>
+    body { margin: 0; min-height: 100svh; display: flex; align-items: center; justify-content: center;
+      background: ${bg}; color: rgba(255,255,255,0.86);
+      font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+    main { width: 100%; max-width: 420px; padding: 24px; }
+    section { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 10px; padding: 32px 28px; text-align: center; }
+    h1 { font-size: 1.15rem; font-weight: 600; color: #fff; margin: 0; }
+    p { color: rgba(255,255,255,0.55); font-size: 0.8rem; }
+    .code { font-size: 1.6rem; letter-spacing: 0.12em; color: #fff; margin: 18px 0; }
+    .actions { display: flex; gap: 10px; }
+    button { flex: 1; font: inherit; border: 0; border-radius: 8px; padding: 11px 14px;
+      cursor: pointer; font-size: 0.8rem; }
+    button.approve { background: ${primary}; color: #fff; font-weight: 600; }
+    button.deny { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.16); }
+    button:disabled { opacity: 0.55; cursor: progress; }
+    #device-result { min-height: 1.2em; }
+  </style>
+</head>
+<body>
+  <main><section>
+    ${body}
+  </section></main>
+</body>
+</html>`;
+}
+
+function deviceMessagePage(app: Application, message: string): string {
+  return deviceShell(app, `<h1>${esc(app.display_name ?? app.name)}</h1><p>${esc(message)}</p>`);
+}
+
+function deviceStatusCopy(status: DeviceLoginStatus): string {
+  if (status === "approved") return "Approved. You can return to the device.";
+  if (status === "denied") return "Denied. That device will not be signed in.";
+  if (status === "consumed") return "This code was already used.";
+  return "This code is not valid.";
+}
+
+function deviceApprovalPage(app: Application, displayCode: string): string {
+  const name = esc(app.display_name ?? app.name);
+  return deviceShell(app, `<h1>${name}</h1>
+    <p>Confirm this code matches the device, then approve.</p>
+    <p class="code" id="device-user-code">${esc(displayCode)}</p>
+    <div class="actions">
+      <button type="button" class="approve" id="approve-device">Approve</button>
+      <button type="button" class="deny" id="deny-device">Deny</button>
+    </div>
+    <p id="device-result" role="status"></p>
+    <script>
+      const code = document.getElementById("device-user-code").textContent || "";
+      const result = document.getElementById("device-result");
+      const buttons = [
+        document.getElementById("approve-device"),
+        document.getElementById("deny-device"),
+      ];
+      async function decide(path) {
+        for (const button of buttons) button.disabled = true;
+        const response = await fetch(path, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ userCode: code }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data.status === "approved") {
+          result.textContent = "Approved. You can return to the device.";
+          return;
+        }
+        if (response.ok && data.status === "denied") {
+          result.textContent = "Denied. That device will not be signed in.";
+          return;
+        }
+        result.textContent = "That code can no longer be used.";
+      }
+      document.getElementById("approve-device").addEventListener("click", () => {
+        decide("/api/hosted/device/approve");
+      });
+      document.getElementById("deny-device").addEventListener("click", () => {
+        decide("/api/hosted/device/deny");
+      });
+    </script>`);
+}
+
+function decisionJson(c: HC, result: DeviceLoginDecisionResult) {
+  c.header("Cache-Control", "no-store");
+  if ("error" in result && result.error === "not_pending") {
+    return c.json({ error: "not_pending", status: result.status }, 409);
+  }
+  if ("error" in result) return c.json({ error: "invalid_code" }, 400);
+  return c.json({ status: result.status });
+}
+
+async function hostedUser(c: HC) {
+  const app = getApp(c);
+  if (app.suspended_at) {
+    return { error: c.json({ error: "Application suspended" }, 403) };
+  }
+  const host = getHost(c);
+  const auth = createAuth(
+    c.env,
+    c.req.raw.cf as IncomingRequestCfProperties | undefined,
+    c.req.raw,
+    `https://${host}`,
+  );
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  if (!session?.user?.id) {
+    return { error: c.json({ error: "Not authenticated" }, 401) };
+  }
+  return { app, userId: session.user.id };
+}
+
+hostedAuthRouter.get("/device", async (c) => {
+  const app = getApp(c);
+  if (app.suspended_at) {
+    return c.html(`<p style="font-family:monospace;color:#f87171;padding:32px">Application suspended.</p>`, 403);
+  }
+  c.header("Cache-Control", "no-store");
+  c.header("Referrer-Policy", "no-referrer");
+
+  const rawCode = c.req.query("code") ?? "";
+  const returnPath = deviceReturnPath(rawCode);
+  const record = returnPath ? await findDeviceLoginByUserCode(c.env.KV, rawCode) : null;
+  const matchesApp = !!record
+    && record.publishableKey === app.publishable_key
+    && record.appId === app.id
+    && Date.now() < record.expiresAt;
+  if (!returnPath || !record || !matchesApp) {
+    return c.html(deviceMessagePage(app, "This code is not valid."), 400);
+  }
+  if (record.status !== "pending") {
+    return c.html(deviceMessagePage(app, deviceStatusCopy(record.status)));
+  }
+
+  const host = getHost(c);
+  const auth = createAuth(
+    c.env,
+    c.req.raw.cf as IncomingRequestCfProperties | undefined,
+    c.req.raw,
+    `https://${host}`,
+  );
+  const session = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+  if (!session?.user?.id) {
+    const enabledProviders = await hostedProviders(c.env, app.id).catch(() => null);
+    if (!enabledProviders) return c.html(deviceMessagePage(app, "Sign-in providers could not be loaded. Please try again."), 503);
+    return c.html(await buildHostedPage({
+      app,
+      mode: "sign-in",
+      redirectUri: "",
+      state: "",
+      returnPath,
+      enabledProviders,
+      authUrl: `https://${host}`,
+      mainAuthUrl: c.env.AUTH_URL,
+      signingSecret: c.env.BETTER_AUTH_SECRET,
+    }));
+  }
+
+  return c.html(deviceApprovalPage(app, formatUserCode(record.userCode)));
+});
+
+async function postDeviceDecision(c: HC, decision: "approved" | "denied") {
+  const gate = await hostedUser(c);
+  if ("error" in gate && gate.error) return gate.error;
+  if (!("app" in gate)) return c.json({ error: "Not authenticated" }, 401);
+
+  const rawBody = await c.req.json().catch(() => null);
+  const userCode = rawBody && typeof rawBody === "object" && !Array.isArray(rawBody)
+    ? (rawBody as Record<string, unknown>).userCode
+    : undefined;
+  const preview = await findDeviceLoginByUserCode(c.env.KV, userCode);
+  const pending = !!preview
+    && preview.publishableKey === gate.app.publishable_key
+    && preview.appId === gate.app.id
+    && Date.now() < preview.expiresAt
+    && preview.status === "pending";
+  if (!preview || preview.publishableKey !== gate.app.publishable_key || preview.appId !== gate.app.id || Date.now() >= preview.expiresAt) {
+    return decisionJson(c, { error: "invalid_code" });
+  }
+  if (!pending) return decisionJson(c, { error: "not_pending", status: preview.status });
+
+  let sessionToken: string | null = null;
+  if (decision === "approved") {
+    const { generateId } = await import("better-auth");
+    sessionToken = generateId(32);
+    const appSessionId = generateId();
+    await insertAppScopedSession(c.env.DB, {
+      sessionId: appSessionId,
+      userId: gate.userId,
+      token: sessionToken,
+      appId: gate.app.id,
+      ipAddress: c.req.header("CF-Connecting-IP") ?? null,
+      userAgent: c.req.header("User-Agent") ?? null,
+    });
+  }
+
+  const result = await decideDeviceLogin(c.env.KV, {
+    publishableKey: gate.app.publishable_key,
+    appId: gate.app.id,
+    userCode,
+    decision,
+    sessionToken,
+    approverUserId: gate.userId,
+  });
+  return decisionJson(c, result);
+}
+
+hostedAuthRouter.post("/api/hosted/device/approve", (c) => postDeviceDecision(c, "approved"));
+hostedAuthRouter.post("/api/hosted/device/deny", (c) => postDeviceDecision(c, "denied"));
 
 // ── Catch-all 404 ──────────────────────────────────────────────────────────────
 

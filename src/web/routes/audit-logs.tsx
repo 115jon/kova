@@ -322,7 +322,7 @@ function AuditLogsPage() {
               background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <ClipboardList size={18} color="var(--color-accent)" strokeWidth={1.5} />
+              <ClipboardList size={18} color="var(--color-text-accent)" strokeWidth={1.5} />
             </div>
             <p style={{ color: "var(--color-text-secondary)", marginBottom: 6, fontFamily: "var(--font-mono)" }}>No audit events found</p>
             <p style={{ color: "var(--color-text-tertiary)", fontSize: "0.72rem" }}>
@@ -356,7 +356,7 @@ function AuditLogsPage() {
                     {row.targetLabel
                       ? <span title={row.targetLabel}>{row.targetLabel}</span>
                       : row.targetId
-                        ? <code style={{ color: "var(--color-accent)" }}>{row.targetId.slice(0, 12)}…</code>
+                        ? <code style={{ color: "var(--color-text-accent)" }}>{row.targetId.slice(0, 12)}…</code>
                         : <span style={{ color: "var(--color-text-tertiary)" }}>—</span>
                     }
                   </td>

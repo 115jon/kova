@@ -57,7 +57,7 @@ export function UserAvatar({ src, name, size = 32, style }: UserAvatarProps) {
         ...baseStyle,
         background: "var(--color-accent-dim)",
         border: "1px solid rgba(59,130,246,0.2)",
-        color: "var(--color-accent)",
+        color: "var(--color-text-accent)",
         fontFamily: "var(--font-mono)",
         fontWeight: 700,
         fontSize,

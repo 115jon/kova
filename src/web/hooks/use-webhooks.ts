@@ -28,6 +28,7 @@ export type AuditAction =
   | "user.passwordSet"
   | "user.emailVerified"
   | "user.avatarUpdated"
+  | "user.wallpaperUpdated"
   | "twoFactor.enabled"
   | "twoFactor.disabled"
   | "twoFactor.challengePassed"

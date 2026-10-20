@@ -275,7 +275,7 @@ function CommandPalette({ onClose, currentUserId }: { onClose: () => void; curre
                 textAlign: "left",
               }}
             >
-              <span style={{ color: activeIdx === idx ? "var(--color-accent)" : "var(--color-text-tertiary)", flexShrink: 0 }}>
+              <span style={{ color: activeIdx === idx ? "var(--color-text-accent)" : "var(--color-text-tertiary)", flexShrink: 0 }}>
                 {item.icon}
               </span>
               <span style={{ flex: 1, minWidth: 0 }}>
@@ -377,7 +377,7 @@ function OrgAvatar({ name, logo, size = 24 }: { name: string; logo?: string | nu
       background: "var(--color-accent-dim)",
       border: "1px solid rgba(59,130,246,0.2)",
       fontFamily: "var(--font-mono)",
-      fontWeight: 700, fontSize: size * 0.44, color: "var(--color-accent)",
+      fontWeight: 700, fontSize: size * 0.44, color: "var(--color-text-accent)",
     }}>
       {name[0]?.toUpperCase() ?? "O"}
     </div>
@@ -503,13 +503,13 @@ function OrgSwitcher() {
                   <p style={{
                     fontFamily: "var(--font-mono)",
                     fontSize: "0.76rem", fontWeight: 600,
-                    color: isPersonal ? "var(--color-accent)" : "var(--color-text-secondary)",
+                    color: isPersonal ? "var(--color-text-accent)" : "var(--color-text-secondary)",
                     letterSpacing: "-0.01em",
                   }}>
                     {isSwitching ? "Switching…" : "No organization"}
                   </p>
                 </div>
-                {isPersonal && <Check size={11} color="var(--color-accent)" />}
+                {isPersonal && <Check size={11} color="var(--color-text-accent)" />}
               </button>
             );
           })()}
@@ -543,14 +543,14 @@ function OrgSwitcher() {
                   <p style={{
                     fontFamily: "var(--font-mono)",
                     fontSize: "0.76rem", fontWeight: 600,
-                    color: isActive ? "var(--color-accent)" : "var(--color-text-primary)",
+                    color: isActive ? "var(--color-text-accent)" : "var(--color-text-primary)",
                     overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                     letterSpacing: "-0.01em",
                   }}>
                     {isSwitching ? "Switching…" : org.name}
                   </p>
                 </div>
-                {isActive && <Check size={11} color="var(--color-accent)" />}
+                {isActive && <Check size={11} color="var(--color-text-accent)" />}
               </button>
             );
           })}
@@ -652,14 +652,14 @@ function SessionSwitcher() {
                 style={{ flexShrink: 0 }}
               />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", fontWeight: 600, color: "var(--color-accent)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>
+                <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", fontWeight: 600, color: "var(--color-text-accent)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-0.01em" }}>
                   {currentSession.user.name ?? currentSession.user.email}
                 </p>
                 <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.62rem", color: "var(--color-text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {currentSession.user.email}
                 </p>
               </div>
-              <Check size={10} color="var(--color-accent)" />
+              <Check size={10} color="var(--color-text-accent)" />
             </div>
           )}
 

@@ -3,7 +3,7 @@
 //
 // Routes:
 //   /api/auth/*                 → Better Auth (per-app pk enforcement)
-//   /api/user/*                 → User self-service (avatar, fields, password)
+//   /api/user/*                 → User self-service (avatar, wallpaper, fields, password)
 //   /api/org/*                  → Org management (logo upload/remove)
 //   /api/admin/audit/*          → Audit logs
 //   /api/admin/users/*          → User admin (detail, avatar, fields)
@@ -37,7 +37,7 @@ import { appsRouter } from "./routes/apps";
 import { appUsersRouter } from "./routes/apps/users";
 import { authRouter } from "./routes/auth";
 import { hostedAuthRouter } from "./routes/hosted-auth";
-import { handleOAuthBounce } from "./routes/oauth-bounce";
+import { handleOAuthBounce, handleOAuthStart } from "./routes/oauth-bounce";
 import { orgRouter } from "./routes/org";
 import { pubAppsRouter } from "./routes/pub/apps";
 import { userRouter } from "./routes/user";
@@ -66,7 +66,11 @@ export function isDashboardHost(host: string, baseHost: string) {
   const normalizedHost = normalizeHost(host);
   if (!normalizedHost) return false;
 
-  return normalizedHost === baseHost || ["localhost", "127.0.0.1", "::1"].includes(normalizedHost);
+  if (normalizedHost === baseHost || ["localhost", "127.0.0.1", "::1"].includes(normalizedHost)) {
+    return true;
+  }
+
+  return baseHost === "auth.lvh.me" && normalizedHost.endsWith(".115jon.com");
 }
 
 // ── Global middleware ────────────────────────────────────────────────────────
@@ -156,6 +160,7 @@ app.route("/api/device-challenges", deviceChallengesRouter);
 // After a social sign-in on the main auth domain, Better Auth redirects here.
 // We read the new session, create an auth ticket, and redirect to the target
 // app subdomain — so Google Console only ever needs ONE callback URL per provider.
+app.get("/api/hosted/oauth-start", handleOAuthStart);
 app.get("/api/hosted/oauth-complete", handleOAuthBounce);
 
 // ── Legacy avatar redirect ────────────────────────────────────────────────────
@@ -195,6 +200,11 @@ export function shouldUseHono(request: Request, authUrl?: string) {
   ) {
     return true;
   }
+  // Static assets are served by the ASSETS binding on every host. A hosted
+  // auth subdomain (mira-wulx5t.auth…) is not the dashboard host, but its
+  // sign-in page loads /assets/hosted-auth.js — routing that through Hono
+  // 404s the bundle and the page renders "Failed to load".
+  if (isDashboardAsset(request)) return false;
   return !isDashboardHost(url.host, authBaseHost(authUrl));
 }
 

@@ -67,7 +67,7 @@ function OkBanner({ msg }: { msg: string }) {
 
 function PlanBadge({ plan }: { plan: string }) {
   const COLOR: Record<string, string> = {
-    free: "var(--color-text-tertiary)", starter: "var(--color-accent)",
+    free: "var(--color-text-tertiary)", starter: "var(--color-text-accent)",
     pro: "var(--color-amber)", enterprise: "var(--color-green)",
   };
   const color = COLOR[plan] ?? "var(--color-text-tertiary)";
@@ -121,7 +121,7 @@ function OverviewTab({ app }: { app: Application }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Stats row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12 }}>
-        <StatCard label="Users" value={isLoading ? "—" : (stats?.total_users ?? 0)} icon={Users} color="var(--color-accent)" />
+        <StatCard label="Users" value={isLoading ? "—" : (stats?.total_users ?? 0)} icon={Users} color="var(--color-text-accent)" />
         <StatCard label="Orgs" value={isLoading ? "—" : (stats?.total_orgs ?? 0)} icon={Layers} color="var(--color-amber)" />
         <StatCard label="Logins 24h" value={isLoading ? "—" : (stats?.logins_24h ?? 0)} icon={TrendingUp} color="var(--color-green)" />
         <StatCard label="Active Sessions" value={isLoading ? "—" : (stats?.active_sessions ?? 0)} icon={Globe} color="var(--color-red)" />
@@ -681,7 +681,7 @@ function BillingTab({ app }: { app: Application }) {
           const isCurrent = app.plan === plan.id;
           return (
             <div key={plan.id} className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12, border: isCurrent ? "1px solid var(--color-accent)" : undefined, position: "relative" }}>
-              {isCurrent && <div style={{ position: "absolute", top: 10, right: 10, fontFamily: "var(--font-mono)", fontSize: "0.6rem", background: "var(--color-accent-dim)", color: "var(--color-accent)", borderRadius: 3, padding: "2px 6px", border: "1px solid rgba(59,130,246,0.25)" }}>CURRENT</div>}
+              {isCurrent && <div style={{ position: "absolute", top: 10, right: 10, fontFamily: "var(--font-mono)", fontSize: "0.6rem", background: "var(--color-accent-dim)", color: "var(--color-text-accent)", borderRadius: 3, padding: "2px 6px", border: "1px solid rgba(59,130,246,0.25)" }}>CURRENT</div>}
               <div>
                 <p style={{ fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: "0.9rem", color: "var(--color-text-primary)" }}>{plan.label}</p>
                 <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem", color: "var(--color-text-secondary)", marginTop: 2 }}>{plan.price}</p>
@@ -1103,7 +1103,7 @@ function SettingsTab({ app }: { app: Application }) {
           <div>
             <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-amber)", marginBottom: 8 }}>⚠ Copy this secret now — it will not be shown again.</p>
             <div style={{ display: "flex", gap: 8, alignItems: "center", background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", borderRadius: 6, padding: "8px 12px" }}>
-              <code style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--color-accent)", wordBreak: "break-all" }}>
+              <code style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--color-text-accent)", wordBreak: "break-all" }}>
                 {showSecret ? rawSecret : rawSecret.slice(0, 10) + "•".repeat(24)}
               </code>
               <button className="btn btn-ghost" style={{ padding: "3px 6px" }} onClick={() => setShowSecret(s => !s)}>{showSecret ? <EyeOff size={13} /> : <Eye size={13} />}</button>
@@ -1232,7 +1232,7 @@ function AppDetailPage() {
               <img src={app.logo_url} alt="" style={{ width: 32, height: 32, borderRadius: 6, objectFit: "contain", flexShrink: 0 }} />
             ) : (
               <div style={{ width: 32, height: 32, borderRadius: 6, background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <Globe size={16} color="var(--color-accent)" />
+                <Globe size={16} color="var(--color-text-accent)" />
               </div>
             )}
             <h1 style={{ fontFamily: "var(--font-sans)", fontWeight: 700, fontSize: "1.2rem", color: "var(--color-text-primary)", margin: 0 }}>

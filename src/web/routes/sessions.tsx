@@ -195,7 +195,7 @@ function SessionCard({
   revoking: boolean;
   onRevoke: (sessionId: string) => void;
 }) {
-  const deviceColor = session.isCurrent ? "var(--color-accent)" : "var(--color-text-secondary)";
+  const deviceColor = session.isCurrent ? "var(--color-text-accent)" : "var(--color-text-secondary)";
 
   return (
     <div
@@ -256,7 +256,7 @@ function SessionCard({
               fontSize: "0.62rem", fontWeight: 600, letterSpacing: "0.06em",
               padding: "2px 7px", borderRadius: 3,
               background: "var(--color-accent-dim)", border: "1px solid var(--color-border-accent)",
-              color: "var(--color-accent)", textTransform: "uppercase",
+              color: "var(--color-text-accent)", textTransform: "uppercase",
             }}>
               <Zap size={9} fill="currentColor" /> Current
             </span>

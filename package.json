@@ -22,7 +22,7 @@
     "dev": "vite dev",
     "dev:preview": "pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Mode preview",
     "dev:local": "pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/dev.ps1 -Mode full",
-    "build": "vite build && pnpm run build:sdk",
+    "build": "vite build && vite build --config vite.hosted.config.ts && pnpm run build:sdk",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && pnpm --filter @115jon/kova-react run typecheck",
     "test": "vitest run",
@@ -35,6 +35,7 @@
     "deploy:sdk-demo": "pnpm --filter @kova/sdk-demo run deploy"
   },
   "dependencies": {
+    "@115jon/kova-react": "workspace:*",
     "@better-auth/api-key": "~1.6.33",
     "@better-auth/passkey": "~1.6.33",
     "@tanstack/react-query": "^5.99.0",
@@ -45,6 +46,7 @@
     "better-auth-cloudflare": "^0.3.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "ditherwave": "^0.1.0",
     "hono": "^4.13.8",
     "lucide-react": "^0.564.0",
     "qrcode.react": "^4.2.0",
@@ -65,8 +67,8 @@
     "@vitejs/plugin-react": "^5.1.4",
     "tailwindcss": "^4.1.18",
     "typescript": "^5",
-    "vitest": "^4.0.15",
     "vite": "^7.3.1",
+    "vitest": "^4.0.15",
     "wrangler": "^4"
   }
 }

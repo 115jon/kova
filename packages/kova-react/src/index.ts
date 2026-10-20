@@ -70,6 +70,24 @@ export type { KovaAuthContextValue, ServerAppearance } from "./context";
 export { createKovaAuthClient } from "./client";
 export type { ClientOptions, KovaAuthClient } from "./client";
 
+// ── Device challenges (vanilla, no React) ─────────────────────────────────────
+export {
+  DEFAULT_KOVA_URL,
+  approveUrl,
+  challengeCreateUrl,
+  challengePollUrl,
+  createDeviceChallenge,
+  isDeviceChallengeId,
+  pollDeviceChallenge,
+  resolveApproveUrl,
+} from "./device";
+export type {
+  CreateDeviceChallengeInput,
+  DeviceChallenge,
+  DeviceChallengeStatus,
+} from "./device";
+
+
 // ── Key utilities ─────────────────────────────────────────────────────────────
 export { decodePublishableKey, encodePublishableKey } from "./key";
 export type { DecodedKey } from "./key";

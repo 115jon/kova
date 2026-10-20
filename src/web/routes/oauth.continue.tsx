@@ -135,28 +135,16 @@ function OauthContinuePage() {
   };
 
   return (
-    <div
-      className="public-auth-shell"
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--color-surface-900)",
-        padding: 24,
-      }}
-    >
-      <div
-        className="public-auth-ambient"
-        style={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          background:
-            "radial-gradient(ellipse 60% 50% at 50% 0%, rgba(99,102,241,0.12), transparent)",
-        }}
-      />
-      <div className="card public-auth-card animate-in" style={{ width: "100%", maxWidth: 400, padding: 36 }}>
+    <div className="public-auth-shell">
+      <div className="coast-paint" aria-hidden="true" />
+      <div className="auth-window">
+        <div className="auth-dots" aria-hidden="true">
+          <span className="auth-dot auth-dot-red" />
+          <span className="auth-dot auth-dot-amber" />
+          <span className="auth-dot auth-dot-green" />
+        </div>
+        <div className="auth-window-spacer" />
+        <div className="auth-glass animate-in">
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <KovaLogo size={36} variant="full" />
           <h1
@@ -301,6 +289,7 @@ function OauthContinuePage() {
             </a>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

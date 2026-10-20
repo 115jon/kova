@@ -24,6 +24,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./device": {
+      "types": "./dist/device.d.ts",
+      "import": "./dist/device.js",
+      "require": "./dist/device.cjs"
     }
   },
   "main": "./dist/index.cjs",

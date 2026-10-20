@@ -53,13 +53,13 @@ const PROVIDER_LABELS: Record<string, string> = {
 function actionLabel(action: string): { label: string; color: string } {
   if (action.startsWith("user.signIn")) return { label: "Signed in", color: "var(--color-green)" };
   if (action.startsWith("user.signOut")) return { label: "Signed out", color: "var(--color-text-tertiary)" };
-  if (action.startsWith("user.signUp")) return { label: "Account created", color: "var(--color-accent)" };
+  if (action.startsWith("user.signUp")) return { label: "Account created", color: "var(--color-text-accent)" };
   if (action.startsWith("user.password")) return { label: "Password changed", color: "var(--color-amber)" };
   if (action.startsWith("admin.userBanned")) return { label: "Banned", color: "var(--color-red)" };
   if (action.startsWith("admin.userUnbanned")) return { label: "Unbanned", color: "var(--color-green)" };
   if (action.startsWith("admin.userLocked")) return { label: "Locked", color: "var(--color-amber)" };
   if (action.startsWith("admin.userUnlocked")) return { label: "Unlocked", color: "var(--color-green)" };
-  if (action.startsWith("admin.userImpersonated")) return { label: "Impersonated", color: "var(--color-accent)" };
+  if (action.startsWith("admin.userImpersonated")) return { label: "Impersonated", color: "var(--color-text-accent)" };
   return { label: action, color: "var(--color-text-secondary)" };
 }
 
@@ -314,7 +314,7 @@ function AppMemberDetailPage() {
           {/* Stats row */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <StatCard icon={<Activity size={15} />} label="Active sessions" value={activeSessionCount} color="var(--color-green)" />
-            <StatCard icon={<Clock size={15} />} label="Last updated" value={relativeTime(new Date(member.updatedAt).toISOString())} color="var(--color-accent)" />
+            <StatCard icon={<Clock size={15} />} label="Last updated" value={relativeTime(new Date(member.updatedAt).toISOString())} color="var(--color-text-accent)" />
           </div>
 
           {/* Activity heatmap */}
@@ -343,7 +343,7 @@ function AppMemberDetailPage() {
                     }}>
                       <div style={{ width: 26, height: 26, borderRadius: 4, background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         {acc.providerId === "credential"
-                          ? <KeyRound size={12} color="var(--color-accent)" />
+                          ? <KeyRound size={12} color="var(--color-text-accent)" />
                           : <ProviderIcon id={acc.providerId as ProviderId} size={13} />}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -441,7 +441,7 @@ function AppMemberDetailPage() {
                   <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.68rem", color: "var(--color-text-tertiary)", marginBottom: 6 }}>
                     Token (expires {relativeTime(new Date(impersonateResult.expiresAt).toISOString())})
                   </p>
-                  <code style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "var(--color-accent)", wordBreak: "break-all", display: "block", background: "var(--color-surface-raised)", padding: "6px 8px", borderRadius: 4, border: "1px solid var(--color-border)" }}>
+                  <code style={{ fontFamily: "var(--font-mono)", fontSize: "0.65rem", color: "var(--color-text-accent)", wordBreak: "break-all", display: "block", background: "var(--color-surface-raised)", padding: "6px 8px", borderRadius: 4, border: "1px solid var(--color-border)" }}>
                     {impersonateResult.token}
                   </code>
                   <button className="btn btn-ghost" style={{ marginTop: 6, fontSize: "0.72rem", width: "100%" }}

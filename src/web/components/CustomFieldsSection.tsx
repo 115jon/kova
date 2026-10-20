@@ -524,7 +524,7 @@ export function CustomFieldsSection() {
         background: "var(--color-accent-dim)",
         borderTop: "none",
       }}>
-        <Info size={13} color="var(--color-accent)" style={{ flexShrink: 0, marginTop: 2 }} />
+        <Info size={13} color="var(--color-text-accent)" style={{ flexShrink: 0, marginTop: 2 }} />
         <p style={{
           fontFamily: "var(--font-mono)",
           fontSize: "0.72rem",

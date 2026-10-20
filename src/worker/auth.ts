@@ -43,22 +43,63 @@ const FORGEJO_OIDC_REDIRECTS = [
   "https://oci-a1.tail91a4f4.ts.net/git/user/oauth2/kova/callback",
 ];
 
-function forgejoOidcClient(env: Env) {
-  const clientId = env.FORGEJO_OIDC_CLIENT_ID?.trim();
-  const clientSecret = env.FORGEJO_OIDC_CLIENT_SECRET?.trim();
-  if (!clientId || !clientSecret) return [];
+// Preview door. A stable hostname should replace this before the door is closed.
+const LITELLM_OIDC_REDIRECTS = [
+  "https://lite.115jon.com/sso/callback",
+  "https://bright-fern-soob.115jon.com/sso/callback",
+];
+
+type TrustedOidcClient = {
+  clientId: string;
+  clientSecret: string;
+  name: string;
+  type: "web";
+  redirectUrls: string[];
+  disabled: false;
+  skipConsent: true;
+  metadata: { product: string };
+};
+
+function trustedOidcClient(
+  clientId: string | undefined,
+  clientSecret: string | undefined,
+  name: string,
+  redirectUrls: readonly string[],
+  product: string,
+): TrustedOidcClient | null {
+  const id = clientId?.trim();
+  const secret = clientSecret?.trim();
+  if (!id || !secret) return null;
+  return {
+    clientId: id,
+    clientSecret: secret,
+    name,
+    type: "web",
+    redirectUrls: [...redirectUrls],
+    disabled: false,
+    skipConsent: true,
+    metadata: { product },
+  };
+}
+
+// Public registration stays off. A client is trusted only when both secrets exist.
+function trustedOidcClients(env: Env): TrustedOidcClient[] {
   return [
-    {
-      clientId,
-      clientSecret,
-      name: "1:15",
-      type: "web" as const,
-      redirectUrls: [...FORGEJO_OIDC_REDIRECTS],
-      disabled: false,
-      skipConsent: true,
-      metadata: { product: "forgejo" },
-    },
-  ];
+    trustedOidcClient(
+      env.FORGEJO_OIDC_CLIENT_ID,
+      env.FORGEJO_OIDC_CLIENT_SECRET,
+      "1:15",
+      FORGEJO_OIDC_REDIRECTS,
+      "forgejo",
+    ),
+    trustedOidcClient(
+      env.LITELLM_OIDC_CLIENT_ID,
+      env.LITELLM_OIDC_CLIENT_SECRET,
+      "LiteLLM",
+      LITELLM_OIDC_REDIRECTS,
+      "litellm",
+    ),
+  ].filter((client): client is TrustedOidcClient => client !== null);
 }
 
 export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Request, baseURLOverride?: string) {
@@ -647,7 +688,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
             requirePKCE: false,
             allowPlainCodeChallengeMethod: true,
             useJWTPlugin: true,
-            trustedClients: forgejoOidcClient(env),
+            trustedClients: trustedOidcClients(env),
             getAdditionalUserInfoClaim: (user) => {
               const username =
                 typeof user.username === "string" && user.username.trim()

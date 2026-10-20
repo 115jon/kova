@@ -86,7 +86,9 @@ ${declarations}
   width: 100%;
   max-width: 420px;
   margin: 0 auto;
-  box-shadow: 0 24px 48px rgba(0,0,0,0.45);
+  backdrop-filter: blur(16px) saturate(1.25);
+  -webkit-backdrop-filter: blur(16px) saturate(1.25);
+  box-shadow: 0 16px 40px oklch(0.12 0.02 250 / 0.35), inset 0 1px 0 oklch(0.955 0.01 95 / 0.22);
 }
 
 /* Card sections */
@@ -111,10 +113,10 @@ ${declarations}
 
 /* Card title */
 [data-ra-element="cardTitle"] {
-  font-family: var(--ra-font-mono);
+  font-family: var(--ra-font);
   font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  font-weight: 500;
+  letter-spacing: 0;
   color: var(--ra-color-text);
   margin: 0 0 6px;
 }
@@ -153,8 +155,8 @@ ${declarations}
   color: var(--ra-color-text-secondary);
 }
 [data-ra-element="tab"][aria-selected="true"] {
-  color: var(--ra-color-primary);
-  border-bottom-color: var(--ra-color-primary);
+  color: var(--ra-color-text);
+  border-bottom-color: var(--ra-color-text);
 }
 
 /* Form fields */
@@ -165,27 +167,29 @@ ${declarations}
   margin-bottom: 14px;
 }
 [data-ra-element="formFieldLabel"] {
-  font-family: var(--ra-font-mono);
+  font-family: var(--ra-font);
   font-size: 0.74rem;
   font-weight: 500;
   color: var(--ra-color-text-secondary);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 [data-ra-element="formFieldInput"] {
   width: 100%;
   background: var(--ra-color-surface-raised);
   border: 1px solid var(--ra-color-border);
   border-radius: var(--ra-radius-sm);
-  padding: 9px 12px;
-  font-family: var(--ra-font-mono);
+  font-family: var(--ra-font);
   font-size: 0.84rem;
   color: var(--ra-color-text);
   outline: none;
+  min-height: 44px;
+  padding: 0 16px;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
-[data-ra-element="formFieldInput"]:focus {
-  border-color: var(--ra-color-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ra-color-primary) 15%, transparent);
+[data-ra-element="formFieldInput"]:focus-visible {
+  outline: 2px solid oklch(0.84 0.018 210);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px oklch(0.16 0.02 255 / 0.9);
 }
 [data-ra-element="formFieldInput"]::placeholder {
   color: var(--ra-color-text-tertiary);
@@ -206,11 +210,12 @@ ${declarations}
   border: none;
   border-radius: var(--ra-radius-sm);
   padding: 10px 16px;
-  font-family: var(--ra-font-mono);
+  min-height: 44px;
+  font-family: var(--ra-font);
   font-size: 0.84rem;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   transition: background 0.15s, opacity 0.15s, transform 0.1s;
   display: flex;
   align-items: center;
@@ -220,6 +225,13 @@ ${declarations}
 }
 [data-ra-element="formSubmitButton"]:hover:not(:disabled) {
   background: var(--ra-color-primary-hover);
+}
+[data-ra-element="formSubmitButton"]:focus-visible,
+[data-ra-element="socialButton"]:focus-visible,
+[data-ra-element="tab"]:focus-visible {
+  outline: 2px solid oklch(0.84 0.018 210);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px oklch(0.16 0.02 255 / 0.9);
 }
 [data-ra-element="formSubmitButton"]:active:not(:disabled) {
   transform: scale(0.99);
@@ -246,10 +258,11 @@ ${declarations}
   display: flex;
   align-items: center;
   gap: 10px;
-  font-family: var(--ra-font-mono);
+  font-family: var(--ra-font);
   font-size: 0.82rem;
   font-weight: 500;
   color: var(--ra-color-text);
+  min-height: 44px;
   transition: background 0.12s, border-color 0.12s;
 }
 [data-ra-element="socialButton"]:hover:not(:disabled) {
@@ -291,12 +304,12 @@ ${declarations}
 }
 [data-ra-element="cardFooter"] a:hover,
 [data-ra-element="cardFooter"] button:hover {
-  color: var(--ra-color-primary);
+  color: var(--ra-color-text);
 }
 
 /* Alert banner */
 [data-ra-element="alertBanner"] {
-  border-radius: var(--ra-radius-sm);
+  border-radius: var(--ra-radius);
   padding: 10px 12px;
   font-size: 0.78rem;
   line-height: 1.55;
@@ -318,7 +331,7 @@ ${declarations}
 [data-ra-element="alertBanner"][data-variant="info"] {
   background: color-mix(in srgb, var(--ra-color-primary) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--ra-color-primary) 18%, transparent);
-  color: var(--ra-color-primary);
+  color: var(--ra-color-text);
 }
 
 /* UserButton */
@@ -341,9 +354,9 @@ ${declarations}
   position: absolute;
   z-index: 9999;
   min-width: 220px;
-  background: var(--ra-color-surface);
+  background: oklch(0.16 0.02 255);
   border: 1px solid var(--ra-color-border-strong);
-  border-radius: var(--ra-radius-sm);
+  border-radius: var(--ra-radius);
   box-shadow: 0 16px 48px rgba(0,0,0,0.6);
   padding: 4px;
   overflow: hidden;

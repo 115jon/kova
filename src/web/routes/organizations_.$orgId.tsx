@@ -29,7 +29,7 @@ type Tab = "members" | "invitations" | "teams" | "roles" | "activity" | "setting
 
 function roleBadgeStyle(role: string): React.CSSProperties {
   if (role === "owner") return { background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)", color: "var(--color-amber)" };
-  if (role === "admin") return { background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)", color: "var(--color-accent)" };
+  if (role === "admin") return { background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)", color: "var(--color-text-accent)" };
   return { background: "var(--color-surface-raised)", border: "1px solid var(--color-border)", color: "var(--color-text-secondary)" };
 }
 
@@ -353,7 +353,7 @@ function CreateRoleModal({ orgId, onClose, onCreated }: { orgId: string; onClose
                       <label key={action} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
                         <input type="checkbox" checked={checked} onChange={() => toggle(resource, action)}
                           style={{ accentColor: "var(--color-accent)", width: 13, height: 13, cursor: "pointer" }} />
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: checked ? "var(--color-accent)" : "var(--color-text-secondary)" }}>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: checked ? "var(--color-text-accent)" : "var(--color-text-secondary)" }}>
                           {action}
                         </span>
                       </label>
@@ -392,13 +392,13 @@ interface AuditLogRow {
 }
 
 const ACTION_META: Record<string, { label: string; color: string }> = {
-  "user.signIn": { label: "Signed in", color: "var(--color-accent)" },
+  "user.signIn": { label: "Signed in", color: "var(--color-text-accent)" },
   "user.signOut": { label: "Signed out", color: "var(--color-text-tertiary)" },
   "user.signUp": { label: "Signed up", color: "var(--color-green)" },
   "apiKey.created": { label: "API key created", color: "var(--color-amber)" },
   "apiKey.revoked": { label: "API key revoked", color: "var(--color-red)" },
-  "member.invited": { label: "Member invited", color: "var(--color-accent)" },
-  "member.joined": { label: "Member joined", color: "var(--color-accent)" },
+  "member.invited": { label: "Member invited", color: "var(--color-text-accent)" },
+  "member.joined": { label: "Member joined", color: "var(--color-text-accent)" },
   "member.removed": { label: "Member removed", color: "var(--color-red)" },
   "member.roleChanged": { label: "Role changed", color: "var(--color-amber)" },
   "session.revoked": { label: "Session revoked", color: "var(--color-red)" },
@@ -671,7 +671,7 @@ function TeamsTab({ orgId, members }: { orgId: string; members: any[] }) {
             <div key={team.id} className="card" style={{ padding: 0, overflow: "hidden" }}>
               <div className="panel-header">
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <UsersRound size={13} color="var(--color-accent)" />
+                  <UsersRound size={13} color="var(--color-text-accent)" />
                   <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", fontWeight: 600, color: "var(--color-text-primary)" }}>
                     {team.name}
                   </span>
@@ -740,7 +740,7 @@ function PermBadge({ resource, actions }: { resource: string; actions: string[] 
       {actions.map(a => (
         <span key={a} style={{
           fontFamily: "var(--font-mono)", fontSize: "0.66rem", fontWeight: 600,
-          background: "var(--color-accent-dim)", color: "var(--color-accent)",
+          background: "var(--color-accent-dim)", color: "var(--color-text-accent)",
           border: "1px solid rgba(59,130,246,0.18)", borderRadius: 3, padding: "1px 5px",
         }}>{a}</span>
       ))}
@@ -841,7 +841,7 @@ function RolesTab({ orgId }: { orgId: string }) {
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Shield size={12} color="var(--color-accent)" />
+                    <Shield size={12} color="var(--color-text-accent)" />
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", fontWeight: 700, color: "var(--color-text-primary)" }}>
                       {role.role}
                     </span>
@@ -1147,7 +1147,7 @@ function OrgDetailPage() {
               display: "flex", alignItems: "center", gap: 6,
               padding: "8px 14px", fontFamily: "var(--font-mono)", fontSize: "0.76rem", fontWeight: 500,
               background: "none", border: "none", cursor: "pointer",
-              color: activeTab === t.key ? "var(--color-accent)" : "var(--color-text-tertiary)",
+              color: activeTab === t.key ? "var(--color-text-accent)" : "var(--color-text-tertiary)",
               borderBottom: activeTab === t.key ? "2px solid var(--color-accent)" : "2px solid transparent",
               marginBottom: -1, transition: "color 0.15s",
             }}
@@ -1231,8 +1231,8 @@ function OrgDetailPage() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.83rem", color: "var(--color-text-primary)" }}>{inv.email}</p>
                 <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-tertiary)" }}>
-                  Invited as <span style={{ color: "var(--color-accent)", fontWeight: 600 }}>{inv.role}</span>
-                  {inv.teamId && <span> · team <span style={{ color: "var(--color-accent)" }}>{teams.find(t => t.id === inv.teamId)?.name ?? inv.teamId}</span></span>}
+                  Invited as <span style={{ color: "var(--color-text-accent)", fontWeight: 600 }}>{inv.role}</span>
+                  {inv.teamId && <span> · team <span style={{ color: "var(--color-text-accent)" }}>{teams.find(t => t.id === inv.teamId)?.name ?? inv.teamId}</span></span>}
                   {" · "}{inv.status}
                 </p>
               </div>

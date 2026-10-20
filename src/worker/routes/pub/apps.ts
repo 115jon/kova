@@ -21,6 +21,7 @@ import type { KVNamespace } from "@cloudflare/workers-types";
 import { getApplicationByPublishableKey, isRedirectUriAllowed } from "../../applications";
 import { createAuth } from "../../auth";
 import { resolveAppScopedSession } from "../../lib/app-session";
+import { pollDeviceLogin, startDeviceLogin } from "../../lib/device-login";
 import { jsonForHtmlScript } from "../../lib/html";
 
 const pubAppsRouter = new Hono<{ Bindings: Env }>();
@@ -397,6 +398,62 @@ pubAppsRouter.post("/:pk/exchange-code", async (c) => {
   }
 
   return Response.json({ sessionToken: result.sessionToken });
+});
+
+// ── Device-code sign-in (public client) ───────────────────────────────────────
+//
+// Mira starts a login here, then polls with the device code. The user code is
+// only for the hosted approval page. Never accept a user code as a poll secret.
+
+function jsonObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+pubAppsRouter.post("/:pk/device/start", async (c) => {
+  const pk = c.req.param("pk");
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+  if (!app) return c.json({ error: "Application not found" }, 404);
+  if (app.suspended_at) return c.json({ error: "Application suspended" }, 403);
+
+  const body = jsonObject(await c.req.json().catch(() => ({}))) ?? {};
+  const started = await startDeviceLogin(c.env.KV, {
+    publishableKey: app.publishable_key,
+    appId: app.id,
+    authUrl: c.env.AUTH_URL,
+    authSlug: app.auth_slug,
+    hostname: body.hostname,
+    platform: body.platform,
+    label: body.label,
+  });
+
+  c.header("Cache-Control", "no-store");
+  if ("error" in started) return c.json({ error: started.error }, 409);
+  return c.json(started.body, 201);
+});
+
+pubAppsRouter.post("/:pk/device/poll", async (c) => {
+  const pk = c.req.param("pk");
+  c.header("Cache-Control", "no-store");
+
+  const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
+  if (!app || app.suspended_at) return c.json({ error: "invalid_device_code" }, 400);
+
+  const body = jsonObject(await c.req.json().catch(() => null));
+  if (!body || typeof body.deviceCode !== "string" || "userCode" in body) {
+    return c.json({ error: "invalid_device_code" }, 400);
+  }
+
+  const result = await pollDeviceLogin(c.env.KV, {
+    publishableKey: app.publishable_key,
+    appId: app.id,
+    deviceCode: body.deviceCode.trim(),
+  });
+  if ("error" in result && result.error === "slow_down") {
+    return c.json({ error: "slow_down", interval: result.interval }, 429);
+  }
+  if ("error" in result) return c.json({ error: result.error }, 400);
+  return c.json(result);
 });
 
 export { pubAppsRouter };

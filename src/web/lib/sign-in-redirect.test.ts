@@ -90,4 +90,54 @@ describe("sign-in redirect helpers", () => {
     );
     expect(safeSignInReturnPath("/dashboard")).toBeNull();
   });
+
+  describe("SDK OAuth callback flow with native handoff", () => {
+    it("preserves native handoff params through SDK OAuth redirect", () => {
+      // Simulates the SDK OAuth flow:
+      // 1. User arrives at /sign-in?pk=pk_dev_test&redirect_url=app://callback&native_handoff=1
+      const initialSearch = {
+        pk: "pk_dev_test",
+        redirect_url: "app://callback",
+        native_handoff: "1",
+      };
+
+      // 2. SDK receives afterSignInUrl from buildSignInReturnPath
+      const afterSignInUrl = buildSignInReturnUrl(
+        initialSearch,
+        "https://auth.example",
+      );
+      expect(afterSignInUrl).toBe(
+        "https://auth.example/sign-in?pk=pk_dev_test&redirect_url=app%3A%2F%2Fcallback&native_handoff=1",
+      );
+
+      // 3. After OAuth completes, user returns to that URL with session
+      // The sign-in page then calls buildNativeHandoffPath with the preserved params
+      const handoffPath = buildNativeHandoffPath(initialSearch);
+      expect(handoffPath).toBe(
+        "/api/hosted/oauth-complete?mode=sdk&pk=pk_dev_test&redirect_uri=app%3A%2F%2Fcallback",
+      );
+
+      // 4. The handoff endpoint validates and completes the native approval
+      // This ensures the native app receives the authenticated session
+    });
+
+    it("handles SDK OAuth callback without native handoff", () => {
+      // Regular web OAuth flow without native handoff
+      const webSearch = {
+        redirect_url: "/oauth/continue?client_id=test",
+      };
+
+      const afterSignInUrl = buildSignInReturnUrl(webSearch, "https://auth.example");
+      expect(afterSignInUrl).toBe(
+        "https://auth.example/sign-in?redirect_url=%2Foauth%2Fcontinue%3Fclient_id%3Dtest",
+      );
+
+      // No native handoff, so completeSignIn uses safeSignInReturnPath instead
+      const safeReturn = safeSignInReturnPath(webSearch.redirect_url);
+      expect(safeReturn).toBe("/oauth/continue?client_id=test");
+
+      const handoffPath = buildNativeHandoffPath(webSearch);
+      expect(handoffPath).toBeNull();
+    });
+  });
 });

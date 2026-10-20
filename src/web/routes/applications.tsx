@@ -164,7 +164,7 @@ function CreateAppModal({ onClose, onCreated }: {
             background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <Layers size={15} color="var(--color-accent)" />
+            <Layers size={15} color="var(--color-text-accent)" />
           </div>
           <div>
             <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.88rem" }}>
@@ -292,7 +292,7 @@ function AppCard({ app, onDelete }: { app: Application; onDelete: (id: string, n
           border: `1px solid ${isProd ? "rgba(52,211,153,0.2)" : "rgba(59,130,246,0.15)"}`,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <Layers size={16} color={isProd ? "var(--color-green)" : "var(--color-accent)"} />
+          <Layers size={16} color={isProd ? "var(--color-green)" : "var(--color-text-accent)"} />
         </div>
 
         {/* Name + key — click name to open detail page */}
@@ -306,7 +306,7 @@ function AppCard({ app, onDelete }: { app: Application; onDelete: (id: string, n
                 color: "var(--color-text-primary)", textDecoration: "none",
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.color = "var(--color-accent)";
+                e.currentTarget.style.color = "var(--color-text-accent)";
                 e.currentTarget.style.textDecoration = "underline";
               }}
               onMouseLeave={e => {
@@ -395,7 +395,7 @@ function IntegrationGuide() {
                   flexShrink: 0, width: 20, height: 20, borderRadius: "50%",
                   background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontFamily: "var(--font-mono)", fontSize: "0.62rem", fontWeight: 700, color: "var(--color-accent)",
+                  fontFamily: "var(--font-mono)", fontSize: "0.62rem", fontWeight: 700, color: "var(--color-text-accent)",
                 }}>{n}</span>
                 <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
                   {text}

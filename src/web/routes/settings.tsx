@@ -473,7 +473,7 @@ function PasskeysSection() {
                 padding: "9px 12px", border: "1px solid var(--color-border)",
               }}
             >
-              <Fingerprint size={14} color="var(--color-accent)" style={{ flexShrink: 0 }} />
+              <Fingerprint size={14} color="var(--color-text-accent)" style={{ flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontFamily: "var(--font-sans)", fontSize: "0.82rem", color: "var(--color-text-primary)", fontWeight: 500 }}>
                   {pk.name ?? "Passkey"}
@@ -765,7 +765,7 @@ function SettingsPage() {
 
         {/* Profile */}
         {session && (
-          <SectionCard icon={<Shield size={14} />} color="var(--color-accent)" title="Profile">
+          <SectionCard icon={<Shield size={14} />} color="var(--color-text-accent)" title="Profile">
             <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 14, borderBottom: "1px solid var(--color-border)" }}>
               <AvatarUpload
                 src={localImage ?? ((session.user as any).image as string | null)}
@@ -838,12 +838,12 @@ function SettingsPage() {
         </SectionCard>
 
         {/* Custom Fields */}
-        <SectionCard icon={<Sliders size={14} />} color="var(--color-accent)" title="Custom Fields">
+        <SectionCard icon={<Sliders size={14} />} color="var(--color-text-accent)" title="Custom Fields">
           <CustomFieldsSection />
         </SectionCard>
 
         {/* Passkeys */}
-        <SectionCard icon={<Fingerprint size={14} />} color="var(--color-accent)" title="Passkeys">
+        <SectionCard icon={<Fingerprint size={14} />} color="var(--color-text-accent)" title="Passkeys">
           <PasskeysSection />
         </SectionCard>
 
@@ -860,12 +860,12 @@ function SettingsPage() {
           />
         </SectionCard>
 
-        <SectionCard icon={<KeyRound size={14} />} color="var(--color-accent)" title="Two-Factor Authentication">
+        <SectionCard icon={<KeyRound size={14} />} color="var(--color-text-accent)" title="Two-Factor Authentication">
           <TwoFactorSection hasCredential={ready ? hasCredential : false} />
         </SectionCard>
 
         {/* Server info */}
-        <SectionCard icon={<Server size={14} />} color="var(--color-accent)" title="Server">
+        <SectionCard icon={<Server size={14} />} color="var(--color-text-accent)" title="Server">
           <InfoRow label="Auth Server URL" value={AUTH_URL || "(proxied via Vite)"} mono />
           <InfoRow label="Auth Base Path" value="/api/auth" mono />
           <InfoRow label="Email Verification" value="Enabled (Resend)" />

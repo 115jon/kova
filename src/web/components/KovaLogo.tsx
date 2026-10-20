@@ -19,7 +19,7 @@ export function KovaLogo({
   const fillColor = theme === "monochrome" ? "currentColor" : "url(#kova-brand-grad)";
   const strokeColor = theme === "monochrome" ? "currentColor" : "url(#kova-brand-grad)";
   const containerBg = "#09090b";
-  const containerBorderColor = theme === "monochrome" ? "rgba(255,255,255,0.12)" : "rgba(59, 130, 246, 0.25)";
+  const containerBorderColor = theme === "monochrome" ? "rgba(255,255,255,0.12)" : "oklch(0.51 0.095 176)";
 
   const renderIcon = () => {
     return (
@@ -34,8 +34,8 @@ export function KovaLogo({
       >
         <defs>
           <linearGradient id="kova-brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#3b82f6" />
-            <stop offset="100%" stopColor="#06b6d4" />
+            <stop offset="0%" stopColor="oklch(0.16 0.02 255)" />
+            <stop offset="100%" stopColor="oklch(0.51 0.095 176)" />
           </linearGradient>
         </defs>
 
@@ -122,7 +122,7 @@ export function KovaLogo({
           lineHeight: 1,
         }}
       >
-        kova<span style={{ color: "var(--color-accent)" }}>auth</span>
+        kova<span style={{ color: "var(--color-text-accent)" }}>auth</span>
       </span>
     </div>
   );

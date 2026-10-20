@@ -18,6 +18,8 @@ interface Env {
   BETTER_AUTH_SECRET: string;
   FORGEJO_OIDC_CLIENT_ID?: string;
   FORGEJO_OIDC_CLIENT_SECRET?: string;
+  LITELLM_OIDC_CLIENT_ID?: string;
+  LITELLM_OIDC_CLIENT_SECRET?: string;
 
   // ── OAuth: Google (always required) ─────────────────────────
   GOOGLE_CLIENT_ID: string;

@@ -15,6 +15,7 @@ import { createAuth } from "../auth";
 import { ALLOWED_IMAGE_TYPES, isFileLike, scanUpload } from "../lib/cdn";
 import { validatePassword } from "../password";
 import { deliverEvent } from "../webhook";
+import { libraryRouter, wallpaperRouter } from "./user-wallpaper";
 
 const userRouter = new Hono<{ Bindings: Env }>();
 
@@ -106,12 +107,12 @@ userRouter.post("/avatar", async (c) => {
     ipAddress: request.headers.get("CF-Connecting-IP"),
     userAgent: request.headers.get("User-Agent"),
   }).catch(() => { });
-  deliverEvent(env.DB, "user.avatarUpdated", {
+  c.executionCtx.waitUntil(deliverEvent(env.DB, "user.avatarUpdated", {
     userId: session.user.id,
     actorName: session.user.name ?? null,
     actorEmail: session.user.email,
     imageUrl,
-  }).catch(() => { });
+  }).catch(() => undefined));
 
   return Response.json({ imageUrl });
 });
@@ -155,12 +156,12 @@ userRouter.delete("/avatar", async (c) => {
     ipAddress: request.headers.get("CF-Connecting-IP"),
     userAgent: request.headers.get("User-Agent"),
   }).catch(() => { });
-  deliverEvent(env.DB, "user.avatarUpdated", {
+  c.executionCtx.waitUntil(deliverEvent(env.DB, "user.avatarUpdated", {
     userId: session.user.id,
     actorName: session.user.name ?? null,
     actorEmail: session.user.email,
     removed: true,
-  }).catch(() => { });
+  }).catch(() => undefined));
 
   return Response.json({ ok: true, previous: row?.image ?? null });
 });
@@ -337,6 +338,9 @@ userRouter.patch("/fields", async (c) => {
   }
   return Response.json({ fields });
 });
+
+userRouter.route("/wallpaper", wallpaperRouter);
+userRouter.route("/wallpapers", libraryRouter);
 
 export { userRouter };
 

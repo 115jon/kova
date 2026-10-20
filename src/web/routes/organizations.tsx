@@ -47,7 +47,7 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
             background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <Building2 size={15} color="var(--color-accent)" />
+            <Building2 size={15} color="var(--color-text-accent)" />
           </div>
           <div>
             <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "0.88rem", fontWeight: 700, color: "var(--color-text-primary)", letterSpacing: "-0.02em" }}>Create organization</h2>
@@ -132,7 +132,7 @@ function OrganizationsPage() {
             background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <Building2 size={18} color="var(--color-accent)" strokeWidth={1.5} />
+            <Building2 size={18} color="var(--color-text-accent)" strokeWidth={1.5} />
           </div>
           <h2 style={{ fontFamily: "var(--font-mono)", fontSize: "0.9rem", fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 6, letterSpacing: "-0.02em" }}>
             No organizations yet

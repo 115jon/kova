@@ -12,37 +12,37 @@
  * Any value not specified falls back to a sensible dark-mode default.
  */
 export interface AppearanceVariables {
-  /** Primary accent color (buttons, active states). @default "#3b82f6" */
+  /** Primary accent color (buttons, active states). @default "oklch(0.51 0.095 176)" */
   colorPrimary?: string;
-  /** Hover tone of primary. @default "#2563eb" */
+  /** Hover tone of primary. @default "oklch(0.47 0.085 176)" */
   colorPrimaryHover?: string;
-  /** Background behind the card. @default "#0a0a0a" */
+  /** Background behind the card. @default "oklch(0.16 0.02 255)" */
   colorBackground?: string;
-  /** Card / surface background. @default "#111111" */
+  /** Card / surface background. @default "oklch(0.20 0.03 245 / 0.78)" */
   colorSurface?: string;
-  /** Subtle raised surface (inputs, keylines). @default "#1a1a1a" */
+  /** Subtle raised surface (inputs, keylines). @default "oklch(0.24 0.03 245 / 0.55)" */
   colorSurfaceRaised?: string;
-  /** Primary text. @default "#f5f5f5" */
+  /** Primary text. @default "oklch(0.97 0.01 210)" */
   colorText?: string;
-  /** Secondary / label text. @default "#a0a0a0" */
+  /** Secondary / label text. @default "oklch(0.84 0.018 210)" */
   colorTextSecondary?: string;
-  /** Placeholder / disabled text. @default "#606060" */
+  /** Placeholder / disabled text. @default "oklch(0.78 0.02 215)" */
   colorTextTertiary?: string;
-  /** Default border color. @default "#2a2a2a" */
+  /** Default border color. @default "oklch(0.955 0.01 95 / 0.18)" */
   colorBorder?: string;
-  /** Strong border (focused inputs, open dropdowns). @default "#3a3a3a" */
+  /** Strong border (focused inputs, open dropdowns). @default "oklch(0.955 0.01 95 / 0.32)" */
   colorBorderStrong?: string;
-  /** Error / destructive color. @default "#f87171" */
+  /** Error / destructive color. @default "oklch(0.72 0.14 25)" */
   colorError?: string;
-  /** Success color. @default "#4ade80" */
+  /** Success color. @default "oklch(0.78 0.12 155)" */
   colorSuccess?: string;
-  /** Border radius for cards. @default "8px" */
+  /** Border radius for cards. @default "18px" */
   borderRadius?: string;
-  /** Border radius for inputs and buttons. @default "5px" */
+  /** Border radius for inputs and buttons. @default "999px" */
   borderRadiusSm?: string;
-  /** Body font family. @default "Inter, system-ui, sans-serif" */
+  /** Body font family. @default "\"IBM Plex Sans\", system-ui, sans-serif" */
   fontFamily?: string;
-  /** Monospace font family. @default "'JetBrains Mono', 'Fira Code', monospace" */
+  /** Monospace font family. @default "\"IBM Plex Mono\", ui-monospace, monospace" */
   fontFamilyMono?: string;
   /** Base font size. @default "14px" */
   fontSize?: string;

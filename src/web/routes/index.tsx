@@ -11,18 +11,7 @@ export const Route = createFileRoute("/")({
 });
 
 function IndexRouteComponent() {
-  const { data: session, isPending } = useSession();
-
-  if (isPending) {
-    return (
-      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#050505" }}>
-        <div className="loading" style={{
-          fontFamily: "var(--font-mono)",
-          color: "var(--color-text-tertiary)", fontSize: "0.8rem",
-        }}>Loading…</div>
-      </div>
-    );
-  }
+  const { data: session } = useSession();
 
   if (!session) {
     return <LandingPage />;
@@ -79,7 +68,7 @@ function OverviewPage() {
           ))
         ) : (
           <>
-            <StatCard label="Total Users" value={stats!.totalUsers} icon={Users} color="var(--color-accent)" />
+            <StatCard label="Total Users" value={stats!.totalUsers} icon={Users} color="var(--color-text-accent)" />
             <StatCard label="Active Sessions" value={stats!.activeSessions} icon={Activity} color="var(--color-green)" />
             <StatCard label="Banned Users" value={stats!.bannedUsers} icon={Shield} color="var(--color-red)" />
             <StatCard label="Providers" value="2 active" icon={Globe} color="var(--color-amber)" />

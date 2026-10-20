@@ -85,13 +85,13 @@ const PROVIDER_LABELS: Record<string, string> = {
 function actionLabel(action: string): { label: string; color: string } {
   if (action.startsWith("user.signIn")) return { label: "Signed in", color: "var(--color-green)" };
   if (action.startsWith("user.signOut")) return { label: "Signed out", color: "var(--color-text-tertiary)" };
-  if (action.startsWith("user.signUp")) return { label: "Account created", color: "var(--color-accent)" };
+  if (action.startsWith("user.signUp")) return { label: "Account created", color: "var(--color-text-accent)" };
   if (action.startsWith("user.password")) return { label: "Password changed", color: "var(--color-amber)" };
   if (action.startsWith("user.ban")) return { label: "Banned", color: "var(--color-red)" };
   if (action.startsWith("user.unban")) return { label: "Unbanned", color: "var(--color-green)" };
   if (action.startsWith("apiKey")) return { label: "API key action", color: "var(--color-amber)" };
-  if (action.startsWith("org.")) return { label: "Org action", color: "var(--color-accent)" };
-  if (action.startsWith("session.")) return { label: "Session action", color: "var(--color-accent)" };
+  if (action.startsWith("org.")) return { label: "Org action", color: "var(--color-text-accent)" };
+  if (action.startsWith("session.")) return { label: "Session action", color: "var(--color-text-accent)" };
   return { label: action, color: "var(--color-text-secondary)" };
 }
 
@@ -250,7 +250,7 @@ function UserDetailPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
             <StatCard icon={<Activity size={15} />} label="Active sessions" value={sessionCount} color="var(--color-green)" />
             <StatCard icon={<Key size={15} />} label="API keys" value={apiKeyCount} color="var(--color-amber)" />
-            <StatCard icon={<Clock size={15} />} label="Last updated" value={relativeTime(new Date(user.updatedAt).toISOString())} color="var(--color-accent)" />
+            <StatCard icon={<Clock size={15} />} label="Last updated" value={relativeTime(new Date(user.updatedAt).toISOString())} color="var(--color-text-accent)" />
           </div>
 
           {/* Linked accounts */}
@@ -281,7 +281,7 @@ function UserDetailPage() {
                         display: "flex", alignItems: "center", justifyContent: "center",
                       }}>
                         {acc.providerId === "credential" ? (
-                          <KeyRound size={12} color="var(--color-accent)" />
+                          <KeyRound size={12} color="var(--color-text-accent)" />
                         ) : (
                           <ProviderIcon id={acc.providerId as ProviderId} size={13} />
                         )}
@@ -309,7 +309,7 @@ function UserDetailPage() {
               </div>
               <Link
                 to="/audit-logs"
-                style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-accent)", textDecoration: "none" }}
+                style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", color: "var(--color-text-accent)", textDecoration: "none" }}
               >
                 View all →
               </Link>

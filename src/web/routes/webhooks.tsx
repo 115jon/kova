@@ -43,7 +43,7 @@ export const Route = createFileRoute("/webhooks")({
 type AuditAction =
   | "user.signIn" | "user.signOut" | "user.signUp"
   | "user.passwordChanged" | "user.passwordSet" | "user.emailVerified"
-  | "user.avatarUpdated"
+  | "user.avatarUpdated" | "user.wallpaperUpdated"
   | "twoFactor.enabled" | "twoFactor.disabled" | "twoFactor.challengePassed"
   | "apiKey.created" | "apiKey.revoked" | "apiKey.allExpiredDeleted"
   | "session.revoked" | "session.revokeAll" | "session.expired"
@@ -72,6 +72,7 @@ const EVENT_CATALOG: EventDef[] = [
   { action: "user.passwordSet", label: "Password set", description: "OAuth-only user added a password for the first time.", category: "auth" },
   { action: "user.emailVerified", label: "Email verified", description: "User clicked the email verification link.", category: "auth" },
   { action: "user.avatarUpdated", label: "Avatar updated", description: "User or admin changed the profile photo.", category: "auth" },
+  { action: "user.wallpaperUpdated", label: "Wallpaper updated", description: "User set, replaced, or cleared their wallpaper.", category: "auth" },
   { action: "twoFactor.enabled", label: "2FA enabled", description: "Two-factor authentication was switched on.", category: "2fa" },
   { action: "twoFactor.disabled", label: "2FA disabled", description: "Two-factor authentication was switched off.", category: "2fa" },
   { action: "twoFactor.challengePassed", label: "2FA challenge passed", description: "User passed a 2FA step successfully.", category: "2fa" },
@@ -97,7 +98,7 @@ const EVENT_CATALOG: EventDef[] = [
 ];
 
 const CATEGORY_META: Record<EventCategory, { label: string; color: string }> = {
-  auth: { label: "Auth", color: "var(--color-accent)" },
+  auth: { label: "Auth", color: "var(--color-text-accent)" },
   "2fa": { label: "2FA", color: "var(--color-green)" },
   key: { label: "API Key", color: "var(--color-amber)" },
   session: { label: "Session", color: "#a78bfa" },
@@ -310,7 +311,7 @@ function CreateEndpointModal({ onClose, onCreated }: {
             background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <Webhook size={15} color="var(--color-accent)" />
+            <Webhook size={15} color="var(--color-text-accent)" />
           </div>
           <div>
             <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.9rem" }}>
@@ -358,11 +359,11 @@ function CreateEndpointModal({ onClose, onCreated }: {
               borderRadius: 4, cursor: "pointer", marginBottom: 8,
               transition: "background 0.12s, border-color 0.12s",
             }}>
-              <Zap size={14} color={allEvents ? "var(--color-accent)" : "var(--color-text-tertiary)"} />
-              <span style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: allEvents ? "var(--color-accent)" : "var(--color-text-primary)", textAlign: "left", fontWeight: 500 }}>
+              <Zap size={14} color={allEvents ? "var(--color-text-accent)" : "var(--color-text-tertiary)"} />
+              <span style={{ flex: 1, fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: allEvents ? "var(--color-text-accent)" : "var(--color-text-primary)", textAlign: "left", fontWeight: 500 }}>
                 All events (wildcard)
               </span>
-              {allEvents && <Check size={13} color="var(--color-accent)" />}
+              {allEvents && <Check size={13} color="var(--color-text-accent)" />}
             </button>
 
             {!allEvents && (
@@ -532,8 +533,8 @@ function DeliveryLogModal({ endpoint, onClose }: {
                 background: "var(--color-accent-glow)", border: "1px solid rgba(59,130,246,0.15)",
                 borderRadius: 4, padding: "8px 12px",
               }}>
-                <Zap size={13} color="var(--color-accent)" />
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-accent)", fontWeight: 500 }}>All events (wildcard)</span>
+                <Zap size={13} color="var(--color-text-accent)" />
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-accent)", fontWeight: 500 }}>All events (wildcard)</span>
               </div>
             ) : (
               <div style={{ border: "1px solid var(--color-border)", borderRadius: 4, maxHeight: 180, overflowY: "auto" }}>
@@ -685,7 +686,7 @@ function EndpointCard({ ep, onDelete, onToggle, onViewLog }: {
             title={ep.enabled ? "Disable" : "Enable"}
             style={{ background: "none", border: "none", cursor: "pointer", padding: 0, opacity: toggling ? 0.5 : 1 }}>
             {ep.enabled
-              ? <ToggleRight size={22} color="var(--color-accent)" />
+              ? <ToggleRight size={22} color="var(--color-text-accent)" />
               : <ToggleLeft size={22} color="var(--color-text-tertiary)" />
             }
           </button>
@@ -892,7 +893,7 @@ function WebhooksPage() {
             background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <Webhook size={18} color="var(--color-accent)" />
+            <Webhook size={18} color="var(--color-text-accent)" />
           </div>
           <p style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 6, letterSpacing: "-0.02em" }}>
             No webhook endpoints yet

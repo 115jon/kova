@@ -68,7 +68,7 @@ function AcceptInvitationPage() {
               background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <Building2 size={20} color="var(--color-accent)" />
+              <Building2 size={20} color="var(--color-text-accent)" />
             </div>
             <h1 style={{ fontFamily: "var(--font-mono)", fontSize: "1rem", fontWeight: 700, color: "var(--color-text-primary)", marginBottom: 8 }}>
               Accepting invitation…

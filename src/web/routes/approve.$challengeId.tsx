@@ -163,10 +163,10 @@ function ApproveDevicePage() {
         }}
         >
           {challenge?.status === "approved" || challenge?.status === "claimed"
-            ? <CheckCircle size={20} color="var(--color-accent)" />
+            ? <CheckCircle size={20} color="var(--color-text-accent)" />
             : challenge?.status === "denied"
               ? <XCircle size={20} color="var(--color-red)" />
-              : <Laptop size={20} color="var(--color-accent)" />}
+              : <Laptop size={20} color="var(--color-text-accent)" />}
         </div>
 
         {loadError && (

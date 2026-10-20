@@ -8,7 +8,7 @@ import {
   type Application,
 } from "./applications";
 import { isDashboardHost } from "./index";
-import { encodeOAuthCtx, decodeOAuthCtx } from "./routes/oauth-bounce";
+import { encodeOAuthCtx, decodeOAuthCtx, oauthStartUsesSdkBounce } from "./routes/oauth-bounce";
 import { verifyStripeWebhookSignature } from "./lib/stripe-webhook";
 
 function app(overrides: Partial<Application>): Application {
@@ -149,6 +149,13 @@ describe("signed OAuth context", () => {
     const tampered = `${payload!.slice(0, -1)}${payload!.endsWith("A") ? "B" : "A"}.${sig}`;
     await expect(decodeOAuthCtx(tampered, secret)).resolves.toBeNull();
   });
+
+  it("uses the SDK bounce only for custom-scheme redirects", () => {
+    expect(oauthStartUsesSdkBounce("mira://auth")).toBe(true);
+    expect(oauthStartUsesSdkBounce("https://app.example.com/callback")).toBe(false);
+    expect(oauthStartUsesSdkBounce("http://localhost:5173/callback")).toBe(false);
+    expect(oauthStartUsesSdkBounce("not a url")).toBe(false);
+  });
 });
 
 describe("Stripe webhook verification", () => {
@@ -174,5 +181,10 @@ describe("dashboard host routing", () => {
 
   it("keeps unknown non-loopback hosts on application resolution", () => {
     expect(isDashboardHost("unknown.auth.lvh.me", "auth.lvh.me")).toBe(false);
+    expect(isDashboardHost("hidden-pine.115jon.com", "auth.115jon.site")).toBe(false);
+  });
+
+  it("allows a DevDoor preview host only while AUTH_URL is the local lvh host", () => {
+    expect(isDashboardHost("hidden-pine.115jon.com", "auth.lvh.me")).toBe(true);
   });
 });

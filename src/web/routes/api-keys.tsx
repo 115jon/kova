@@ -61,7 +61,7 @@ function KeyRevealModal({ keyValue, onClose }: { keyValue: string; onClose: () =
             background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <Key size={15} color="var(--color-accent)" />
+            <Key size={15} color="var(--color-text-accent)" />
           </div>
           <div>
             <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.88rem" }}>Save your API key</p>
@@ -78,7 +78,7 @@ function KeyRevealModal({ keyValue, onClose }: { keyValue: string; onClose: () =
       <div className="modal-body">
         <div style={{
           background: "var(--color-surface-raised)", borderRadius: 4, padding: "11px 14px",
-          fontFamily: "var(--font-mono)", fontSize: "0.77rem", color: "var(--color-accent)",
+          fontFamily: "var(--font-mono)", fontSize: "0.77rem", color: "var(--color-text-accent)",
           wordBreak: "break-all", border: "1px solid var(--color-border)",
           letterSpacing: "0.03em",
         }}>
@@ -304,7 +304,7 @@ function ApiKeysPage() {
             background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.15)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}>
-            <Key size={16} color="var(--color-accent)" />
+            <Key size={16} color="var(--color-text-accent)" />
           </div>
           <p style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 5, letterSpacing: "-0.02em" }}>No API keys yet</p>
           <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--color-text-tertiary)" }}>

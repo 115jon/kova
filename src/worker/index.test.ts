@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { STATIC_ORIGINS } from "./middleware/cors";
 import worker, { AppCounter, createWorker } from "./index";
@@ -73,6 +74,33 @@ describe("composed Worker boundary", () => {
     );
 
     expect(await response.text()).toBe("asset");
+  });
+
+  it("serves hosted-auth assets instead of routing them through Hono", async () => {
+    const composed = createWorker(handler("start"), handler("hono"), handler("asset"));
+
+    const bundle = await composed.fetch(
+      new Request("https://tenant.auth.lvh.me/assets/hosted-auth.js"),
+      env,
+      ctx,
+    );
+    const page = await composed.fetch(
+      new Request("https://tenant.auth.lvh.me/sign-in"),
+      env,
+      ctx,
+    );
+
+    expect(await bundle.text()).toBe("asset");
+    expect(await page.text()).toBe("hono");
+  });
+
+  it("points the hosted page at the bundle the hosted-auth build emits", () => {
+    const page = readFileSync(new URL("./routes/hosted-auth.ts", import.meta.url), "utf8");
+    const bundle = readFileSync(new URL("../../dist/client/assets/hosted-auth.js", import.meta.url), "utf8");
+
+    expect(page).toContain('src="/assets/hosted-auth.js"');
+    expect(bundle).toContain("__KOVA_AUTH_HOSTED__");
+    expect(bundle).not.toMatch(/^import /m);
   });
 
   it("delegates hosted-auth and custom-host requests to Hono", async () => {

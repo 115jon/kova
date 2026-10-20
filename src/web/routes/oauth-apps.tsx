@@ -87,7 +87,7 @@ function OAuthAppsPage() {
       {/* Info panel */}
       <div className="card" style={{ marginTop: 24, padding: 20 }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-          <Globe size={16} color="var(--color-accent)" style={{ flexShrink: 0, marginTop: 2 }} />
+          <Globe size={16} color="var(--color-text-accent)" style={{ flexShrink: 0, marginTop: 2 }} />
           <div>
             <p style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 5 }}>Adding a new provider</p>
             <p style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--color-text-secondary)", lineHeight: 1.6 }}>

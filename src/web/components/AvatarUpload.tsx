@@ -113,7 +113,7 @@ function CropModal({
               background: "var(--color-accent-dim)", border: "1px solid rgba(59,130,246,0.2)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <Camera size={13} color="var(--color-accent)" />
+              <Camera size={13} color="var(--color-text-accent)" />
             </div>
             <p style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "var(--color-text-primary)", fontSize: "0.86rem" }}>Crop photo</p>
           </div>
