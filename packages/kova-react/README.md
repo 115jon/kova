@@ -217,6 +217,11 @@ app's settings. A `redirect_url` that isn't registered is refused.
   on that origin. Register exact paths unless that is what you want.
 - Custom schemes such as `myapp://auth` match scheme, host and path.
 
+When someone who is already signed in to Kova opens your hosted sign-in page
+(`createHostedSignInUrl`), they choose which account to continue as, or sign in
+with another one, before Kova sends them back. Add `prompt=login` to the URL to
+always show the sign-in form instead.
+
 ---
 
 ## Imperative Client

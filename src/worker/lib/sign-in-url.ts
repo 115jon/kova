@@ -10,6 +10,8 @@
  * registration has one. A registration of just an origin and `/` (no query)
  * allows any path on that origin. An optional `state` is echoed back unchanged.
  * `native_handoff=1` is accepted as a legacy hint and changes nothing.
+ * Someone already signed in picks an account first; `prompt=login` shows the
+ * sign-in form instead.
  * `/sign-up` takes the same query, for the page that creates the account.
  */
 export function appSignInUrl(

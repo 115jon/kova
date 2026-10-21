@@ -53,6 +53,7 @@ import { insertAppScopedSession } from "../lib/app-session";
 import { createAuthTicket, createSessionTransferCode } from "../lib/auth-ticket";
 import { escapeHtml, jsonForHtmlScript } from "../lib/html";
 import { isSafeDeviceReturnPath } from "../lib/device-login";
+import { isFreshSignInSession, timestampMs } from "../lib/fresh-sign-in";
 import { hostedProviders } from "../lib/hosted-providers";
 
 export interface OAuthBounceCtx {
@@ -343,22 +344,7 @@ export async function handleOAuthBounce(
 
 // ── SDK bounce helper ─────────────────────────────────────────────────────────
 
-/** A session this young was created by the sign-in that led to this handoff. */
-const FRESH_SIGN_IN_MS = 2 * 60 * 1000;
-
 type DeviceSessionEntry = { session: Record<string, unknown> };
-
-function timestampMs(value: unknown): number {
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "number") return value;
-  if (typeof value === "string") return /^\d+$/.test(value) ? Number(value) : Date.parse(value);
-  return Number.NaN;
-}
-
-export function isFreshSignInSession(createdAt: unknown, now = Date.now()): boolean {
-  const created = timestampMs(createdAt);
-  return Number.isFinite(created) && now - created <= FRESH_SIGN_IN_MS;
-}
 
 /** Token of the most recently updated saved session other than the current one. */
 export function pickSessionToRestore(

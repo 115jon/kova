@@ -1,4 +1,5 @@
 import { authErrorMessage, KovaAuthProvider, SignIn, SignUp, useSession } from "@115jon/kova-react";
+import { AccountChooser } from "@/components/AccountChooser";
 import {
   appSignInLook,
   appSignInProviders,
@@ -9,8 +10,10 @@ import { CONFIGURED_PROVIDERS } from "@/lib/providers";
 import { useTheme } from "@/lib/theme";
 import {
   buildAuthPagePath,
+  buildFreshSignInReturnPath,
   buildNativeHandoffPath,
   canContinueWithSession,
+  existingSessionAction,
   isAddAccount,
   safeSignInReturnPath,
   type AuthPage as AuthPageMode,
@@ -229,6 +232,99 @@ function AppFooter({ appearance, isDevelopment }: { appearance?: AppAppearance; 
   );
 }
 
+/**
+ * The body of an app's sign-in page once its branding has loaded. Someone
+ * already signed in gets the account chooser; a sign-in made here, or one that
+ * returned with `fresh=1` moments after it happened, continues to the app.
+ */
+function AppSignInFlow({ mode, search, appearance }: {
+  mode: AuthPageMode;
+  search: SignInRouteSearch;
+  appearance: AppAppearance;
+}) {
+  const { session, isLoaded } = useSession();
+  const [usingAnother, setUsingAnother] = useState(false);
+  const arrivedWithSessionId = useRef<string | null | undefined>(undefined);
+  const leaving = useRef(false);
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  // KovaSession's type leaves out createdAt; get-session always returns it.
+  const current = session?.session
+    ? { id: session.session.id, token: session.session.token, createdAt: (session.session as { createdAt?: unknown }).createdAt }
+    : null;
+  if (isLoaded && arrivedWithSessionId.current === undefined) arrivedWithSessionId.current = current?.id ?? null;
+
+  const handoffPath = buildNativeHandoffPath(search);
+  const freshHandoffPath = buildNativeHandoffPath(search, { fresh: true });
+  // Without a redirect_url this is a dashboard preview: signing in lands in Kova.
+  const freshReturnPath = handoffPath ? buildFreshSignInReturnPath(search) : "/";
+  const signInPath = buildAuthPagePath("sign-in", { ...search, add_account: undefined });
+
+  const action = !isLoaded
+    ? null
+    : !handoffPath
+      ? "form"
+      : existingSessionAction({
+        // Sign-up never continues as the account that was there on arrival.
+        search: mode === "sign-up" ? { ...search, add_account: "1" } : search,
+        session: current,
+        arrivedWithSessionId: arrivedWithSessionId.current ?? null,
+      });
+
+  useEffect(() => {
+    if (action !== "continue" || !freshHandoffPath || leaving.current) return;
+    leaving.current = true;
+    window.location.assign(freshHandoffPath);
+  }, [action, freshHandoffPath]);
+
+  const continueWithChosen = useCallback(() => {
+    if (!handoffPath) return;
+    // Switching accounts updates the session store; that must not also count as a new sign-in.
+    leaving.current = true;
+    window.location.assign(handoffPath);
+  }, [handoffPath]);
+
+  const showSignInForm = useCallback(() => {
+    setUsingAnother(true);
+    // The chooser's button is gone; start keyboard users at the form.
+    requestAnimationFrame(() => {
+      stageRef.current?.querySelector<HTMLElement>("input, button")?.focus();
+    });
+  }, []);
+
+  if (action === null || action === "continue") {
+    return <div className="app-auth-placeholder" role="status" aria-label={action ? "Signing you in" : "Loading sign-in"} />;
+  }
+
+  if (action === "choose" && current && session && !usingAnother) {
+    return (
+      <AccountChooser
+        appearance={appearance}
+        active={{ sessionId: current.id, sessionToken: current.token, user: session.user }}
+        onContinue={continueWithChosen}
+        onUseAnother={showSignInForm}
+      />
+    );
+  }
+
+  return (
+    <div className="app-auth-flow" ref={stageRef}>
+      {mode === "sign-up"
+        ? <SignUp afterSignUpUrl={freshReturnPath} signInUrl={signInPath} />
+        : <SignIn
+            afterSignInUrl={freshReturnPath}
+            signUpUrl={buildAuthPagePath("sign-up", { ...search, add_account: undefined })}
+            forgotPasswordUrl={buildAuthPagePath("reset-password", { ...search, add_account: undefined })}
+          />}
+      {action === "choose" && usingAnother && (
+        <button type="button" className="app-auth-back" onClick={() => setUsingAnother(false)}>
+          Back to signed-in accounts
+        </button>
+      )}
+    </div>
+  );
+}
+
 function AppAuthPage({ pk, search, mode }: { pk: string; search: SignInRouteSearch; mode: AuthPageMode }) {
   const ctx = useAppSignInContext(pk, search.redirect_url);
   const prefersDark = usePrefersDark();
@@ -241,21 +337,8 @@ function AppAuthPage({ pk, search, mode }: { pk: string; search: SignInRouteSear
     () => appSignInProviders(CONFIGURED_PROVIDERS, appearance?.enabledProviders ?? []),
     [appearance],
   );
-  const nativeHandoffPath = buildNativeHandoffPath(search);
-  // Without a redirect_url this is a dashboard preview: signing in lands in Kova.
-  // add_account only skips the session present on arrival, so the page a
-  // sign-in method returns to drops it and continues with the new account.
-  const signInPath = buildAuthPagePath("sign-in", { ...search, add_account: undefined });
-  const afterSignInUrl = nativeHandoffPath ? signInPath : "/";
+  const afterSignInUrl = search.redirect_url ? buildFreshSignInReturnPath(search) : "/";
   const isDevelopment = pk.startsWith("pk_dev_");
-  const addAccount = isAddAccount(search.add_account);
-
-  // An existing session continues only to a redirect the app registered.
-  // handleSdkBounce re-checks it; this is not the security boundary.
-  const canComplete = ctx.status === "ready" && !!nativeHandoffPath && canContinueWithSession(search);
-  const completeSignIn = useCallback(() => {
-    if (nativeHandoffPath) window.location.assign(nativeHandoffPath);
-  }, [nativeHandoffPath]);
 
   useEffect(() => {
     if (appearance) {
@@ -297,24 +380,13 @@ function AppAuthPage({ pk, search, mode }: { pk: string; search: SignInRouteSear
               </div>
             ) : (
               <>
-                <CompleteOnSession
-                  enabled={canComplete}
-                  skipInitialUser={addAccount || mode === "sign-up"}
-                  onComplete={completeSignIn}
-                />
                 <FailedLinkNotice error={search.error} />
                 {!search.redirect_url && (
                   <p className="app-auth-notice">
                     Preview. This link has no redirect_url, so signing in opens the Kova dashboard instead of the app.
                   </p>
                 )}
-                {mode === "sign-up"
-                  ? <SignUp afterSignUpUrl={signInPath} signInUrl={signInPath} />
-                  : <SignIn
-                      afterSignInUrl={afterSignInUrl}
-                      signUpUrl={buildAuthPagePath("sign-up", { ...search, add_account: undefined })}
-                      forgotPasswordUrl={buildAuthPagePath("reset-password", { ...search, add_account: undefined })}
-                    />}
+                <AppSignInFlow mode={mode} search={search} appearance={ctx.appearance} />
               </>
             )}
           </KovaAuthProvider>

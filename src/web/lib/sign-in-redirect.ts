@@ -1,4 +1,5 @@
 import { safeOauthContinuePath } from "../../worker/lib/oidc-account-picker";
+import { isFreshSignInSession } from "../../worker/lib/fresh-sign-in";
 
 const APPROVE_PATH = /^\/approve\/dc_[A-Za-z0-9_-]+$/;
 
@@ -9,6 +10,12 @@ export type SignInRouteSearch = {
   add_account?: string;
   /** App nonce echoed back to redirect_url unchanged. */
   state?: string;
+  /**
+   * Set on the return URL of sign-in methods that leave the page (provider,
+   * emailed link). A session created moments ago then skips the account
+   * chooser. Only this page view reads it; links between pages drop it.
+   */
+  fresh?: string;
   /**
    * Better Auth's code when an emailed link or provider sign-in failed and sent
    * the browser back here. Never carried onward; see canContinueWithSession.
@@ -38,10 +45,40 @@ export function validateSignInSearch(search: Record<string, unknown>): SignInRou
     pk: searchParamString(search.pk),
     redirect_url: searchParamString(search.redirect_url),
     native_handoff: searchParamString(search.native_handoff),
-    add_account: isAddAccount(search.add_account) ? "1" : undefined,
+    // OIDC-style prompt=login asks for a sign-in even when one exists, which
+    // is what add_account already does. select_account is the default.
+    add_account: isAddAccount(search.add_account) || search.prompt === "login" ? "1" : undefined,
     state: searchParamString(search.state),
+    fresh: isAddAccount(search.fresh) ? "1" : undefined,
     error: searchParamString(search.error),
   };
+}
+
+/** What the app sign-in page does about the session in this browser. */
+export type ExistingSessionAction = "form" | "choose" | "continue";
+
+/**
+ * - `continue`: a sign-in just happened, on this page (the session changed
+ *   since it loaded) or on a method that returned here with `fresh=1`.
+ * - `choose`: someone was already signed in on arrival. The page asks which
+ *   account to continue as instead of handing one to the app unasked.
+ * - `form`: nobody is signed in, the app asked for a new sign-in
+ *   (add_account, prompt=login, sign-up), or a link failed.
+ *
+ * The bounce re-checks freshness (`fresh=1`); this only picks what to show.
+ */
+export function existingSessionAction(input: {
+  search: Pick<SignInRouteSearch, "add_account" | "fresh" | "error">;
+  session: { id: string; createdAt: unknown } | null;
+  arrivedWithSessionId: string | null;
+  now?: number;
+}): ExistingSessionAction {
+  const { search, session } = input;
+  if (!session) return "form";
+  if (session.id !== input.arrivedWithSessionId) return "continue";
+  if (!canContinueWithSession(search) || isAddAccount(search.add_account)) return "form";
+  if (search.fresh === "1" && isFreshSignInSession(session.createdAt, input.now)) return "continue";
+  return "choose";
 }
 
 /**
@@ -88,6 +125,7 @@ export function safeSignInReturnPath(redirectUrl: string | undefined): string | 
  */
 export function buildNativeHandoffPath(
   search: SignInRouteSearch,
+  opts: { fresh?: boolean } = {},
 ): string | null {
   const pk = search.pk?.trim();
   const redirectUrl = search.redirect_url?.trim();
@@ -100,6 +138,8 @@ export function buildNativeHandoffPath(
     redirect_uri: redirectUrl,
   });
   if (search.state) params.set("state", search.state);
+  // The bounce then refuses any session older than this sign-in.
+  if (opts.fresh) params.set("fresh", "1");
   return `/api/hosted/oauth-complete?${params.toString()}`;
 }
 
@@ -119,6 +159,16 @@ export function buildAuthPagePath(page: AuthPage, search: SignInRouteSearch): st
 
   const query = params.toString();
   return query ? `/${page}?${query}` : `/${page}`;
+}
+
+/**
+ * Where provider sign-ins and emailed links return on an app's page. `fresh=1`
+ * lets a session they just created skip the chooser; add_account is dropped
+ * because the new session is the one to continue with.
+ */
+export function buildFreshSignInReturnPath(search: SignInRouteSearch): string {
+  const path = buildAuthPagePath("sign-in", { ...search, add_account: undefined });
+  return `${path}${path.includes("?") ? "&" : "?"}fresh=1`;
 }
 
 export function buildSignInReturnPath(search: SignInRouteSearch): string {

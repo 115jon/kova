@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { appSignInUrl } from "../../worker/lib/sign-in-url";
 import {
   buildAuthPagePath,
+  buildFreshSignInReturnPath,
   canContinueWithSession,
+  existingSessionAction,
   validateSignInSearch,
   validateResetPasswordSearch,
   buildNativeHandoffPath,
@@ -200,5 +202,58 @@ describe("reset-password page helpers", () => {
     expect(validateResetPasswordSearch({ token: ["a"], error: null })).toEqual({
       pk: undefined, redirect_url: undefined, state: undefined, token: undefined, error: undefined,
     });
+  });
+});
+
+describe("signing in when an account is already signed in", () => {
+  const now = Date.parse("2026-10-20T12:00:00Z");
+  const old = { id: "s-old", createdAt: "2026-10-19T09:00:00Z" };
+  const justNow = { id: "s-new", createdAt: new Date(now - 20_000).toISOString() };
+  const app = validateSignInSearch({ pk: "pk_live_house", redirect_url: "t3code://app/auth/kova" });
+
+  it("asks which account to use instead of continuing as the one already there", () => {
+    expect(existingSessionAction({ search: app, session: old, arrivedWithSessionId: "s-old", now })).toBe("choose");
+  });
+
+  it("shows the form when nobody is signed in", () => {
+    expect(existingSessionAction({ search: app, session: null, arrivedWithSessionId: null, now })).toBe("form");
+  });
+
+  it("continues once someone signs in on the page, including another account", () => {
+    expect(existingSessionAction({ search: app, session: justNow, arrivedWithSessionId: null, now })).toBe("continue");
+    expect(existingSessionAction({ search: app, session: justNow, arrivedWithSessionId: "s-old", now })).toBe("continue");
+  });
+
+  it("continues straight through a provider or emailed link that returned with a fresh sign-in", () => {
+    const back = validateSignInSearch({ ...app, fresh: "1" });
+    expect(existingSessionAction({ search: back, session: justNow, arrivedWithSessionId: "s-new", now })).toBe("continue");
+    // An already-used link lands here with someone else's older session: they choose.
+    expect(existingSessionAction({ search: back, session: old, arrivedWithSessionId: "s-old", now })).toBe("choose");
+  });
+
+  it("shows the form for prompt=login and add_account until a new sign-in", () => {
+    const login = validateSignInSearch({ ...app, prompt: "login" });
+    expect(login.add_account).toBe("1");
+    expect(existingSessionAction({ search: login, session: old, arrivedWithSessionId: "s-old", now })).toBe("form");
+    expect(existingSessionAction({ search: login, session: justNow, arrivedWithSessionId: "s-old", now })).toBe("continue");
+    expect(validateSignInSearch({ ...app, prompt: "select_account" }).add_account).toBeUndefined();
+  });
+
+  it("never offers the browser's session after a failed link", () => {
+    const failed = validateSignInSearch({ ...app, fresh: "1", error: "INVALID_TOKEN" });
+    expect(existingSessionAction({ search: failed, session: justNow, arrivedWithSessionId: "s-new", now })).toBe("form");
+  });
+
+  it("marks only the sign-in return as fresh, and only the bounce enforces it", () => {
+    const search = { ...app, state: "nonce-1", add_account: "1" };
+    expect(buildFreshSignInReturnPath(search)).toBe(
+      "/sign-in?pk=pk_live_house&redirect_url=t3code%3A%2F%2Fapp%2Fauth%2Fkova&state=nonce-1&fresh=1",
+    );
+    const back = validateSignInSearch({ ...search, fresh: "1" });
+    expect(buildAuthPagePath("sign-up", back)).not.toContain("fresh");
+    expect(buildNativeHandoffPath(back)).not.toContain("fresh");
+    expect(buildNativeHandoffPath(back, { fresh: true })).toBe(
+      "/api/hosted/oauth-complete?mode=sdk&pk=pk_live_house&redirect_uri=t3code%3A%2F%2Fapp%2Fauth%2Fkova&state=nonce-1&fresh=1",
+    );
   });
 });
