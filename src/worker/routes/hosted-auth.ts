@@ -42,7 +42,8 @@ import { escapeHtml, jsonForHtmlScript } from "../lib/html";
 import { hostedProviders } from "../lib/hosted-providers";
 import { isPlatformOnlyAuthPath, rejectAppScopedSession } from "../lib/platform-session";
 import { appSignInUrl } from "../lib/sign-in-url";
-import { RALPH_RADIO_SVG, resolveHostedAppearance, type HostedProvider } from "../../shared/hosted-brand";
+import { resolveHostedAppearance, type HostedProvider } from "../../shared/hosted-brand";
+import { artPanelHtml, hostedShellCss, hostedTheme } from "../../web/hosted/hosted-theme";
 import { findMFAEnforcedOrgBlockingUser } from "../org-settings";
 import { devicePageApp, devicePageResponse, loadDevicePage, NO_FRAMING_HEADERS, releaseDeviceClaim } from "./hosted-device";
 import { encodeOAuthCtx, oauthStartUsesSdkBounce } from "./oauth-bounce";
@@ -100,7 +101,7 @@ async function buildHostedPage(opts: {
     ? `Sign in to ${esc(app.display_name ?? app.name)}`
     : `Create account — ${esc(app.display_name ?? app.name)}`;
 
-  const appearance = resolveHostedAppearance(app.publishable_key, {
+  const appearance = resolveHostedAppearance(app, {
     primaryColor: app.primary_color ?? "#3b82f6",
     backgroundColor: app.background_color ?? "#0a0a0a",
     theme: app.theme ?? "dark",
@@ -145,38 +146,41 @@ async function buildHostedPage(opts: {
     }, opts.signingSecret),
   });
 
+  const theme = hostedTheme(appearance.primaryColor, appearance.backgroundColor);
+  const appName = app.display_name ?? app.name;
+
+  // The split page is server-rendered so the art fallback and the form column
+  // are on screen before the bundle runs; the bundle fills #root and mounts the
+  // shader into the art panel.
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="${theme.background}" />
   <title>${title}</title>
   <meta name="robots" content="noindex" />
   ${app.favicon_url ? `<link rel="icon" href="${esc(app.favicon_url)}" />` : ""}
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&display=swap" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      display: flex; min-height: 100svh;
-      align-items: center; justify-content: center;
-      background: ${esc(appearance.backgroundColor)};
-      font-family: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
-    }
-    #root { width: 100%; max-width: 400px; padding: 24px 16px; }
-    .ra-skeleton {
-      background: rgba(255,255,255,0.05); border-radius: 20px; min-height: 420px;
-      border: 1px solid rgba(255,255,255,0.10);
-      display: flex; align-items: center; justify-content: center;
-      text-align: center; color: #8a9090; font-size: 13px;
-    }
+    ${hostedShellCss(theme)}
+    .ra-skeleton { min-height: 360px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); font-size: 13px; }
   </style>
 </head>
 <body>
-  <div id="root"><div class="ra-skeleton">Loading&hellip;</div></div>
+  <div class="kv-page">
+    ${artPanelHtml(theme, appName)}
+    <main class="kv-form">
+      <div class="kv-form-inner">
+        <div id="root"><div class="ra-skeleton">Loading&hellip;</div></div>
+      </div>
+    </main>
+  </div>
   <script>window.__KOVA_AUTH_HOSTED__ = ${bootstrap};</script>
   <script type="module" src="/assets/hosted-auth.js" onerror="
     document.getElementById('root').innerHTML =
-      '<div class=ra-skeleton style=color:#ff6b6b>Couldn\u2019t load sign-in. Refresh to try again.</div>';
+      '<div class=ra-skeleton style=color:#ff9b9b>Couldn’t load sign-in. Refresh to try again.</div>';
   "></script>
 </body>
 </html>`;

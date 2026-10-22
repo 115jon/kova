@@ -310,7 +310,9 @@ describe("device sign-in", () => {
       const html = await (await h.fetch(`${hostOf(ralph)}/device`)).text();
       expect(html).toContain("--primary: #5865f2;");
       expect(html).toContain("--bg: #070709;");
-      expect(html).toContain('class="logo mark"');
+      // Same art panel and brand colours as the hosted sign-in; no logo set, so the monogram stands in.
+      expect(html).toContain('data-kova-art data-primary="#5865f2" data-background="#070709"');
+      expect(html).toContain('<span class="logo kv-logo kv-monogram" aria-hidden="true">R</span>');
       expect(html).toContain("Secured by Kova");
       h.sqlite.prepare(`UPDATE application SET hide_branding = 1 WHERE id = ?`).run(app.id);
       expect(await (await h.fetch(`${hostOf(app)}/device`)).text()).not.toContain("Secured by Kova");

@@ -81,6 +81,8 @@ function app(redirectUris: string[]): Application {
     suspended_at: null,
     auth_slug: "mira",
     custom_domain: null,
+    legacy_publishable_key: null,
+    device_verification_uri: null,
   };
 }
 

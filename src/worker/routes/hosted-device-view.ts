@@ -27,7 +27,7 @@
  *     server-observed "Requested from" location.
  */
 import { escapeHtml as esc, jsonForHtmlScript } from "../lib/html";
-import { RALPH_RADIO_SVG } from "../../shared/hosted-brand";
+import { artPanelHtml, hostedShellCss, hostedTheme } from "../../web/hosted/hosted-theme";
 import type { DevicePageApp, DevicePageModel } from "./hosted-device";
 
 type ReviewModel = Extract<DevicePageModel, { state: "review" }>;
@@ -165,11 +165,10 @@ function makeNonce(): string {
 // ── Pieces ─────────────────────────────────────────────────────────────────────
 
 function logo(app: DevicePageApp): string {
-  // Same order as the hosted sign-in page: logo, then the built-in brand mark.
-  if (!app.logoUrl && app.brandMark === "ralph-radio") return `<span class="logo mark" aria-hidden="true">${RALPH_RADIO_SVG}</span>`;
+  // Same order as the hosted sign-in page: the app's logo, else a monogram.
   const src = app.logoUrl ?? app.faviconUrl;
-  if (src) return `<img class="logo" src="${esc(src)}" alt="" width="48" height="48" decoding="async" referrerpolicy="no-referrer" />`;
-  return `<span class="logo monogram" aria-hidden="true">${esc(initials(app.name, app.name))}</span>`;
+  if (src) return `<img class="logo kv-logo" src="${esc(src)}" alt="" width="44" height="44" decoding="async" referrerpolicy="no-referrer" />`;
+  return `<span class="logo kv-logo kv-monogram" aria-hidden="true">${esc(initials(app.name, app.name))}</span>`;
 }
 
 const CHECK_ICON = `<svg class="check" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true" focusable="false">
@@ -179,7 +178,7 @@ const CHECK_ICON = `<svg class="check" viewBox="0 0 48 48" width="48" height="48
 
 function actionLink(action: Copy["action"]): string {
   if (!action) return "";
-  return `<a class="btn secondary" href="${esc(action.href)}">${esc(action.label)}</a>`;
+  return `<a class="btn kv-btn secondary" href="${esc(action.href)}">${esc(action.label)}</a>`;
 }
 
 // ── States ─────────────────────────────────────────────────────────────────────
@@ -192,11 +191,11 @@ function enterBody(model: EnterModel): string {
     <p class="sub">Enter the code shown on your device to sign in to ${esc(model.app.name)}.</p>
     <form class="enter" method="get" action="/device" novalidate>
       <label for="device-code" class="sr-only">Device code</label>
-      <input id="device-code" class="code-input" name="code" type="text" value="${esc(model.code ?? "")}" placeholder="XXXX-XXXX"
+      <input id="device-code" class="code-input kv-input" name="code" type="text" value="${esc(model.code ?? "")}" placeholder="XXXX-XXXX"
         autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false" inputmode="text"
         maxlength="24" required autofocus aria-describedby="code-error"${hasError ? ` aria-invalid="true"` : ""} />
       <p class="error" id="code-error" role="alert">${hasError ? "Codes are 8 letters and numbers, like ABCD-EFGH. Check the code and try again." : ""}</p>
-      <button type="submit" class="btn primary" id="continue"><span class="label">Continue</span><span class="spinner" aria-hidden="true"></span></button>
+      <button type="submit" class="btn kv-btn kv-btn-primary primary" id="continue"><span class="label">Continue</span><span class="spinner" aria-hidden="true"></span></button>
     </form>
   </div>`;
 }
@@ -283,8 +282,8 @@ function reviewBody(model: ReviewModel): string {
       <button type="button" class="link" id="switch-account">Not you?<span class="sr-only"> Use another account</span></button>
     </div>
     <div class="actions">
-      <button type="button" class="btn primary" id="approve-device"><span class="label">Approve</span><span class="spinner" aria-hidden="true"></span></button>
-      <button type="button" class="btn secondary" id="deny-device"><span class="label">Deny</span><span class="spinner" aria-hidden="true"></span></button>
+      <button type="button" class="btn kv-btn secondary" id="deny-device"><span class="label">Deny</span><span class="spinner" aria-hidden="true"></span></button>
+      <button type="button" class="btn kv-btn kv-btn-primary primary" id="approve-device"><span class="label">Approve</span><span class="spinner" aria-hidden="true"></span></button>
     </div>
     <noscript><p class="error">Turn on JavaScript to approve or deny this sign-in.</p></noscript>
     <p class="error" id="device-error" role="alert"></p>
@@ -367,7 +366,7 @@ function reviewScript(model: ReviewModel): string {
     next.appendChild(title);
     next.appendChild(el("p", "sub", copy.body));
     if (copy.action) {
-      var link = el("a", "btn secondary", copy.action.label);
+      var link = el("a", "btn kv-btn secondary", copy.action.label);
       link.href = copy.action.href;
       next.appendChild(link);
     }
@@ -456,39 +455,23 @@ function terminalBody(model: DevicePageModel & { state: TerminalState }): string
 // ── Shell ──────────────────────────────────────────────────────────────────────
 
 function styles(primary: string, background: string): string {
-  return `
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root { --primary: ${primary}; --bg: ${background}; --text: #ffffff; --secondary: #b8b8b8; --muted: #959b9b;
-      --ease-out: cubic-bezier(0.23, 1, 0.32, 1); color-scheme: dark; }
-    html { -webkit-text-size-adjust: 100%; }
-    body { min-height: 100vh; min-height: 100svh; display: flex; align-items: center; justify-content: center;
-      background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased;
-      font-family: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 15px; line-height: 1.5;
-      padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
-        max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
-    main { width: 100%; max-width: 400px; }
-    .card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10); border-radius: 20px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.35); padding: 32px 28px 24px; text-align: center;
-      animation: card-in 260ms var(--ease-out) both; }
-    @keyframes card-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  const theme = hostedTheme(primary, background);
+  return `${hostedShellCss(theme)}
     .stage { transition: opacity 200ms ease-out, filter 200ms ease-out; }
     .stage.is-entering { opacity: 0; }
     .stage.is-leaving { opacity: 0; filter: blur(2px); transition-duration: 140ms; }
 
-    .logo { display: block; width: auto; height: 48px; max-width: 160px; max-height: 48px; object-fit: contain;
-      margin: 0 auto 16px; border-radius: 12px; }
-    .monogram { width: 48px; display: grid; place-items: center; background: var(--primary); color: #fff;
-      font-weight: 600; font-size: 18px; letter-spacing: 0.02em; }
-    h1 { font-size: 20px; font-weight: 600; line-height: 1.25; letter-spacing: -0.015em; text-wrap: balance; overflow-wrap: anywhere; }
+    .logo { margin-bottom: 18px; }
+    h1 { font-size: 24px; font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; text-wrap: balance; overflow-wrap: anywhere; }
     h1:focus { outline: none; }
-    .sub { margin-top: 6px; color: var(--secondary); text-wrap: pretty; overflow-wrap: anywhere; }
+    .sub { margin-top: 4px; color: var(--secondary); text-wrap: pretty; overflow-wrap: anywhere; }
 
-    .code { margin: 20px 0 4px; padding: 14px 12px; border-radius: 12px; background: rgba(0,0,0,0.25);
-      border: 1px solid rgba(255,255,255,0.10); font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    .code { margin: 18px 0 0; padding: 12px; border-radius: var(--radius); background: rgba(0,0,0,0.28); text-align: center;
+      border: 1px solid var(--line); font-family: var(--mono);
       font-weight: 500; font-size: 30px; line-height: 1.2; letter-spacing: 0.08em; font-variant-numeric: tabular-nums; }
 
-    .details { margin-top: 16px; text-align: left; font-size: 14px; }
-    .row { display: grid; grid-template-columns: 112px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,0.08); }
+    .details { margin-top: 14px; font-size: 14px; }
+    .row { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; padding: 9px 0; border-top: 1px solid rgba(255,255,255,0.08); }
     .row:last-child { border-bottom: 1px solid rgba(255,255,255,0.08); }
     dt { color: var(--muted); }
     dd { color: var(--text); min-width: 0; overflow-wrap: anywhere; }
@@ -497,12 +480,10 @@ function styles(primary: string, background: string): string {
     dd .ip { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; overflow-wrap: normal; font-variant-numeric: tabular-nums; }
     dd.reported { color: var(--secondary); }
     dd .caption { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; font-style: italic; }
-    .mark { width: 48px; display: grid; place-items: center; color: var(--primary); }
-    .mark svg { width: 32px; height: 32px; }
-    .brand { margin-top: 20px; text-align: center; font-size: 12px; color: #8a9090; }
+    .brand { margin-top: 18px; text-align: center; font-size: 12px; color: var(--muted); }
 
-    .account { margin-top: 16px; display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px 12px;
-      border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+    .account { margin-top: 14px; display: flex; align-items: center; gap: 12px; padding: 9px 12px;
+      border-radius: var(--radius); background: var(--field); border: 1px solid var(--line); }
     .avatar { position: relative; flex: none; width: 36px; height: 36px; border-radius: 50%; overflow: hidden;
       display: grid; place-items: center; background: rgba(255,255,255,0.10); color: var(--text); font-size: 13px; font-weight: 600; }
     .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -510,69 +491,38 @@ function styles(primary: string, background: string): string {
     .name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .email { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .link { flex: none; min-height: 44px; padding: 0 4px; margin-right: -4px; border: 0; background: none; font: inherit;
-      font-size: 14px; color: var(--secondary); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; border-radius: 8px; }
+      font-size: 14px; color: var(--secondary); text-decoration: underline; text-decoration-color: ${theme.primary}99; text-underline-offset: 3px; cursor: pointer; border-radius: 8px; }
 
-    .actions { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; }
-    .btn { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 100%; height: 44px;
-      padding: 0 16px; border-radius: 12px; font: inherit; font-size: 15px; font-weight: 500; text-decoration: none;
-      color: #fff; cursor: pointer; overflow: hidden; -webkit-tap-highlight-color: transparent;
-      transition: transform 160ms ease-out; }
-    .btn::after { content: ""; position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none;
-      transition: opacity 160ms ease-out; }
-    .btn:active:not([aria-disabled="true"]) { transform: scale(0.97); }
-    .btn.primary { background: var(--primary); border: 0; font-weight: 600; }
-    .btn.secondary { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.10); }
-    a.btn { margin-top: 20px; }
-    .btn[aria-disabled="true"] { cursor: default; }
-    .btn[aria-disabled="true"]:not(.is-busy) { opacity: 0.5; }
-    .btn .spinner { position: absolute; top: 50%; left: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
-      border-radius: 50%; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; opacity: 0; }
-    .btn.is-busy .label { opacity: 0; }
-    .btn.is-busy .spinner { opacity: 1; animation: spin 700ms linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .actions { margin-top: 18px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+    a.btn { margin-top: 18px; }
 
-    .btn:focus-visible, .link:focus-visible, .code-input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-
-    form.enter { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; }
-    .code-input { width: 100%; height: 44px; padding: 0 12px; border-radius: 12px; background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.10); color: var(--text); text-align: center; text-transform: uppercase;
-      font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace; font-weight: 500; font-size: 20px;
+    form.enter { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+    .code-input { text-align: center; text-transform: uppercase; font-family: var(--mono); font-weight: 500; font-size: 20px;
       letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
-    .code-input::placeholder { color: var(--muted); letter-spacing: 0.12em; }
-    .code-input:focus { outline: none; border-color: var(--primary); }
-    .code-input[aria-invalid="true"] { border-color: rgba(255,107,107,0.6); }
-    .error { color: #ff9b9b; font-size: 14px; text-align: left; }
+    .code-input::placeholder { letter-spacing: 0.12em; }
+    .error { color: #ff9b9b; font-size: 14px; }
     .error:empty { display: none; }
     .actions + noscript .error, .actions ~ .error { margin-top: 12px; }
-    .safety { margin-top: 16px; color: var(--muted); font-size: 13px; text-wrap: pretty; }
+    .safety { margin-top: 14px; color: var(--muted); font-size: 13px; text-wrap: pretty; }
 
-    .check { display: block; margin: 0 auto 16px; fill: none; stroke: var(--primary); stroke-width: 2.5;
+    .check { display: block; margin: 0 0 16px; fill: none; stroke: var(--primary); stroke-width: 2.5;
       stroke-linecap: round; stroke-linejoin: round; }
     .check circle { stroke: rgba(255,255,255,0.14); stroke-width: 2; }
     .check path { stroke-dasharray: 1; stroke-dashoffset: 0; animation: draw 300ms var(--ease-out) 120ms both; }
     @keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 
-    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
-      clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
-
     @media (hover: hover) and (pointer: fine) {
-      .btn:hover:not([aria-disabled="true"])::after { opacity: 0.08; }
-      .link:hover { color: var(--text); }
+      .link:hover { color: var(--text); text-decoration-color: var(--primary); }
     }
     @media (max-width: 479px) {
-      .card { padding: 28px 20px 20px; }
-      .row { grid-template-columns: 1fr; gap: 2px; }
+      .row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
     }
     @media (max-width: 359px) {
       .code { font-size: 26px; letter-spacing: 0.06em; }
     }
     @media (prefers-reduced-motion: reduce) {
-      @keyframes card-in { from { opacity: 0; } to { opacity: 1; } }
       .stage.is-leaving { filter: none; }
-      .btn, .btn:active:not([aria-disabled="true"]) { transform: none; transition: none; }
       .check path { animation: none; }
-      .btn.is-busy .spinner { animation: pulse 1000ms ease-in-out infinite alternate; }
-      @keyframes pulse { from { opacity: 1; } to { opacity: 0.4; } }
     }
   `;
 }
@@ -587,6 +537,7 @@ function documentTitle(model: DevicePageModel): string {
 function shell(model: DevicePageModel, body: string, script: string | null): string {
   const { app } = model;
   const { primary, background } = pageColors(app);
+  const theme = hostedTheme(primary, background);
   const nonce = makeNonce();
   const csp = [
     "default-src 'none'",
@@ -614,14 +565,18 @@ function shell(model: DevicePageModel, body: string, script: string | null): str
   <style nonce="${nonce}">${styles(primary, background)}</style>
 </head>
 <body>
-  <main>
-    <section class="card" aria-labelledby="title">
-    ${body}
-    ${app.hideBranding ? "" : `<p class="brand">Secured by Kova</p>`}
-    </section>
-    <p class="sr-only" id="device-status" role="status" aria-live="polite"></p>
-  </main>
+  <div class="kv-page">
+    ${artPanelHtml(theme, app.name)}
+    <main class="kv-form">
+      <section class="kv-form-inner card kv-enter" aria-labelledby="title">
+      ${body}
+      ${app.hideBranding ? "" : `<p class="brand">Secured by Kova</p>`}
+      </section>
+      <p class="sr-only" id="device-status" role="status" aria-live="polite"></p>
+    </main>
+  </div>
   ${script ? `<script nonce="${nonce}">${script}</script>` : ""}
+  <script type="module" nonce="${nonce}" src="/assets/hosted-auth.js"></script>
 </body>
 </html>`;
 }

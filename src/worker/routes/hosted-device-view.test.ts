@@ -144,11 +144,11 @@ describe("hosted device view", () => {
       for (const script of scripts(html)) {
         expect(script).not.toMatch(/<\/script|<img/i);
       }
-      // The only executable <script> elements are ours, all carrying the nonce.
+      // The only executable <script> elements are ours, all carrying the nonce:
+      // the inline page script and the same-origin art module.
       const nonce = nonceOf(html);
       const tags = html.match(/<script\b[^>]*>/g) ?? [];
-      expect(tags.length).toBe(1);
-      expect(tags[0]).toBe(`<script nonce="${nonce}">`);
+      expect(tags).toEqual([`<script nonce="${nonce}">`, `<script type="module" nonce="${nonce}" src="/assets/hosted-auth.js">`]);
     });
 
     it("ships inline scripts that parse", () => {
@@ -163,19 +163,21 @@ describe("hosted device view", () => {
   describe("terminal states", () => {
     const states = ["approved", "denied", "expired", "invalid", "used", "claimed", "rate_limited", "unavailable"] as const;
 
-    it.each(states)("%s renders its copy without a script", (state) => {
+    it.each(states)("%s renders its copy without an inline script", (state) => {
       const html = renderDevicePage({ state, app });
       expect(html).toContain(`<h1 id="title">${TERMINAL_COPY[state].title.replace(/'/g, "&#39;")}</h1>`);
       expect(html).toContain(TERMINAL_COPY[state].body.replace(/'/g, "&#39;"));
-      expect(html).not.toContain("<script");
+      expect(html).not.toMatch(/<script nonce="[^"]+">/);
+      // Only the same-origin art module, under the page nonce.
+      expect(html.match(/<script\b[^>]*>/g)).toEqual([`<script type="module" nonce="${nonceOf(html)}" src="/assets/hosted-auth.js">`]);
     });
 
     it("offers the most useful next step", () => {
       for (const state of ["expired", "invalid", "used", "claimed"] as const) {
-        expect(renderDevicePage({ state, app })).toContain('<a class="btn secondary" href="/device">Enter a different code</a>');
+        expect(renderDevicePage({ state, app })).toContain('<a class="btn kv-btn secondary" href="/device">Enter a different code</a>');
       }
       for (const state of ["rate_limited", "unavailable"] as const) {
-        expect(renderDevicePage({ state, app })).toContain('<a class="btn secondary" href="">Try again</a>');
+        expect(renderDevicePage({ state, app })).toContain('<a class="btn kv-btn secondary" href="">Try again</a>');
       }
       expect(renderDevicePage({ state: "rate_limited", app })).toContain("Wait a few minutes");
       expect(renderDevicePage({ state: "rate_limited", app, retryAfterSeconds: 61 })).toContain("Wait 2 minutes before trying this code again.");
@@ -203,20 +205,33 @@ describe("hosted device view", () => {
 
     it("constrains the logo and falls back to a monogram", () => {
       const html = renderDevicePage({ state: "enter", app });
-      expect(html).toContain('<img class="logo" src="https://cdn.example.com/logo.svg" alt="" width="48" height="48"');
-      expect(html).toMatch(/\.logo \{[^}]*max-width: 160px;[^}]*max-height: 48px;/);
+      expect(html).toContain('<img class="logo kv-logo" src="https://cdn.example.com/logo.svg" alt="" width="44" height="44"');
+      expect(html).toMatch(/\.kv-logo \{[^}]*width: 44px;[^}]*height: 44px;[^}]*object-fit: contain;/);
       const plain = renderDevicePage({ state: "enter", app: { ...app, logoUrl: null } });
-      expect(plain).toContain('<span class="logo monogram" aria-hidden="true">RM</span>');
+      expect(plain).toContain('<span class="logo kv-logo kv-monogram" aria-hidden="true">RM</span>');
     });
 
-    it("uses the built-in brand mark and the Secured by Kova footer like the sign-in page", () => {
+    it("never draws the generic radio mark and keeps the Secured by Kova footer like the sign-in page", () => {
       const ralph = renderDevicePage({ state: "enter", app: { ...app, logoUrl: null, brandMark: "ralph-radio" } });
-      expect(ralph).toMatch(/<span class="logo mark" aria-hidden="true"><svg [^>]*>/);
-      expect(ralph).not.toContain('class="logo monogram"');
+      expect(ralph).not.toContain("<circle");
+      expect(ralph).toContain('<span class="logo kv-logo kv-monogram" aria-hidden="true">RM</span>');
       expect(ralph).toContain('<p class="brand">Secured by Kova</p>');
-      // A real logo still wins over the mark.
-      expect(renderDevicePage({ state: "enter", app: { ...app, brandMark: "ralph-radio" } })).toContain('<img class="logo"');
+      // A real logo still wins.
+      expect(renderDevicePage({ state: "enter", app: { ...app, brandMark: "ralph-radio" } })).toContain('<img class="logo kv-logo"');
       expect(renderDevicePage({ state: "invalid", app: { ...app, hideBranding: true } })).not.toContain("Secured by Kova");
+    });
+
+    it("shares the split layout and the art panel with the sign-in page", () => {
+      const html = renderDevicePage(review());
+      expect(html).toContain('<div class="kv-page">');
+      expect(html).toContain('<aside class="kv-art" data-kova-art data-primary="#5865f2" data-background="#070709" aria-hidden="true">');
+      expect(html).toContain('<span class="kv-art-app">Ralph Meet</span>');
+      expect(html).toContain('<main class="kv-form">');
+      expect(html).toContain('<section class="kv-form-inner card kv-enter" aria-labelledby="title">');
+      // Deny sits left of Approve.
+      expect(html.indexOf('id="deny-device"')).toBeLessThan(html.indexOf('id="approve-device"'));
+      const xss = renderDevicePage({ state: "enter", app: { ...app, name: XSS } });
+      expect(xss).toContain('<span class="kv-art-app">&lt;img src=x onerror=alert(1)&gt;&quot;&#39;&amp;</span>');
     });
 
     it("only puts hex colors into CSS and keeps the page dark", () => {

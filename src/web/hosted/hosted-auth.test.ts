@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bootHostedAuth, finishRedirectUrl, googleCallbackUrl, isSafeDeviceReturnPath } from "./hosted-auth";
+import { bootHostedAuth, finishRedirectUrl, googleCallbackUrl, isSafeDeviceReturnPath, monogram, orderedProviders } from "./hosted-auth";
 
 describe("hosted auth client", () => {
   it("sends Google through the platform bounce with the pre-signed oauthCtx", () => {
@@ -76,6 +76,8 @@ class Node {
   appendChild(node: Node) { this.children.push(node); return node; }
   replaceChildren(...nodes: Node[]) { this.children = nodes; }
   addEventListener(event: string, listener: () => void) { this.listeners[event] = listener; }
+  closest() { return null; }
+  replaceWith() {}
 }
 function descendants(node: Node): Node[] { return [node, ...node.children.flatMap(descendants)]; }
 function renderPage(returnPath?: string, enabledProviders = ["google", "github"], page = "sign-in") {
@@ -105,8 +107,8 @@ afterEach(() => vi.unstubAllGlobals());
 describe("hosted sign-in rendering", () => {
   it.each([undefined, "/device?code=ABCD-EFGH"])("offers enabled providers for return %s", (returnPath) => {
     const { nodes, assign } = renderPage(returnPath);
-    const google = nodes.find(node => node.tag === "button" && node.textContent.includes("Google"));
-    const github = nodes.find(node => node.tag === "button" && node.textContent.includes("GitHub"));
+    const google = nodes.find(node => node.tag === "button" && node.attributes["aria-label"] === "Continue with Google");
+    const github = nodes.find(node => node.tag === "button" && node.attributes["aria-label"] === "Continue with GitHub");
     expect(google).toBeDefined();
     expect(github).toBeDefined();
     google!.listeners.click!();
@@ -127,7 +129,23 @@ describe("hosted sign-in rendering", () => {
     expect(nodes.find(node => node.tag === "a" && node.textContent === "Forgot password?")).toBeUndefined();
   });
   it("omits providers when none are enabled", () => {
-    expect(renderPage(undefined, []).nodes.some(node => node.textContent.includes("Continue with"))).toBe(false);
+    expect(renderPage(undefined, []).nodes.some(node => node.textContent.includes("Continue with") || node.attributes["aria-label"]?.includes("Continue with"))).toBe(false);
+  });
+  it("shows the app logo when configured and a monogram otherwise", () => {
+    expect(renderPage().nodes.some(node => node.className.includes("kv-monogram") && node.textContent === "RM")).toBe(true);
+    expect(renderPage().nodes.some(node => node.innerHTML.includes("<circle"))).toBe(false);
+    expect(monogram("Ralph Meet")).toBe("RM");
+    expect(monogram("mira")).toBe("M");
+    expect(monogram("  ")).toBe("?");
+  });
+  it("lays providers out as a grid of short labels once there are three or more", () => {
+    const grid = renderPage(undefined, ["google", "github", "discord"]).nodes.find(node => node.className.includes("ra-providers"));
+    expect(grid?.className).toContain("is-grid");
+    expect(grid?.children.map(button => button.children[1]?.textContent)).toEqual(["Google", "GitHub", "Discord"]);
+    expect(orderedProviders(["discord", "nope", "google"])).toEqual(["google", "discord"]);
+    const pair = renderPage(undefined, ["google"]).nodes.find(node => node.className.includes("ra-providers"));
+    expect(pair?.className).not.toContain("is-grid");
+    expect(pair?.children[0]?.children[1]?.textContent).toBe("Continue with Google");
   });
   it("gives inputs visible associated labels and respects configured legal links and hideBranding", () => {
     const { nodes } = renderPage();
