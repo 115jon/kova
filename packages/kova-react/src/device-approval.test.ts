@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { approveDeviceRequest, denyDeviceRequest, getDeviceRequest, type DeviceApprovalOptions } from "./device-approval";
+import { approveDeviceRequest, denyDeviceRequest, getDeviceRequest, releaseDeviceRequest, type DeviceApprovalOptions } from "./device-approval";
 import { createDeviceChallenge, DEFAULT_KOVA_URL, pollDeviceChallenge, resolveApproveUrl } from "./device";
 import { startDeviceSignIn } from "./device-sign-in";
 import { KOVA_HOSTED_AUTH_URL, resolveAuthUrl } from "./key";
@@ -101,6 +101,25 @@ describe("device approval client", () => {
     expect(await getDeviceRequest(opts(fetchImpl))).toMatchObject({ error: "unexpected_response" });
   });
 
+  it("releases a claim, with the same request shape and error style", async () => {
+    const { fetchImpl, calls } = fakeFetch([
+      reply(200, { status: "released" }),
+      reply(403, { error: "access_denied", message: "Another account is already reviewing this code" }),
+      reply(409, { error: "already_processed", message: "done" }),
+      reply(200, { status: "approved" }),
+      new TypeError("offline"),
+    ]);
+    expect(await releaseDeviceRequest(opts(fetchImpl))).toEqual({ ok: true, status: "released" });
+    expect(calls[0]!.url).toBe(`${BASE}/release`);
+    expect(calls[0]!.init.credentials).toBe("omit");
+    expect(new Headers(calls[0]!.init.headers).get("authorization")).toBe("Bearer tok_app");
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual({ userCode: "abcd-efgh" });
+    expect(await releaseDeviceRequest(opts(fetchImpl))).toEqual({ ok: false, error: "access_denied", status: 403, message: "Another account is already reviewing this code" });
+    expect(await releaseDeviceRequest(opts(fetchImpl))).toMatchObject({ ok: false, error: "already_processed", status: 409 });
+    expect(await releaseDeviceRequest(opts(fetchImpl))).toMatchObject({ ok: false, error: "unexpected_response" });
+    expect(await releaseDeviceRequest(opts(fetchImpl))).toMatchObject({ ok: false, error: "network_error", status: 0 });
+  });
+
   it("encodes the publishable key into the path", async () => {
     const { fetchImpl, calls } = fakeFetch([reply(200, { status: "denied" })]);
     await denyDeviceRequest(opts(fetchImpl, { publishableKey: "pk/odd" }));
@@ -116,6 +135,7 @@ describe("configured auth host", () => {
       reply(200, REQUEST),
       reply(200, { status: "approved" }),
       reply(200, { status: "denied" }),
+      reply(200, { status: "released" }),
       reply(200, { id: "dc_aaaaaaaaaaaaaaaaaaaaaaaa", status: "pending" }),
       reply(200, { id: "dc_aaaaaaaaaaaaaaaaaaaaaaaa", status: "pending" }),
       reply(201, {
@@ -131,6 +151,7 @@ describe("configured auth host", () => {
     await getDeviceRequest(opts(fetchImpl));
     await approveDeviceRequest(opts(fetchImpl));
     await denyDeviceRequest(opts(fetchImpl));
+    await releaseDeviceRequest(opts(fetchImpl));
     const challenge = await createDeviceChallenge(AUTH, {}, fetchImpl);
     await pollDeviceChallenge(AUTH, challenge.id, fetchImpl);
     const signIn = startDeviceSignIn({ authUrl: AUTH, publishableKey: PK, fetch: fetchImpl });

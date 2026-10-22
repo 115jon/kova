@@ -9,6 +9,9 @@
  * const found = await getDeviceRequest(opts);       // claims the code for this user
  * if (found.ok) show(found.request.device, found.request.requester);
  * const result = await approveDeviceRequest(opts);  // or denyDeviceRequest(opts)
+ *
+ * // "Not you?": give the code up BEFORE signing out, so the next account can claim it.
+ * await releaseDeviceRequest(opts);
  * ```
  *
  * `sessionToken` is the signed-in user's app-scoped session token (the
@@ -74,6 +77,7 @@ export interface DeviceApprovalError {
 
 export type DeviceRequestResult = { ok: true; request: DeviceRequest } | DeviceApprovalError;
 export type DeviceDecisionResult = { ok: true; status: "approved" | "denied" } | DeviceApprovalError;
+export type DeviceReleaseResult = { ok: true; status: "released" } | DeviceApprovalError;
 
 const SERVER_CODES = new Set<DeviceApprovalErrorCode>([
   "app_not_found", "app_suspended", "origin_not_allowed", "invalid_session", "invalid_request",
@@ -82,7 +86,7 @@ const SERVER_CODES = new Set<DeviceApprovalErrorCode>([
 ]);
 
 async function post(
-  step: "lookup" | "approve" | "deny",
+  step: "lookup" | "approve" | "deny" | "release",
   options: DeviceApprovalOptions,
 ): Promise<{ ok: true; body: Record<string, unknown> } | DeviceApprovalError> {
   const fetchImpl = options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init));
@@ -169,4 +173,17 @@ export function approveDeviceRequest(options: DeviceApprovalOptions): Promise<De
 /** Refuses the device. It stops polling with `denied`. */
 export function denyDeviceRequest(options: DeviceApprovalOptions): Promise<DeviceDecisionResult> {
   return decide("deny", options);
+}
+
+/**
+ * Gives up this account's claim on a pending code, so another account can
+ * look it up. Call it on "Not you?" BEFORE signing out: once signed out there
+ * is no session to release with, and the code stays held until it expires.
+ * Fails with `access_denied` (someone else holds it), `not_claimed`,
+ * `already_processed`, or `expired_token`, like approve/deny.
+ */
+export async function releaseDeviceRequest(options: DeviceApprovalOptions): Promise<DeviceReleaseResult> {
+  const result = await post("release", options);
+  if (!result.ok) return result;
+  return result.body.status === "released" ? { ok: true, status: "released" } : unexpected(200);
 }

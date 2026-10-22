@@ -11,12 +11,13 @@ export { startDeviceSignIn } from "./device-sign-in";
 export type { DeviceSignIn, DeviceSignInOptions, DeviceSignInState } from "./device-sign-in";
 
 // Approving a device code from the app's own /activate page; same entry, no React.
-export { approveDeviceRequest, denyDeviceRequest, getDeviceRequest } from "./device-approval";
+export { approveDeviceRequest, denyDeviceRequest, getDeviceRequest, releaseDeviceRequest } from "./device-approval";
 export type {
   DeviceApprovalError,
   DeviceApprovalErrorCode,
   DeviceApprovalOptions,
   DeviceDecisionResult,
+  DeviceReleaseResult,
   DeviceRequest,
   DeviceRequestResult,
 } from "./device-approval";

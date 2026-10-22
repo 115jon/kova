@@ -97,12 +97,13 @@ export { startDeviceSignIn } from "./device-sign-in";
 export type { DeviceSignIn, DeviceSignInOptions, DeviceSignInState } from "./device-sign-in";
 
 // ── Device approval on your own /activate page (vanilla, no React) ────────────
-export { approveDeviceRequest, denyDeviceRequest, getDeviceRequest } from "./device-approval";
+export { approveDeviceRequest, denyDeviceRequest, getDeviceRequest, releaseDeviceRequest } from "./device-approval";
 export type {
   DeviceApprovalError,
   DeviceApprovalErrorCode,
   DeviceApprovalOptions,
   DeviceDecisionResult,
+  DeviceReleaseResult,
   DeviceRequest,
   DeviceRequestResult,
 } from "./device-approval";

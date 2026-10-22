@@ -19,8 +19,10 @@ import {
   approveDeviceRequest,
   denyDeviceRequest,
   getDeviceRequest,
+  releaseDeviceRequest,
   type DeviceApprovalError,
   type DeviceDecisionResult,
+  type DeviceReleaseResult,
   type DeviceRequestResult,
 } from "../device-approval";
 
@@ -30,6 +32,8 @@ export interface UseDeviceApprovalReturn {
   getDeviceRequest: (userCode: string) => Promise<DeviceRequestResult>;
   approveDeviceRequest: (userCode: string) => Promise<DeviceDecisionResult>;
   denyDeviceRequest: (userCode: string) => Promise<DeviceDecisionResult>;
+  /** "Not you?": call before signing out so the next account can claim the code. */
+  releaseDeviceRequest: (userCode: string) => Promise<DeviceReleaseResult>;
 }
 
 const NOT_SIGNED_IN: DeviceApprovalError = {
@@ -58,6 +62,7 @@ export function useDeviceApproval(): UseDeviceApprovalReturn {
       getDeviceRequest: run(getDeviceRequest) as (userCode: string) => Promise<DeviceRequestResult>,
       approveDeviceRequest: run(approveDeviceRequest) as (userCode: string) => Promise<DeviceDecisionResult>,
       denyDeviceRequest: run(denyDeviceRequest) as (userCode: string) => Promise<DeviceDecisionResult>,
+      releaseDeviceRequest: run(releaseDeviceRequest) as (userCode: string) => Promise<DeviceReleaseResult>,
     }),
     [isReady, run],
   );

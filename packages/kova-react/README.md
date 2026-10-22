@@ -290,10 +290,17 @@ function Activate() {
   // 1. getDeviceRequest(code): claims the code for this user and returns
   //    { ok: true, request: { userCode, status, device, requester, expiresAt } }
   // 2. Show the device and requester, then approveDeviceRequest(code) or denyDeviceRequest(code).
+  // 3. "Not you?": await releaseDeviceRequest(code) BEFORE signing out, then sign in again.
 }
 ```
 
-Outside React, `getDeviceRequest`, `approveDeviceRequest` and `denyDeviceRequest` take
+The first signed-in account to look a code up holds it until the code is decided or expires;
+any other account gets `access_denied`. To switch accounts, release first:
+`releaseDeviceRequest(code)` gives the code back while the current session still exists. After
+sign-out there is no session left to release it with, and the code stays held until it expires.
+
+Outside React, `getDeviceRequest`, `approveDeviceRequest`, `denyDeviceRequest` and
+`releaseDeviceRequest` take
 `{ authUrl, publishableKey, sessionToken, userCode, fetch? }`. They are also exported from
 `@115jon/kova-react/device`. `sessionToken` is the user's app session token
 (`useKovaAuth().sessionToken`). These functions never throw. They resolve to `{ ok: true, … }` or
@@ -305,9 +312,9 @@ Outside React, `getDeviceRequest`, `approveDeviceRequest` and `denyDeviceRequest
 | `origin_not_allowed` | The page is not on an allowed origin, or it runs in a desktop webview. |
 | `invalid_code` / `invalid_request` | Unknown code, or one that is not `XXXX-XXXX`. |
 | `expired_token` | The code expired. Start again on the device. |
-| `access_denied` | Another account already looked this code up. |
+| `access_denied` | Another account already looked this code up (it can release it). |
 | `not_claimed` | Call `getDeviceRequest` before approving or denying. |
-| `already_processed` | The code was already approved or denied. |
+| `already_processed` | The code was already approved or denied (it can no longer be released). |
 | `mfa_required` | An organization of this user requires two-factor authentication. |
 | `rate_limited` | Too many attempts. `retryAfterSeconds` says when to retry. |
 | `network_error`, `unexpected_response`, `server_error`, `temporarily_unavailable` | Retry later. |
@@ -317,8 +324,9 @@ with the user's bearer token. Cookies are ignored, and a desktop webview origin
 (`tauri.localhost`) is refused, so a device cannot approve its own code.
 
 **Trust model.** The app session token is the credential for these calls. Anyone holding a user's
-token can approve device sign-ins for that same user and that same app, from a page on one of the
-app's allowed origins. Origin is a header a non-browser client can set to anything, so treat the
+token can approve, deny or release device sign-ins for that same user and that same app, from a
+page on one of the app's allowed origins. Release only drops that user's own claim on a pending
+code; it cannot touch another account's claim or a decided code. Origin is a header a non-browser client can set to anything, so treat the
 token like the session itself: keep it in memory, never log it, and revoke the session if it leaks.
 A leaked token gives nothing beyond what it already gives (that user, that app).
 
