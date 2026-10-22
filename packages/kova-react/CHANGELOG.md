@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/115jon/kova/compare/kova-react-v1.0.0...kova-react-v1.1.0) (2026-10-22)
+
+
+### Features
+
+* **sdk:** ✨ approve device sign-ins from the app's own site ([7c80296](https://github.com/115jon/kova/commit/7c8029677c899ffe5412a2efc67c1f435dde32a3))
+
 ## [1.0.0](https://github.com/115jon/kova/compare/kova-react-v0.1.1...kova-react-v1.0.0) (2026-10-22)
 
 
