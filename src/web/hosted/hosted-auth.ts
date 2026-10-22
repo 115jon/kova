@@ -239,7 +239,7 @@ function render(config: HostedBootstrap): void {
     name: "email",
     autocomplete: "email",
     required: "true",
-    placeholder: "Email",
+    placeholder: "you@example.com",
   });
   email.id = "ra-email";
   const password = el("input", {
@@ -249,7 +249,6 @@ function render(config: HostedBootstrap): void {
     autocomplete: isSignUp ? "new-password" : "current-password",
     required: "true",
     minlength: "8",
-    placeholder: "Password",
   });
   const name = el("input", {
     class: "ra-input",
@@ -257,22 +256,23 @@ function render(config: HostedBootstrap): void {
     name: "name",
     autocomplete: "name",
     required: "true",
-    placeholder: "Name",
   });
 
-  for (const [input, label] of [[email, "Email"], [password, "Password"], [name, "Name"]] as const) {
-    const labelNode = el("label", { for: input.id || `ra-${input.name}` }, label);
+  // Each label sits directly above its own input. Name exists only on sign-up.
+  const field = (input: HTMLInputElement, label: string) => {
     if (!input.id) input.id = `ra-${input.name}`;
-    form.appendChild(labelNode);
-    input.setAttribute("aria-label", label);
-  }
+    const wrapper = el("div", { class: "ra-field" });
+    wrapper.appendChild(el("label", { class: "ra-label", for: input.id }, label));
+    wrapper.appendChild(input);
+    return wrapper;
+  };
 
   const submit = el("button", { class: "ra-submit", type: "submit" }, isSignUp ? "Create account" : "Continue");
   submit.style.background = primary;
 
-  if (isSignUp) form.appendChild(name);
-  form.appendChild(email);
-  form.appendChild(password);
+  if (isSignUp) form.appendChild(field(name, "Name"));
+  form.appendChild(field(email, "Email"));
+  form.appendChild(field(password, "Password"));
   form.appendChild(submit);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -340,7 +340,10 @@ function injectStyles(primary: string): void {
       font-size: 15px;
       line-height: 1.5;
     }
-    .ra-logo { display: block; height: 48px; width: auto; margin: 0 auto 16px; border-radius: 12px; }
+    .ra-logo { display: block; height: 48px; width: auto; max-width: 160px; object-fit: contain; margin: 0 auto 16px; border-radius: 12px; }
+    /* The inline radio SVG has no intrinsic size; without this it fills the card. */
+    .ra-ralph-radio { width: 48px; display: grid; place-items: center; color: ${primary}; }
+    .ra-ralph-radio svg { display: block; width: 32px; height: 32px; }
     .ra-title { font-size: 20px; font-weight: 600; line-height: 1.25; letter-spacing: -0.015em; text-align: center; color: #ffffff; }
     .ra-sub, .ra-test, .ra-or, .ra-foot, .ra-brand { text-align: center; }
     .ra-sub { margin: 6px 0 24px; color: #b8b8b8; font-size: 15px; }
@@ -365,7 +368,9 @@ function injectStyles(primary: string): void {
     .ra-google:active:not(:disabled), .ra-submit:active:not(:disabled) { transform: scale(0.98); }
     .ra-google:disabled, .ra-submit:disabled { opacity: 0.5; cursor: progress; }
     .ra-or { margin: 20px 0; color: #8a9090; font-size: 13px; }
-    .ra-form { display: flex; flex-direction: column; gap: 12px; }
+    .ra-form { display: flex; flex-direction: column; gap: 14px; }
+    .ra-field { display: flex; flex-direction: column; gap: 6px; }
+    .ra-label { color: #b8b8b8; font-size: 13px; font-weight: 500; }
     .ra-input {
       background: rgba(255,255,255,0.08); color: #ffffff;
       border: 1px solid rgba(255,255,255,0.10); padding: 0 16px;
