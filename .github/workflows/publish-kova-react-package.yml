@@ -1,6 +1,14 @@
 name: Publish Kova React Package
 
 on:
+  # release-please.yml calls this after it creates a kova-react release.
+  workflow_call:
+    inputs:
+      tag_name:
+        description: Kova React release tag to publish
+        required: true
+        type: string
+  # Releases published by hand, or by a PAT.
   release:
     types:
       - published
@@ -19,32 +27,53 @@ jobs:
   publish:
     if: startsWith(github.event.release.tag_name || inputs.tag_name, 'kova-react-v')
     runs-on: ubuntu-latest
+    # Serialize per tag so a release event and a release-please call can't race.
+    concurrency:
+      group: publish-kova-react-package-${{ github.event.release.tag_name || inputs.tag_name }}
+      cancel-in-progress: false
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag_name }}
     steps:
       - name: Checkout release tag
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag_name }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.9
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 10
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           registry-url: https://npm.pkg.github.com
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Check whether this version is already published
+        id: published
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./packages/kova-react/package.json').version")
+          if npm view "@115jon/kova-react@${version}" version --registry https://npm.pkg.github.com >/dev/null 2>&1; then
+            echo "@115jon/kova-react@${version} is already published; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install Kova React dependencies
+        if: steps.published.outputs.skip != 'true'
         run: pnpm install --frozen-lockfile --filter @115jon/kova-react...
 
       - name: Build Kova React package
+        if: steps.published.outputs.skip != 'true'
         run: pnpm --filter @115jon/kova-react run build
 
       - name: Publish Kova React package
+        if: steps.published.outputs.skip != 'true'
         run: pnpm --filter @115jon/kova-react publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
