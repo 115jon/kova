@@ -13,9 +13,9 @@
  *   ALL  /api/auth/*                       → Proxied to Better Auth (subdomain-scoped session)
  *   POST /api/hosted/create-ticket         → Issues short-lived auth code after sign-in
  *   POST /api/hosted/exchange-ticket       → Exchanges code for userId (requires sk_*)
- *   GET  /device                           → Device-code approval (user code only)
- *   POST /api/hosted/device/approve        → Mint an app session onto a pending device login
- *   POST /api/hosted/device/deny           → Deny a pending device login
+ *   GET  /device                           → Device-code approval (manual entry or ?code=)
+ *   ALL  /api/auth/device*                 → Better Auth verify/approve/deny, behind device-host-guard
+ *   POST /api/hosted/device/release        → Drop this account's claim on a pending code
  *   *    (catch-all)                       → Branded 404
  *
  * ## Session isolation
@@ -36,21 +36,15 @@ import { createAuth } from "../auth";
 import { rejectDisallowedOrigin } from "../lib/app-origin";
 import { APP_SESSION_TTL_MS, insertAppScopedSession, sessionMayActForApp } from "../lib/app-session";
 import { createAuthTicket, createSessionTransferCode, exchangeAuthTicket } from "../lib/auth-ticket";
-import {
-  decideDeviceLogin,
-  deviceReturnPath,
-  findDeviceLoginByUserCode,
-  formatUserCode,
-  isSafeDeviceReturnPath,
-  type DeviceLoginDecisionResult,
-  type DeviceLoginStatus,
-} from "../lib/device-login";
+import { isSafeDeviceReturnPath } from "../lib/device-code";
+import { guardHostedDeviceRequest, isDeviceAuthPath } from "../lib/device-host-guard";
 import { escapeHtml, jsonForHtmlScript } from "../lib/html";
 import { hostedProviders } from "../lib/hosted-providers";
 import { isPlatformOnlyAuthPath, rejectAppScopedSession } from "../lib/platform-session";
 import { appSignInUrl } from "../lib/sign-in-url";
 import { RALPH_RADIO_SVG, resolveHostedAppearance, type HostedProvider } from "../../shared/hosted-brand";
 import { findMFAEnforcedOrgBlockingUser } from "../org-settings";
+import { devicePageApp, devicePageResponse, loadDevicePage, NO_FRAMING_HEADERS, releaseDeviceClaim } from "./hosted-device";
 import { encodeOAuthCtx, oauthStartUsesSdkBounce } from "./oauth-bounce";
 
 // ── Router ─────────────────────────────────────────────────────────────────────
@@ -203,8 +197,9 @@ async function hostedSignIn(c: HC, mode: HostedPageMode): Promise<Response> {
   const deviceReturn = c.req.query("device_return");
   if (isSafeDeviceReturnPath(deviceReturn)) {
     const enabledProviders = await hostedProviders(c.env, app.id).catch(() => null);
-    if (!enabledProviders) return c.html(deviceMessagePage(app, "Sign-in providers could not be loaded. Please try again."), 503);
+    if (!enabledProviders) return c.html(hostedMessagePage(app, "Sign-in providers could not be loaded. Please try again."), 503);
     const host = getHost(c);
+    for (const [name, value] of Object.entries(NO_FRAMING_HEADERS)) c.header(name, value);
     return c.html(await buildHostedPage({
       app, mode, redirectUri: "", state: "", returnPath: deviceReturn,
       enabledProviders,
@@ -247,6 +242,10 @@ hostedAuthRouter.all("/api/auth/*", async (c) => {
   }
   const host = getHost(c);
   const subdomainUrl = `https://${host}`;
+  if (isDeviceAuthPath(new URL(c.req.url).pathname)) {
+    const refused = await guardHostedDeviceRequest({ request: c.req.raw, db: c.env.DB, appId: app.id, hostOrigin: subdomainUrl });
+    if (refused) return refused;
+  }
   const auth = createAuth(
     c.env,
     c.req.raw.cf as IncomingRequestCfProperties | undefined,
@@ -383,7 +382,7 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
 
   if ((returnPath !== undefined && (!isSafeDeviceReturnPath(returnPath) || redirectUri !== ""))
     || (redirectUri && !isRedirectUriAllowed(app, redirectUri))) {
-    return c.html(deviceMessagePage(app, "OAuth complete failed: invalid destination."), 400);
+    return c.html(hostedMessagePage(app, "OAuth complete failed: invalid destination."), 400);
   }
 
   if (!ticket) {
@@ -441,7 +440,7 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
       userAgent: c.req.header("User-Agent") ?? null,
     });
 
-    // Better Auth 1.6 uses token.base64(HMAC-SHA256(token)). Hono's signed
+    // Better Auth (1.6 and 1.7) uses token.base64(HMAC-SHA256(token)). Hono's signed
     // serializer uses the same format; the name/attributes come from Better Auth.
     responseHeaders.append("Set-Cookie", await generateSignedCookie(
       context.authCookies.sessionToken.name, sessionToken, context.secret, attributes,
@@ -457,7 +456,7 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
       ...cache.attributes, domain: undefined, httpOnly: true, secure: true, maxAge: 0,
     }));
   } catch {
-    return c.html(deviceMessagePage(app, "Sign-in could not be completed. Please sign in again."), 503);
+    return c.html(hostedMessagePage(app, "Sign-in could not be completed. Please sign in again."), 503);
   }
 
   if (returnPath) {
@@ -487,16 +486,11 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
   return new Response(null, { status: 302, headers: responseHeaders });
 });
 
-// ── Device-code approval ───────────────────────────────────────────────────────
-//
-// The session cookie is scoped to this app host, so approval lives here and
-// not on the dashboard. The page never receives the device code or the
-// session token. A same-origin /device return is the only post-login hop.
+// ── Plain message page ─────────────────────────────────────────────────────────
 
-function deviceShell(app: Application, body: string): string {
+function messageShell(app: Application, body: string): string {
   const name = esc(app.display_name ?? app.name);
   const bg = esc(app.background_color ?? "#0a0a0a");
-  const primary = esc(app.primary_color ?? "#3b82f6");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -514,18 +508,6 @@ function deviceShell(app: Application, body: string): string {
       border-radius: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.35); padding: 32px 28px 28px; text-align: center; }
     h1 { font-size: 20px; font-weight: 600; line-height: 1.25; letter-spacing: -0.015em; color: #ffffff; margin: 0; }
     p { color: #b8b8b8; font-size: 15px; margin: 6px 0 0; }
-    .code { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 28px; font-weight: 500;
-      letter-spacing: 0.08em; color: #ffffff; margin: 20px 0; }
-    .actions { display: flex; gap: 10px; margin-top: 8px; }
-    button { flex: 1; height: 44px; font: inherit; font-size: 15px; border: 0; border-radius: 12px; padding: 0 16px;
-      cursor: pointer; transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1); }
-    button:active:not(:disabled) { transform: scale(0.98); }
-    button:focus-visible { outline: 2px solid ${primary}; outline-offset: 2px; }
-    button.approve { background: ${primary}; color: #ffffff; font-weight: 600; }
-    button.deny { background: transparent; color: #ffffff; font-weight: 500; border: 1px solid rgba(255,255,255,0.18); }
-    button:disabled { opacity: 0.5; cursor: progress; }
-    #device-result { min-height: 1.5em; }
-    @media (prefers-reduced-motion: reduce) { button:active:not(:disabled) { transform: none; } }
   </style>
 </head>
 <body>
@@ -536,187 +518,49 @@ function deviceShell(app: Application, body: string): string {
 </html>`;
 }
 
-function deviceMessagePage(app: Application, message: string): string {
-  return deviceShell(app, `<h1>${esc(app.display_name ?? app.name)}</h1><p>${esc(message)}</p>`);
+function hostedMessagePage(app: Application, message: string): string {
+  return messageShell(app, `<h1>${esc(app.display_name ?? app.name)}</h1><p>${esc(message)}</p>`);
 }
 
-function deviceStatusCopy(status: DeviceLoginStatus): string {
-  if (status === "approved") return "Approved. You can return to the device.";
-  if (status === "denied") return "Denied. That device will not be signed in.";
-  if (status === "consumed") return "This code was already used.";
-  return "This code is not valid.";
-}
-
-function deviceApprovalPage(app: Application, displayCode: string): string {
-  const name = esc(app.display_name ?? app.name);
-  return deviceShell(app, `<h1>${name}</h1>
-    <p>Confirm this code matches the device, then approve.</p>
-    <p class="code" id="device-user-code">${esc(displayCode)}</p>
-    <div class="actions">
-      <button type="button" class="approve" id="approve-device">Approve</button>
-      <button type="button" class="deny" id="deny-device">Deny</button>
-    </div>
-    <p id="device-result" role="status"></p>
-    <script>
-      const code = document.getElementById("device-user-code").textContent || "";
-      const result = document.getElementById("device-result");
-      const buttons = [
-        document.getElementById("approve-device"),
-        document.getElementById("deny-device"),
-      ];
-      async function decide(path) {
-        for (const button of buttons) button.disabled = true;
-        const response = await fetch(path, {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ userCode: code }),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (response.ok && data.status === "approved") {
-          result.textContent = "Approved. You can return to the device.";
-          return;
-        }
-        if (response.ok && data.status === "denied") {
-          result.textContent = "Denied. That device will not be signed in.";
-          return;
-        }
-        result.textContent = "That code can no longer be used.";
-      }
-      document.getElementById("approve-device").addEventListener("click", () => {
-        decide("/api/hosted/device/approve");
-      });
-      document.getElementById("deny-device").addEventListener("click", () => {
-        decide("/api/hosted/device/deny");
-      });
-    </script>`);
-}
-
-function decisionJson(c: HC, result: DeviceLoginDecisionResult) {
-  c.header("Cache-Control", "no-store");
-  if ("error" in result && result.error === "not_pending") {
-    return c.json({ error: "not_pending", status: result.status }, 409);
-  }
-  if ("error" in result) return c.json({ error: "invalid_code" }, 400);
-  return c.json({ status: result.status });
-}
-
-async function hostedUser(c: HC) {
-  const app = getApp(c);
-  if (app.suspended_at) {
-    return { error: c.json({ error: "Application suspended" }, 403) };
-  }
-  const host = getHost(c);
-  const auth = createAuth(
-    c.env,
-    c.req.raw.cf as IncomingRequestCfProperties | undefined,
-    c.req.raw,
-    `https://${host}`,
-  );
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
-  if (!session?.user?.id || !(await sessionMayActForApp(c.env.DB, session.session.id, app.id))) {
-    return { error: c.json({ error: "Not authenticated" }, 401) };
-  }
-  return { app, userId: session.user.id };
-}
+// ── Device-code approval ───────────────────────────────────────────────────────
+//
+// The session cookie is scoped to this app host, so approval lives here and
+// not on the dashboard. The page never receives the device code or a session
+// token. Page data and states: hosted-device.ts; markup: hosted-device-view.ts.
 
 hostedAuthRouter.get("/device", async (c) => {
   const app = getApp(c);
   if (app.suspended_at) {
     return c.html(`<p style="font-family:monospace;color:#f87171;padding:32px">Application suspended.</p>`, 403);
   }
+  const host = getHost(c);
+  const hostOrigin = `https://${host}`;
+  const page = await loadDevicePage({ request: c.req.raw, env: c.env, app, hostOrigin });
+  if (!("signIn" in page)) return devicePageResponse(page);
+
+  const enabledProviders = await hostedProviders(c.env, app.id).catch(() => null);
+  if (!enabledProviders) return devicePageResponse({ state: "unavailable", app: devicePageApp(app) });
   c.header("Cache-Control", "no-store");
   c.header("Referrer-Policy", "no-referrer");
-
-  const rawCode = c.req.query("code") ?? "";
-  const returnPath = deviceReturnPath(rawCode);
-  const record = returnPath ? await findDeviceLoginByUserCode(c.env.KV, rawCode) : null;
-  const matchesApp = !!record
-    && record.publishableKey === app.publishable_key
-    && record.appId === app.id
-    && Date.now() < record.expiresAt;
-  if (!returnPath || !record || !matchesApp) {
-    return c.html(deviceMessagePage(app, "This code is not valid."), 400);
-  }
-  if (record.status !== "pending") {
-    return c.html(deviceMessagePage(app, deviceStatusCopy(record.status)));
-  }
-
-  const host = getHost(c);
-  const auth = createAuth(
-    c.env,
-    c.req.raw.cf as IncomingRequestCfProperties | undefined,
-    c.req.raw,
-    `https://${host}`,
-  );
-  const session = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
-  if (!session?.user?.id) {
-    const enabledProviders = await hostedProviders(c.env, app.id).catch(() => null);
-    if (!enabledProviders) return c.html(deviceMessagePage(app, "Sign-in providers could not be loaded. Please try again."), 503);
-    return c.html(await buildHostedPage({
-      app,
-      mode: "sign-in",
-      redirectUri: "",
-      state: "",
-      returnPath,
-      enabledProviders,
-      authUrl: `https://${host}`,
-      mainAuthUrl: c.env.AUTH_URL,
-      signingSecret: c.env.BETTER_AUTH_SECRET,
-    }));
-  }
-
-  return c.html(deviceApprovalPage(app, formatUserCode(record.userCode)));
+  for (const [name, value] of Object.entries(NO_FRAMING_HEADERS)) c.header(name, value);
+  return c.html(await buildHostedPage({
+    app,
+    mode: "sign-in",
+    redirectUri: "",
+    state: "",
+    returnPath: page.signIn,
+    enabledProviders,
+    authUrl: hostOrigin,
+    mainAuthUrl: c.env.AUTH_URL,
+    signingSecret: c.env.BETTER_AUTH_SECRET,
+  }));
 });
 
-async function postDeviceDecision(c: HC, decision: "approved" | "denied") {
-  const gate = await hostedUser(c);
-  if ("error" in gate && gate.error) return gate.error;
-  if (!("app" in gate)) return c.json({ error: "Not authenticated" }, 401);
-
-  const rawBody = await c.req.json().catch(() => null);
-  const userCode = rawBody && typeof rawBody === "object" && !Array.isArray(rawBody)
-    ? (rawBody as Record<string, unknown>).userCode
-    : undefined;
-  const preview = await findDeviceLoginByUserCode(c.env.KV, userCode);
-  const pending = !!preview
-    && preview.publishableKey === gate.app.publishable_key
-    && preview.appId === gate.app.id
-    && Date.now() < preview.expiresAt
-    && preview.status === "pending";
-  if (!preview || preview.publishableKey !== gate.app.publishable_key || preview.appId !== gate.app.id || Date.now() >= preview.expiresAt) {
-    return decisionJson(c, { error: "invalid_code" });
-  }
-  if (!pending) return decisionJson(c, { error: "not_pending", status: preview.status });
-
-  let sessionToken: string | null = null;
-  if (decision === "approved") {
-    const { generateId } = await import("better-auth");
-    sessionToken = generateId(32);
-    const appSessionId = generateId();
-    await insertAppScopedSession(c.env.DB, {
-      sessionId: appSessionId,
-      userId: gate.userId,
-      token: sessionToken,
-      appId: gate.app.id,
-      ipAddress: c.req.header("CF-Connecting-IP") ?? null,
-      userAgent: c.req.header("User-Agent") ?? null,
-    });
-  }
-
-  const result = await decideDeviceLogin(c.env.KV, {
-    publishableKey: gate.app.publishable_key,
-    appId: gate.app.id,
-    userCode,
-    decision,
-    sessionToken,
-    approverUserId: gate.userId,
-  });
-  return decisionJson(c, result);
-}
-
-hostedAuthRouter.post("/api/hosted/device/approve", (c) => postDeviceDecision(c, "approved"));
-hostedAuthRouter.post("/api/hosted/device/deny", (c) => postDeviceDecision(c, "denied"));
+hostedAuthRouter.post("/api/hosted/device/release", (c) => {
+  const app = getApp(c);
+  if (app.suspended_at) return c.json({ error: "Application suspended" }, 403);
+  return releaseDeviceClaim(c, { env: c.env, app, hostOrigin: `https://${getHost(c)}` });
+});
 
 // ── Catch-all 404 ──────────────────────────────────────────────────────────────
 

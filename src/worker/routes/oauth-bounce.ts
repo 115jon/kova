@@ -52,7 +52,7 @@ import { createAuth } from "../auth";
 import { insertAppScopedSession } from "../lib/app-session";
 import { createAuthTicket, createSessionTransferCode } from "../lib/auth-ticket";
 import { escapeHtml, jsonForHtmlScript } from "../lib/html";
-import { isSafeDeviceReturnPath } from "../lib/device-login";
+import { isSafeDeviceReturnPath } from "../lib/device-code";
 import { isFreshSignInSession, timestampMs } from "../lib/fresh-sign-in";
 import { hostedProviders } from "../lib/hosted-providers";
 

@@ -36,8 +36,15 @@ export function buildOidcContinueLocation(origin: string, search: string): strin
   return `${origin}${OIDC_CONTINUE_PATH}${query ? `?${query}` : ""}`;
 }
 
+/**
+ * oauth-provider signs the query it sends to the login page (sig, exp, ba_*).
+ * Re-entering /oauth2/authorize starts a fresh request, so those are dropped.
+ */
+const SIGNED_LOGIN_QUERY_PARAMS = ["sig", "exp", "ba_iat", "ba_pl", "ba_param"];
+
 export function buildAuthorizeUrlAfterAccountSelected(origin: string, search: string): string {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  for (const name of SIGNED_LOGIN_QUERY_PARAMS) params.delete(name);
   params.set(OIDC_ACCOUNT_SELECTED_PARAM, "1");
   return `${origin}/api/auth/oauth2/authorize?${params.toString()}`;
 }

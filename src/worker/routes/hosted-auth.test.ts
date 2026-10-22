@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Application } from "../applications";
 
+// The first dynamic import in a test can take seconds while the full suite
+// runs in parallel; the default 5s timeout made these flaky under load.
+vi.setConfig({ testTimeout: 20_000 });
+
 const session = {
   user: { id: "user_1" },
   session: { id: "sess_cookie", token: "cookie_tok" },

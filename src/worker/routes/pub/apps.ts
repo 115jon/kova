@@ -13,6 +13,9 @@
  *   GET /api/pub/apps/:publishableKey/redirect-check?redirect_uri=…
  *     → { allowed } for the sign-in page's up-front redirect check. Uncached.
  *
+ *   POST /api/pub/apps/:publishableKey/device/{start,poll,cancel}
+ *     → Device-code sign-in for desktop/CLI clients (see the section below).
+ *
  *   GET /api/pub/apps/:publishableKey/plan
  *     → Returns plan name + allowed features for operator-side feature gating.
  *     → Requires X-Secret-Key header matching the application's secret key.
@@ -25,7 +28,9 @@ import { getApplicationByPublishableKey, isRedirectUriAllowed } from "../../appl
 import { createAuth } from "../../auth";
 import { rejectDisallowedOrigin } from "../../lib/app-origin";
 import { resolveAppScopedSession, sessionMayActForApp } from "../../lib/app-session";
-import { pollDeviceLogin, startDeviceLogin } from "../../lib/device-login";
+import { deviceErrorCode } from "../../lib/device-authorization";
+import { DEVICE_CODE_INTERVAL_SECONDS, formatUserCode, hostedVerificationUri } from "../../lib/device-code";
+import { consumeRateLimit, requestIp } from "../../lib/rate-limit";
 import { hostedProviders } from "../../lib/hosted-providers";
 import { jsonForHtmlScript } from "../../lib/html";
 
@@ -451,34 +456,98 @@ pubAppsRouter.post("/:pk/exchange-code", async (c) => {
 
 // ── Device-code sign-in (public client) ───────────────────────────────────────
 //
-// Mira starts a login here, then polls with the device code. The user code is
-// only for the hosted approval page. Never accept a user code as a poll secret.
+// Thin wrappers over Better Auth's device-authorization plugin that keep the
+// camelCase contract the Ralph Meet desktop client and Zeron already speak.
+// The device polls with the high-entropy device code; the user code is only
+// for the hosted approval page, so it is never accepted as a poll secret.
+//
+//   POST /:pk/device/start   {hostname?, platform?, label?}
+//     201 {deviceCode, userCode, verificationUri, verificationUriComplete, interval, expiresIn}
+//   POST /:pk/device/poll    {deviceCode}
+//     200 {status:"pending", interval} | 429 {error:"slow_down", interval}
+//     200 {status:"denied"} | 200 {status:"approved", sessionToken}
+//     400 {error:"expired_token" | "invalid_device_code"} | 403 {error:"mfa_required"}
+//   POST /:pk/device/cancel  {deviceCode}  → 204, best effort
+//
+// The session is minted at the approved poll and nowhere else.
+
+const DEVICE_START_LIMIT = { windowSeconds: 600, max: 20 };
 
 function jsonObject(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 }
 
+function cfText(cf: unknown, key: "country" | "city"): string | undefined {
+  const value = (cf as Record<string, unknown> | undefined)?.[key];
+  return typeof value === "string" && value ? value : undefined;
+}
+
 pubAppsRouter.post("/:pk/device/start", async (c) => {
   const pk = c.req.param("pk");
+  c.header("Cache-Control", "no-store");
   const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
   if (!app) return c.json({ error: "Application not found" }, 404);
   if (app.suspended_at) return c.json({ error: "Application suspended" }, 403);
+  const verificationUri = hostedVerificationUri(c.env.AUTH_URL, app.auth_slug);
+  if (!verificationUri) return c.json({ error: "device_flow_unavailable" }, 409);
+
+  const ip = requestIp(c.req.raw);
+  // Fails closed: issuing codes unthrottled is worse than a brief outage.
+  const limit = await consumeRateLimit(c.env.DB, `device-start:${ip ?? "unknown"}:${app.publishable_key}`, DEVICE_START_LIMIT)
+    .catch(() => null);
+  if (!limit) return c.json({ error: "temporarily_unavailable" }, 503);
+  if (!limit.allowed) {
+    c.header("Retry-After", String(limit.retryAfterSeconds));
+    return c.json({ error: "rate_limited" }, 429);
+  }
 
   const body = jsonObject(await c.req.json().catch(() => ({}))) ?? {};
-  const started = await startDeviceLogin(c.env.KV, {
-    publishableKey: app.publishable_key,
-    appId: app.id,
-    authUrl: c.env.AUTH_URL,
-    authSlug: app.auth_slug,
-    hostname: body.hostname,
-    platform: body.platform,
-    label: body.label,
-  });
+  const text = (value: unknown) => (typeof value === "string" ? value : undefined);
+  const cf = c.req.raw.cf;
+  const auth = createAuth(c.env, cf as IncomingRequestCfProperties | undefined);
 
-  c.header("Cache-Control", "no-store");
-  if ("error" in started) return c.json({ error: started.error }, 409);
-  return c.json(started.body, 201);
+  // Codes nobody polled to the end are never claimed or deleted by the
+  // plugin. Sweep expired ones here, off the response path.
+  const sweep = (async () => {
+    const context = await auth.$context;
+    await context.adapter.deleteMany({ model: "deviceCode", where: [{ field: "expiresAt", operator: "lt", value: new Date() }] });
+  })().catch((error) => console.error("[kova-auth] expired device code sweep failed", error));
+  try {
+    c.executionCtx.waitUntil(sweep);
+  } catch {
+    // No execution context (tests, local tools): the sweep still runs.
+  }
+
+  try {
+    // No `request` here: the grant refuses issuance from an HTTP request,
+    // which is what keeps /api/auth/device/code closed to direct callers.
+    const issued = await auth.api.deviceCode({
+      body: {
+        client_id: app.publishable_key,
+        hostname: text(body.hostname),
+        platform: text(body.platform),
+        label: text(body.label),
+        requester_ip: ip ?? undefined,
+        requester_country: cfText(cf, "country"),
+        requester_city: cfText(cf, "city"),
+      },
+    });
+    const userCode = formatUserCode(issued.user_code);
+    return c.json({
+      deviceCode: issued.device_code,
+      userCode,
+      verificationUri,
+      verificationUriComplete: `${verificationUri}?code=${userCode}`,
+      interval: issued.interval,
+      expiresIn: issued.expires_in,
+    }, 201);
+  } catch (error) {
+    if (deviceErrorCode(error) === "invalid_client") return c.json({ error: "device_flow_unavailable" }, 409);
+    if (deviceErrorCode(error) === "invalid_request") return c.json({ error: "invalid_request" }, 400);
+    console.error("[kova-auth] device start failed", error);
+    return c.json({ error: "server_error" }, 500);
+  }
 });
 
 pubAppsRouter.post("/:pk/device/poll", async (c) => {
@@ -489,20 +558,58 @@ pubAppsRouter.post("/:pk/device/poll", async (c) => {
   if (!app || app.suspended_at) return c.json({ error: "invalid_device_code" }, 400);
 
   const body = jsonObject(await c.req.json().catch(() => null));
-  if (!body || typeof body.deviceCode !== "string" || "userCode" in body) {
+  if (!body || typeof body.deviceCode !== "string" || !body.deviceCode.trim() || "userCode" in body) {
     return c.json({ error: "invalid_device_code" }, 400);
   }
 
-  const result = await pollDeviceLogin(c.env.KV, {
-    publishableKey: app.publishable_key,
-    appId: app.id,
-    deviceCode: body.deviceCode.trim(),
-  });
-  if ("error" in result && result.error === "slow_down") {
-    return c.json({ error: "slow_down", interval: result.interval }, 429);
+  const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
+  try {
+    const { sessionToken } = await auth.api.kovaRedeemDeviceCode({
+      body: {
+        deviceCode: body.deviceCode.trim(),
+        publishableKey: app.publishable_key,
+        ipAddress: requestIp(c.req.raw),
+        userAgent: c.req.header("User-Agent") ?? null,
+      },
+    });
+    return c.json({ status: "approved", sessionToken });
+  } catch (error) {
+    switch (deviceErrorCode(error)) {
+      case "authorization_pending":
+        return c.json({ status: "pending", interval: DEVICE_CODE_INTERVAL_SECONDS });
+      case "slow_down":
+        return c.json({ error: "slow_down", interval: DEVICE_CODE_INTERVAL_SECONDS }, 429);
+      case "access_denied":
+        return c.json({ status: "denied" });
+      case "expired_token":
+        return c.json({ error: "expired_token" }, 400);
+      case "invalid_grant":
+        // Unknown, another app's, or already redeemed: never a second success.
+        return c.json({ error: "invalid_device_code" }, 400);
+      case "mfa_required":
+        return c.json({ error: "mfa_required" }, 403);
+      default:
+        console.error("[kova-auth] device poll failed", error);
+        return c.json({ error: "server_error" }, 500);
+    }
   }
-  if ("error" in result) return c.json({ error: result.error }, 400);
-  return c.json(result);
+});
+
+pubAppsRouter.post("/:pk/device/cancel", async (c) => {
+  const pk = c.req.param("pk");
+  c.header("Cache-Control", "no-store");
+  const body = jsonObject(await c.req.json().catch(() => null));
+  const deviceCode = typeof body?.deviceCode === "string" ? body.deviceCode.trim() : "";
+  if (deviceCode) {
+    // Only codes this key issued and nobody redeemed yet; a redeemed code is
+    // already gone. Denied/expired rows go too, they are dead either way.
+    await c.env.DB
+      .prepare(`DELETE FROM "deviceCode" WHERE "deviceCode" = ? AND "clientId" = ?`)
+      .bind(deviceCode, pk)
+      .run()
+      .catch(() => { /* best effort */ });
+  }
+  return c.body(null, 204);
 });
 
 export { pubAppsRouter };

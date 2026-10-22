@@ -11,6 +11,8 @@
  * set-active that OrgSwitcher and useOrganization call. link-social is not
  * among them: linking an account changes the platform identity, so it needs the
  * platform session, and SDK apps send users to Kova settings instead.
+ * OAuth client and consent management under /oauth2/ is platform-only too;
+ * the OIDC protocol endpoints themselves stay open.
  */
 import { parseCookies } from "better-auth/cookies";
 import type { MiddlewareHandler } from "hono";
@@ -52,6 +54,25 @@ const PLATFORM_ONLY_AUTH_PATHS = new Set([
   "passkey/update-passkey",
 ]);
 
+/**
+ * oauth-provider endpoints that implement the OAuth/OIDC protocol itself.
+ * Everything else under /oauth2/ manages clients or consents: platform only.
+ */
+const OAUTH2_PROTOCOL_PATHS = new Set([
+  "authorize",
+  "token",
+  "userinfo",
+  "consent",
+  "continue",
+  "end-session",
+  "endsession",
+  "introspect",
+  "revoke",
+  "register",
+  "public-client",
+  "public-client-prelogin",
+]);
+
 /** True for Better Auth endpoints an app-scoped session must not reach. Over-matches rather than under-matches. */
 export function isPlatformOnlyAuthPath(pathname: string): boolean {
   let path: string;
@@ -67,6 +88,7 @@ export function isPlatformOnlyAuthPath(pathname: string): boolean {
   const [first = "", ...tail] = rest.split("/");
   if (first === "admin" || first === "api-key") return true;
   if (first === "organization") return !ORGANIZATION_ALLOWED.has(tail.join("/"));
+  if (first === "oauth2") return !OAUTH2_PROTOCOL_PATHS.has(tail.join("/"));
   return PLATFORM_ONLY_AUTH_PATHS.has(rest);
 }
 

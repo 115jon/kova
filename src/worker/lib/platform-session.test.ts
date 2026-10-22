@@ -48,6 +48,12 @@ describe("isPlatformOnlyAuthPath", () => {
     "/api/auth/admin/list-users/",
     "/api/auth/%61dmin/list-users",
     "/api/auth/%zz",
+    "/api/auth/oauth2/create-client",
+    "/api/auth/oauth2/get-clients",
+    "/api/auth/oauth2/update-client",
+    "/api/auth/oauth2/client/rotate-secret",
+    "/api/auth/oauth2/delete-consent",
+    "/api/auth/admin/oauth2/create-client",
   ])("denies %s", (path) => {
     expect(isPlatformOnlyAuthPath(path)).toBe(true);
   });
@@ -72,6 +78,12 @@ describe("isPlatformOnlyAuthPath", () => {
     "/api/auth/passkey/verify-authentication",
     "/api/auth/magic-link/verify",
     "/api/auth/callback/google",
+    "/api/auth/oauth2/authorize",
+    "/api/auth/oauth2/token",
+    "/api/auth/oauth2/userinfo",
+    "/api/auth/oauth2/end-session",
+    "/api/auth/.well-known/openid-configuration",
+    "/api/auth/jwks",
   ])("allows %s", (path) => {
     expect(isPlatformOnlyAuthPath(path)).toBe(false);
   });

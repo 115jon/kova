@@ -3,7 +3,9 @@ import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
 import { APIError } from "better-auth/api";
-import { admin, bearer, genericOAuth, jwt, magicLink, multiSession, oidcProvider, organization, twoFactor, username } from "better-auth/plugins";
+import { oauthProvider } from "@better-auth/oauth-provider";
+import { admin, bearer, genericOAuth, jwt, magicLink, multiSession, organization, twoFactor, username } from "better-auth/plugins";
+import { deviceAuthorization } from "better-auth/plugins/device-authorization";
 import { logAudit } from "./audit";
 import {
   devEmailCaptureEnabled,
@@ -15,8 +17,19 @@ import {
   verificationEmail,
 } from "./email";
 import { getAppId } from "./lib/app-context";
+import { kovaDeviceGrant, kovaDeviceRedemption } from "./lib/device-authorization";
+import { DEVICE_CODE_INTERVAL_SECONDS, DEVICE_CODE_TTL_SECONDS, generateDeviceCode } from "./lib/device-code";
 import { passkeyOrigins } from "./lib/passkey-origins";
-import { isAllowlistedAdminEmail, parseEmailAllowlist } from "./lib/roles";
+import {
+  legacyIdTokenClaims,
+  legacyUserInfoClaims,
+  OIDC_ACCESS_TOKEN_TTL_SECONDS,
+  OIDC_CLAIMS_SUPPORTED,
+  OIDC_CODE_TTL_SECONDS,
+  OIDC_REFRESH_TOKEN_TTL_SECONDS,
+  OIDC_SCOPES,
+} from "./lib/oidc-provider";
+import { hasAdminRole, isAllowlistedAdminEmail, parseEmailAllowlist } from "./lib/roles";
 import { resolveOrigin, STATIC_ORIGINS } from "./middleware/cors";
 import {
   findAutoJoinDomainForEmail,
@@ -40,70 +53,6 @@ import { deliverEvent } from "./webhook";
  *   withCloudflare sets `database` internally from d1Native — don't
  *   set it again in the second arg or it will conflict.
  */
-const FORGEJO_OIDC_REDIRECTS = [
-  "https://git.115jon.com/user/oauth2/kova/callback",
-  "https://oci-a1.tail91a4f4.ts.net/git/user/oauth2/kova/callback",
-];
-
-// Preview door. A stable hostname should replace this before the door is closed.
-const LITELLM_OIDC_REDIRECTS = [
-  "https://lite.115jon.com/sso/callback",
-  "https://bright-fern-soob.115jon.com/sso/callback",
-];
-
-type TrustedOidcClient = {
-  clientId: string;
-  clientSecret: string;
-  name: string;
-  type: "web";
-  redirectUrls: string[];
-  disabled: false;
-  skipConsent: true;
-  metadata: { product: string };
-};
-
-function trustedOidcClient(
-  clientId: string | undefined,
-  clientSecret: string | undefined,
-  name: string,
-  redirectUrls: readonly string[],
-  product: string,
-): TrustedOidcClient | null {
-  const id = clientId?.trim();
-  const secret = clientSecret?.trim();
-  if (!id || !secret) return null;
-  return {
-    clientId: id,
-    clientSecret: secret,
-    name,
-    type: "web",
-    redirectUrls: [...redirectUrls],
-    disabled: false,
-    skipConsent: true,
-    metadata: { product },
-  };
-}
-
-// Public registration stays off. A client is trusted only when both secrets exist.
-function trustedOidcClients(env: Env): TrustedOidcClient[] {
-  return [
-    trustedOidcClient(
-      env.FORGEJO_OIDC_CLIENT_ID,
-      env.FORGEJO_OIDC_CLIENT_SECRET,
-      "1:15",
-      FORGEJO_OIDC_REDIRECTS,
-      "forgejo",
-    ),
-    trustedOidcClient(
-      env.LITELLM_OIDC_CLIENT_ID,
-      env.LITELLM_OIDC_CLIENT_SECRET,
-      "LiteLLM",
-      LITELLM_OIDC_REDIRECTS,
-      "litellm",
-    ),
-  ].filter((client): client is TrustedOidcClient => client !== null);
-}
-
 export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Request, baseURLOverride?: string) {
   const capture = devEmailCaptureEnabled(env);
   const send = (mail: { to: string; subject: string; html: string }) =>
@@ -178,6 +127,10 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
             sameSite: "none" as const,
             secure: true,
           },
+          // Already the production default. Spelled out because Better Auth
+          // turns the origin/CSRF check off under test runners, and the route
+          // tests must see the same check production runs.
+          disableOriginCheck: false,
         },
 
 
@@ -224,8 +177,18 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
           errorURL: `${env.DASHBOARD_URL}/auth-error`,
         },
 
+        // ── Verification values ───────────────────────────────────
+        // Better Auth 1.7 consumes verification values (magic links, reset
+        // and email-verification tokens, OAuth codes) atomically. KV has no
+        // atomic get-and-delete, so they live in D1's verification table.
+        verification: {
+          storeInDatabase: true,
+        },
+
         // ── Rate limiting ─────────────────────────────────────────
-        // Uses KV for distributed counters across Worker instances.
+        // Counters live in D1 (`rateLimit` table): Better Auth 1.7 needs an
+        // atomic increment, which KV cannot do. Costs a D1 read + write per
+        // accepted request.
         // Global ceiling is high (200/min) since the admin dashboard makes
         // multiple requests per page (get-session, list-users, list-sessions).
         // Tight limits only on credential endpoints that need brute-force protection.
@@ -233,7 +196,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
           enabled: true,
           window: 60,   // 60-second sliding window
           max: 200,     // global ceiling — plenty for normal admin dashboard use
-          storage: "secondary-storage", // stored in KV
+          storage: "database",
           customRules: {
             "/sign-in/email": { window: 60, max: 5 },          // brute-force protection
             "/sign-in/magic-link": { window: 60, max: 3 },      // magic link send throttle
@@ -683,21 +646,50 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
             },
           }),
 
-          oidcProvider({
+          // OIDC issuer for 1:15 Forgejo and LiteLLM. Clients live in
+          // oauthClient, seeded from env by ensureTrustedOidcClients; the claim
+          // callbacks reproduce what the pre-1.7 oidcProvider emitted, since
+          // Forgejo links accounts by sub and reads these claims.
+          oauthProvider({
             loginPage: "/oauth/continue",
+            // Only the seeded first-party clients exist and they skip consent.
+            // There is no consent UI, so anything else lands on the error page.
+            consentPage: "/auth-error",
+            scopes: [...OIDC_SCOPES],
+            grantTypes: ["authorization_code", "refresh_token"],
             allowDynamicClientRegistration: false,
-            requirePKCE: false,
-            allowPlainCodeChallengeMethod: true,
-            useJWTPlugin: true,
-            trustedClients: trustedOidcClients(env),
-            getAdditionalUserInfoClaim: (user) => {
-              const username =
-                typeof user.username === "string" && user.username.trim()
-                  ? user.username.trim()
-                  : user.email.split("@")[0] ?? user.id;
-              return { preferred_username: username };
+            // No resources are configured; tokens without `resource` stay valid.
+            enforcePerClientResources: false,
+            accessTokenExpiresIn: OIDC_ACCESS_TOKEN_TTL_SECONDS,
+            idTokenExpiresIn: OIDC_ACCESS_TOKEN_TTL_SECONDS,
+            refreshTokenExpiresIn: OIDC_REFRESH_TOKEN_TTL_SECONDS,
+            codeExpiresIn: OIDC_CODE_TTL_SECONDS,
+            advertisedMetadata: { claims_supported: OIDC_CLAIMS_SUPPORTED },
+            // Token and UserInfo calls come from the Forgejo / LiteLLM servers,
+            // one IP for every user. The plugin's 20/min and 60/min per-IP
+            // defaults would throttle a busy minute; keep the old global ceiling.
+            rateLimit: {
+              token: { window: 60, max: 200 },
+              userinfo: { window: 60, max: 200 },
             },
+            // Client CRUD is for platform admins; the endpoints are also
+            // platform-session-only (lib/platform-session.ts).
+            clientPrivileges: ({ user }) => hasAdminRole(typeof user?.role === "string" ? user.role : null),
+            customIdTokenClaims: ({ user, scopes }) => legacyIdTokenClaims(user, scopes),
+            customUserInfoClaims: ({ user, scopes }) => legacyUserInfoClaims(user, scopes),
           }),
+
+          // Device sign-in (RFC 8628) for SDK apps: Ralph Meet desktop, Zeron.
+          // App-owned codes only, issued and redeemed through
+          // /api/pub/apps/:pk/device/*; see lib/device-authorization.ts.
+          deviceAuthorization({
+            expiresIn: `${DEVICE_CODE_TTL_SECONDS}s`,
+            interval: `${DEVICE_CODE_INTERVAL_SECONDS}s`,
+            userCodeLength: 8,
+            generateDeviceCode,
+            grant: kovaDeviceGrant(env),
+          }),
+          kovaDeviceRedemption(env),
         ],
 
         // ── Session ───────────────────────────────────────────────
@@ -719,6 +711,10 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
         //   be invalidated before their TTL expires. The JWE cache gives us
         //   JWT-equivalent performance while preserving the revocation guarantee.
         session: {
+          // D1 is the source of truth (see above). withCloudflare only turns
+          // this on when a `cf` object is present; oauth-provider refuses to
+          // start with KV secondary storage unless it is set explicitly.
+          storeSessionInDatabase: true,
           expiresIn: 60 * 60 * 24 * 30,  // 30-day cap; use slides it forward
           updateAge: 60 * 60 * 24,       // refresh at most once a day when used
           disableSessionRefresh: false,  // keep the chosen Kova session alive

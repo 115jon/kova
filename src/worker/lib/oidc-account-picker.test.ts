@@ -69,6 +69,17 @@ describe("OIDC continue URLs", () => {
       "https://auth.115jon.site/api/auth/oauth2/authorize?client_id=forgejo-client&state=abc&account_selected=1",
     );
   });
+
+  it("drops the login page's signature params so authorize starts fresh", () => {
+    expect(
+      buildAuthorizeUrlAfterAccountSelected(
+        "https://auth.115jon.site",
+        "?client_id=forgejo-client&state=abc&exp=1&ba_iat=2&ba_param=client_id&ba_param=state&sig=xyz",
+      ),
+    ).toBe(
+      "https://auth.115jon.site/api/auth/oauth2/authorize?client_id=forgejo-client&state=abc&account_selected=1",
+    );
+  });
 });
 
 describe("sortAccountsLastUsedFirst", () => {

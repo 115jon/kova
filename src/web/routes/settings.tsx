@@ -104,17 +104,19 @@ function TwoFactorSection({ hasCredential }: { hasCredential: boolean }) {
     }
     setError(""); setLoading(true);
     try {
-      const res = await twoFactor.enable(typed ? { password: typed } : {});
+      const res = await twoFactor.enable({ method: "totp", ...(typed ? { password: typed } : {}) });
       if (res.error) {
         throw new Error(
           res.error.message || res.error.code || res.error.statusText || "Could not start 2FA",
         );
       }
-      const uri: string = res.data?.totpURI ?? "";
+      // Better Auth 1.7 answers per method; only a TOTP enrollment has a QR.
+      if (res.data?.method !== "totp") throw new Error("Could not start authenticator setup");
+      const uri: string = res.data.totpURI;
       setTotpUri(uri);
       const match = uri.match(/secret=([A-Z2-7]+)/i);
       setSecret(match?.[1] ?? "");
-      setBackupCodes(res.data?.backupCodes ?? []);
+      setBackupCodes(res.data.backupCodes);
       setStep("qr");
     } catch (e: any) {
       setError(e?.message ?? "Failed to enable 2FA");

@@ -53,7 +53,7 @@ interface AuthErrorBody {
 const BOOTSTRAP_KEY = "__KOVA_AUTH_HOSTED__";
 const DEVICE_RETURN_CODE = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/;
 
-/** Same-origin /device return only. Keep this aligned with worker device-login.ts. */
+/** Same-origin /device return only. Keep this aligned with worker lib/device-code.ts. */
 export function isSafeDeviceReturnPath(path: unknown): path is string {
   if (typeof path !== "string") return false;
   if (!/^\/device\?code=[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}$/.test(path)) return false;

@@ -9,12 +9,13 @@
   "pnpm": {
     "overrides": {
       "postcss": "^8.5.10",
-      "better-auth": "1.6.33",
-      "@better-auth/api-key": "1.6.33",
-      "@better-auth/passkey": "1.6.33",
-      "@better-auth/core": "1.6.33",
-      "@better-auth/drizzle-adapter": "1.6.33",
-      "@better-auth/kysely-adapter": "1.6.33",
+      "better-auth": "1.7.12",
+      "@better-auth/api-key": "1.7.12",
+      "@better-auth/passkey": "1.7.12",
+      "@better-auth/oauth-provider": "1.7.12",
+      "@better-auth/core": "1.7.12",
+      "@better-auth/drizzle-adapter": "1.7.12",
+      "@better-auth/kysely-adapter": "1.7.12",
       "seroval": ">=1.5.3"
     }
   },
@@ -36,14 +37,15 @@
   },
   "dependencies": {
     "@115jon/kova-react": "workspace:*",
-    "@better-auth/api-key": "~1.6.33",
-    "@better-auth/passkey": "~1.6.33",
+    "@better-auth/api-key": "~1.7.12",
+    "@better-auth/oauth-provider": "~1.7.12",
+    "@better-auth/passkey": "~1.7.12",
     "@tanstack/react-query": "^5.99.0",
     "@tanstack/react-query-devtools": "^5.99.0",
     "@tanstack/react-router": "^1.163.3",
     "@tanstack/react-start": "^1.164.0",
-    "better-auth": "~1.6.33",
-    "better-auth-cloudflare": "^0.3.1",
+    "better-auth": "~1.7.12",
+    "better-auth-cloudflare": "^0.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "ditherwave": "^0.1.0",
@@ -55,7 +57,8 @@
     "react-easy-crop": "^5.5.7",
     "react-icons": "^5.6.0",
     "recharts": "^3.7.0",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.25.6",

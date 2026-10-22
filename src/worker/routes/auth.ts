@@ -8,6 +8,13 @@ import {
   shouldOfferOidcAccountPicker,
 } from "../lib/oidc-account-picker";
 import { dashboardCanUseCookieSession, isSessionUnexpired, resolveAppScopedSession, sdkCookieProvesIdentity } from "../lib/app-session";
+import {
+  ensureTrustedOidcClients,
+  legacyAuthorizeUrl,
+  legacyTokenRequest,
+  trustedOidcClients,
+} from "../lib/oidc-provider";
+import { isDeviceAuthPath } from "../lib/device-host-guard";
 import { isPlatformOnlyAuthPath, rejectAppScopedSession } from "../lib/platform-session";
 import { withHeaders } from "../middleware/cors";
 import { withWallpaper } from "./user-wallpaper";
@@ -47,6 +54,13 @@ authRouter.all("/*", async (c) => {
   const { req, env } = c;
   const db = env.DB;
   const request = req.raw;
+
+  // Device codes all belong to SDK apps. They are issued and redeemed through
+  // /api/pub/apps/:pk/device/* and approved on the app's own hosted host, so
+  // the platform host serves none of the plugin's endpoints.
+  if (isDeviceAuthPath(req.path)) {
+    return withHeaders(Response.json({ error: "not_found" }, { status: 404 }), request, db, env.KV);
+  }
 
   if (req.method === "GET" && req.path.endsWith("/oauth2/authorize")) {
     const url = new URL(req.url);
@@ -288,6 +302,32 @@ authRouter.all("/*", async (c) => {
   }
 
   const auth = createAuth(env, req.raw.cf as IncomingRequestCfProperties | undefined);
+  let authRequest = request;
+
+  // -- OIDC issuer (1:15 Forgejo, LiteLLM) --
+  // Seed the env-configured clients before the plugin looks them up, and keep
+  // the request shapes the pre-1.7 oidcProvider accepted working for them.
+  if (req.path.includes("/oauth2/")) {
+    const clients = trustedOidcClients(env);
+    try {
+      await ensureTrustedOidcClients(auth, clients);
+    } catch (error) {
+      console.error("[kova-auth] OIDC client seeding failed", error);
+    }
+    const trustedIds = new Set(clients.map((client) => client.clientId));
+    const url = new URL(req.url);
+    if (req.method === "GET" && req.path.endsWith("/oauth2/authorize")) {
+      const next = legacyAuthorizeUrl(url, trustedIds);
+      if (next) authRequest = new Request(next, request);
+    } else if (req.path.endsWith("/oauth2/token")) {
+      authRequest = (await legacyTokenRequest(request, trustedIds)) ?? request;
+    } else if (req.path.endsWith("/oauth2/endsession")) {
+      // Renamed in the new plugin; the old discovery doc advertised this path.
+      url.pathname = url.pathname.replace(/\/oauth2\/endsession$/, "/oauth2/end-session");
+      authRequest = new Request(url, request);
+    }
+  }
+
   // Wrap auth.handler() response with CORS + security headers.
   //
   // withHeaders() does `new Headers(response.headers)` first, so all headers
@@ -296,7 +336,7 @@ authRouter.all("/*", async (c) => {
   // the CORS access-control and security (X-Frame-Options, etc.) headers are
   // added on top. Without this, cross-origin clients receive a CORS failure
   // on every 429, preventing the JS from reading Retry-After.
-  return withHeaders(await auth.handler(request), request, db, env.KV);
+  return withHeaders(await auth.handler(authRequest), request, db, env.KV);
 });
 
 export { authRouter };
