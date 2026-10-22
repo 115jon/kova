@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/115jon/kova/compare/kova-react-v1.1.0...kova-react-v1.2.0) (2026-10-22)
+
+
+### Features
+
+* **sdk:** ✨ add releaseDeviceRequest for switching accounts ([59c4a0f](https://github.com/115jon/kova/commit/59c4a0f1cdf12292fc353c87a7fa67ba95755500))
+
 ## [1.1.0](https://github.com/115jon/kova/compare/kova-react-v1.0.0...kova-react-v1.1.0) (2026-10-22)
 
 
