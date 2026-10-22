@@ -95,7 +95,7 @@ describe("hosted device view", () => {
       expect(html).toContain("Ralph Meet Desktop · Windows");
       expect(html).toContain('<span class="muted">ada-laptop</span>');
       expect(html).toContain("Nashville, US");
-      expect(html).toContain('<span class="muted">203.0.113.7</span>');
+      expect(html).toContain('<span class="muted ip" title="203.0.113.7">203.0.113.7</span>');
       expect(html).toContain("Ada Lovelace");
       expect(html).toContain("ada@example.com");
       expect(html).toMatch(/<span class="avatar" aria-hidden="true">AL<img /);

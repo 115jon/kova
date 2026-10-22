@@ -268,7 +268,7 @@ function reviewBody(model: ReviewModel): string {
     ? `<div class="row"><dt>Device</dt><dd class="reported">${esc(device.primary)}${device.hostname ? `<span class="muted">${esc(device.hostname)}</span>` : ""}<span class="caption">Reported by the device</span></dd></div>`
     : "";
   const requesterRow = place || requesterIp
-    ? `<div class="row"><dt>Requested from</dt><dd>${esc(place || requesterIp)}${place && requesterIp ? `<span class="muted">${esc(requesterIp)}</span>` : ""}</dd></div>`
+    ? `<div class="row"><dt>Requested from</dt><dd>${esc(place || requesterIp)}${place && requesterIp ? `<span class="muted ip" title="${esc(requesterIp)}">${esc(requesterIp)}</span>` : ""}</dd></div>`
     : "";
 
   return `<div class="stage" id="stage">
@@ -493,6 +493,8 @@ function styles(primary: string, background: string): string {
     dt { color: var(--muted); }
     dd { color: var(--text); min-width: 0; overflow-wrap: anywhere; }
     dd .muted { display: block; color: var(--muted); font-size: 13px; }
+    /* IPv6 addresses are long; keep them on one line instead of breaking mid-group. */
+    dd .ip { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; overflow-wrap: normal; font-variant-numeric: tabular-nums; }
     dd.reported { color: var(--secondary); }
     dd .caption { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; font-style: italic; }
     .mark { width: 48px; display: grid; place-items: center; color: var(--primary); }
