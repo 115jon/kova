@@ -17,7 +17,7 @@ import type { Application } from "../applications";
 import { createAuth } from "../auth";
 import { sessionMayActForApp } from "../lib/app-session";
 import type { KovaDeviceVerificationContext } from "../lib/device-authorization";
-import { deviceErrorCode } from "../lib/device-authorization";
+import { deviceErrorCode, releaseDeviceCodeClaim } from "../lib/device-authorization";
 import { deviceReturnPath, formatUserCode, normalizeUserCode } from "../lib/device-code";
 import { guardHostedDeviceRequest } from "../lib/device-host-guard";
 import { consumeRateLimit, requestIp } from "../lib/rate-limit";
@@ -202,10 +202,7 @@ export async function releaseDeviceClaim(c: Context, input: { env: Env; app: App
   const body = (await request.json().catch(() => null)) as { userCode?: unknown } | null;
   const normalized = normalizeUserCode(body?.userCode);
   if (normalized) {
-    await env.DB
-      .prepare(`UPDATE "deviceCode" SET "userId" = NULL WHERE "userCode" = ? AND "appId" = ? AND "userId" = ? AND "status" = 'pending'`)
-      .bind(normalized, app.id, session.user.id)
-      .run()
+    await releaseDeviceCodeClaim(env.DB, { userCode: normalized, appId: app.id, userId: session.user.id })
       .catch(() => { /* best effort */ });
   }
   return c.body(null, 204);

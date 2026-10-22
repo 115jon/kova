@@ -16,7 +16,7 @@
  *   POST /api/pub/apps/:publishableKey/device/{start,poll,cancel}
  *     → Device-code sign-in for desktop/CLI clients (see the section below).
  *
- *   POST /api/pub/apps/:publishableKey/device/{lookup,approve,deny}
+ *   POST /api/pub/apps/:publishableKey/device/{lookup,approve,deny,release}
  *     → Approval from the app's own page with an app-scoped bearer session.
  *
  *   GET /api/pub/apps/:publishableKey/plan
@@ -36,7 +36,7 @@ import { DEVICE_CODE_INTERVAL_SECONDS, formatUserCode, hostedVerificationUri } f
 import { consumeRateLimit, requestIp } from "../../lib/rate-limit";
 import { hostedProviders } from "../../lib/hosted-providers";
 import { jsonForHtmlScript } from "../../lib/html";
-import { approveDeviceRequest, denyDeviceRequest, lookupDeviceRequest } from "./device-approval";
+import { approveDeviceRequest, denyDeviceRequest, lookupDeviceRequest, releaseDeviceRequest } from "./device-approval";
 
 const pubAppsRouter = new Hono<{ Bindings: Env }>();
 const DEFAULT_ENABLED_PROVIDERS = ["google", "github", "discord", "microsoft"] as const;
@@ -627,5 +627,6 @@ pubAppsRouter.post("/:pk/device/cancel", async (c) => {
 pubAppsRouter.post("/:pk/device/lookup", lookupDeviceRequest);
 pubAppsRouter.post("/:pk/device/approve", approveDeviceRequest);
 pubAppsRouter.post("/:pk/device/deny", denyDeviceRequest);
+pubAppsRouter.post("/:pk/device/release", releaseDeviceRequest);
 
 export { pubAppsRouter };

@@ -210,6 +210,52 @@ export function kovaDeviceRedemption(env: Pick<Env, "DB">) {
   } satisfies BetterAuthPlugin;
 }
 
+export type DeviceClaimRelease =
+  | "released"
+  | "unknown"       // no such code, or another app's
+  | "expired"
+  | "not_pending"   // already approved or denied
+  | "not_claimed"
+  | "not_claimer";  // claimed by another account
+
+function expired(value: unknown, now: number): boolean {
+  if (value === null || value === undefined) return true;
+  const at = value instanceof Date ? value.getTime() : new Date(typeof value === "number" ? value : String(value)).getTime();
+  return Number.isNaN(at) || at < now;
+}
+
+/**
+ * Gives up `userId`'s claim on a code (the "use another account" path), so the
+ * next account that verifies it can claim it. Nothing else about the code
+ * changes. Only the account holding the claim can release, only while the
+ * code is pending and unexpired, and only for `appId`'s own codes. The update
+ * repeats every condition, so a code approved, denied, or re-claimed after
+ * the read is left alone. Shared by the hosted /device page and the
+ * app-session /device/release endpoint. `userCode` is normalized.
+ */
+export async function releaseDeviceCodeClaim(
+  db: D1Database,
+  input: { userCode: string; appId: string; userId: string; now?: number },
+): Promise<DeviceClaimRelease> {
+  const { userCode, appId, userId } = input;
+  const row = await db
+    .prepare(`SELECT "appId", "status", "userId", "expiresAt" FROM "deviceCode" WHERE "userCode" = ? LIMIT 1`)
+    .bind(userCode)
+    .first<{ appId: string | null; status: string; userId: string | null; expiresAt: unknown }>();
+  if (!row || row.appId !== appId) return "unknown";
+  if (expired(row.expiresAt, input.now ?? Date.now())) return "expired";
+  if (row.status !== "pending") return "not_pending";
+  if (!row.userId) return "not_claimed";
+  if (row.userId !== userId) return "not_claimer";
+
+  const result = await db
+    .prepare(`UPDATE "deviceCode" SET "userId" = NULL WHERE "userCode" = ? AND "appId" = ? AND "userId" = ? AND "status" = 'pending'`)
+    .bind(userCode, appId, userId)
+    .run();
+  // Changed between the read and the write: decided, or no longer ours.
+  return result.meta?.changes ? "released" : "not_claimer";
+}
+
 /** The RFC 8628 error a plugin APIError carries, if any. */
 export function deviceErrorCode(error: unknown): string | null {
   if (!(error instanceof APIError)) return null;

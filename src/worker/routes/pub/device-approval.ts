@@ -11,6 +11,9 @@
  *          requester:{city,country,ip}, expiresAt}
  *   POST /api/pub/apps/:pk/device/approve {userCode} → 200 {status:"approved"}
  *   POST /api/pub/apps/:pk/device/deny    {userCode} → 200 {status:"denied"}
+ *   POST /api/pub/apps/:pk/device/release {userCode} → 200 {status:"released"}
+ *     Gives up this account's claim on a pending code ("Not you?"), so the
+ *     next account to sign in on the page can look it up.
  *
  * Every response is `Cache-Control: no-store`; CORS comes from the global
  * middleware (the app's allowed origins, preflight included). Errors are
@@ -31,9 +34,9 @@
  *     sessions (app_id NULL) and other apps' sessions are refused. Cookies are
  *     ignored entirely: they are never read and never forwarded to Better
  *     Auth, so a browser's auth-domain cookie cannot stand in for the bearer.
- *  4. A per user+IP+app limit shared by all three endpoints (30 per 10 min,
- *     the hosted verify budget), so codes cannot be probed through approve or
- *     deny either. Fails closed.
+ *  4. A per user+IP+app limit shared by all four endpoints (30 per 10 min,
+ *     the hosted verify budget), so codes cannot be probed through approve,
+ *     deny, or release either. Fails closed.
  *  5. The code belongs to this app (deviceCode.appId). Another app's code
  *     answers exactly like an unknown one.
  *
@@ -62,7 +65,7 @@ import type { Context } from "hono";
 import { getApplicationByPublishableKey, isDesktopShellOrigin, type Application } from "../../applications";
 import { createAuth } from "../../auth";
 import { isSessionUnexpired } from "../../lib/app-session";
-import { deviceErrorCode, type KovaDeviceVerificationContext } from "../../lib/device-authorization";
+import { deviceErrorCode, releaseDeviceCodeClaim, type KovaDeviceVerificationContext } from "../../lib/device-authorization";
 import { formatUserCode, normalizeUserCode } from "../../lib/device-code";
 import { consumeRateLimit, requestIp } from "../../lib/rate-limit";
 import { findMFAEnforcedOrgBlockingUser } from "../../org-settings";
@@ -304,6 +307,40 @@ async function decide(c: Context<{ Bindings: Env }>, action: "approve" | "deny")
     }
   }
   return ok({ status: action === "approve" ? "approved" : "denied" });
+}
+
+/**
+ * Release uses the same helper as the hosted page's release, which repeats
+ * the plugin's approve/deny preconditions (pending, unexpired, claimed by the
+ * caller), and answers with the same error codes approve/deny use.
+ */
+export async function releaseDeviceRequest(c: Context<{ Bindings: Env }>): Promise<Response> {
+  const caller = await authorizeCaller(c);
+  if (caller instanceof Response) return caller;
+  const owned = await readOwnedCode(c, caller);
+  if (owned instanceof Response) return owned;
+
+  let outcome;
+  try {
+    outcome = await releaseDeviceCodeClaim(c.env.DB, { userCode: owned.userCode, appId: caller.app.id, userId: caller.userId });
+  } catch (error) {
+    console.error("[kova-auth] app device release failed", error);
+    return fail("temporarily_unavailable");
+  }
+  switch (outcome) {
+    case "released":
+      return ok({ status: "released" });
+    case "unknown":
+      return fail("invalid_code");
+    case "expired":
+      return fail("expired_token");
+    case "not_pending":
+      return fail("already_processed");
+    case "not_claimed":
+      return fail("not_claimed");
+    case "not_claimer":
+      return fail("access_denied");
+  }
 }
 
 export const approveDeviceRequest = (c: Context<{ Bindings: Env }>) => decide(c, "approve");

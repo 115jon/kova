@@ -59,7 +59,7 @@ describe("device approval from the app's own page", () => {
     body?: unknown;
   };
 
-  async function call(step: "lookup" | "approve" | "deny", userCode: string, options: CallOptions = {}) {
+  async function call(step: "lookup" | "approve" | "deny" | "release", userCode: string, options: CallOptions = {}) {
     const headers: Record<string, string> = { "content-type": "application/json", "CF-Connecting-IP": options.ip ?? "198.51.100.4" };
     const bearer = options.token === undefined ? token : options.token;
     if (bearer) headers.authorization = `Bearer ${bearer}`;
@@ -324,6 +324,103 @@ describe("device approval from the app's own page", () => {
       const again = await call("deny", started.userCode);
       expect([again.status, again.body.error]).toEqual([409, "already_processed"]);
       expect(claimOf(started.userCode).status).toBe("approved");
+    });
+  });
+
+  describe("release (\"Not you?\")", () => {
+    async function bob() {
+      const other = h.createUser({ name: "Bob", email: "bob@example.com" });
+      return { id: other.id, token: (await h.createSession(other.id, { appId: app.id })).token };
+    }
+
+    it("lets the claimer give the code up, so another account can look it up and approve", async () => {
+      const started = await start();
+      const b = await bob();
+      await call("lookup", started.userCode);
+      expect((await call("lookup", started.userCode, { token: b.token })).body.error).toBe("access_denied");
+
+      const released = await call("release", started.userCode);
+      expect([released.status, released.body]).toEqual([200, { status: "released" }]);
+      expect(released.response.headers.get("cache-control")).toBe("no-store");
+      expect(released.response.headers.get("access-control-allow-origin")).toBe(WEB);
+      expect(claimOf(started.userCode)).toEqual({ userId: null, status: "pending" });
+
+      expect((await call("lookup", started.userCode, { token: b.token })).status).toBe(200);
+      expect(claimOf(started.userCode)).toEqual({ userId: b.id, status: "pending" });
+      expect((await call("approve", started.userCode, { token: b.token })).status).toBe(200);
+      // The first account can no longer act on it.
+      expect((await call("approve", started.userCode)).body.error).toBe("already_processed");
+
+      later(5_000);
+      const redeemed = await poll(started.deviceCode);
+      expect(h.sqlite.prepare(`SELECT userId FROM session WHERE token = ?`).get(String(redeemed.sessionToken))).toEqual({ userId: b.id });
+    });
+
+    it("refuses a non-claimer with 403 and leaves the claim alone", async () => {
+      const started = await start();
+      const b = await bob();
+      await call("lookup", started.userCode);
+      const result = await call("release", started.userCode, { token: b.token });
+      expect([result.status, result.body.error]).toEqual([403, "access_denied"]);
+      expect(claimOf(started.userCode)).toEqual({ userId: user.id, status: "pending" });
+    });
+
+    it("answers not_claimed for an unclaimed code", async () => {
+      const started = await start();
+      const result = await call("release", started.userCode);
+      expect([result.status, result.body.error]).toEqual([409, "not_claimed"]);
+    });
+
+    it("answers another app's code exactly like an unknown one", async () => {
+      const other = h.createApp({ name: "Other" });
+      const theirs = await start(other.publishableKey);
+      const foreign = await call("release", theirs.userCode);
+      const unknown = await call("release", "ABCD-EFGH");
+      expect([foreign.status, foreign.body]).toEqual([unknown.status, unknown.body]);
+      expect(foreign.body.error).toBe("invalid_code");
+    });
+
+    it("cannot release an approved or denied code", async () => {
+      const a = await start();
+      await call("lookup", a.userCode);
+      await call("approve", a.userCode);
+      const approved = await call("release", a.userCode);
+      expect([approved.status, approved.body.error]).toEqual([409, "already_processed"]);
+      expect(claimOf(a.userCode)).toEqual({ userId: user.id, status: "approved" });
+
+      const d = await start();
+      await call("lookup", d.userCode);
+      await call("deny", d.userCode);
+      expect((await call("release", d.userCode)).body.error).toBe("already_processed");
+    });
+
+    it("cannot release an expired code", async () => {
+      const started = await start();
+      await call("lookup", started.userCode);
+      later(601_000);
+      const result = await call("release", started.userCode);
+      expect([result.status, result.body.error]).toEqual([410, "expired_token"]);
+    });
+
+    it("follows the same Origin and bearer rules", async () => {
+      const started = await start();
+      await call("lookup", started.userCode);
+      const { cookie } = await h.createSession(user.id, { appId: app.id });
+      const platform = (await h.createSession(user.id)).token;
+      expect((await call("release", started.userCode, { origin: null })).body.error).toBe("origin_not_allowed");
+      expect((await call("release", started.userCode, { origin: "https://evil.example" })).body.error).toBe("origin_not_allowed");
+      expect((await call("release", started.userCode, { origin: DESKTOP })).body.error).toBe("origin_not_allowed");
+      expect((await call("release", started.userCode, { token: null, cookie })).body.error).toBe("invalid_session");
+      expect((await call("release", started.userCode, { token: platform })).body.error).toBe("invalid_session");
+      expect(claimOf(started.userCode)).toEqual({ userId: user.id, status: "pending" });
+      // No Sec-Fetch-Site rule: a cross-site page on an allowed origin may release.
+      expect((await call("release", started.userCode, { fetchSite: "cross-site" })).status).toBe(200);
+    });
+
+    it("shares the rate limit with the other endpoints", async () => {
+      for (let i = 0; i < 30; i += 1) await call("release", "ABCD-EFGH");
+      const limited = await call("lookup", "ABCD-EFGH");
+      expect([limited.status, limited.body.error]).toEqual([429, "rate_limited"]);
     });
   });
 
