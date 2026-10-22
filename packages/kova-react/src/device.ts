@@ -5,6 +5,10 @@
 
 export const DEFAULT_KOVA_URL = "https://auth.115jon.site";
 
+// Per-app device sign-in for desktop/CLI apps; same entry, no React.
+export { startDeviceSignIn } from "./device-sign-in";
+export type { DeviceSignIn, DeviceSignInOptions, DeviceSignInState } from "./device-sign-in";
+
 const CHALLENGE_ID = /^dc_[A-Za-z0-9_-]{20,}$/;
 
 export function isDeviceChallengeId(id: string): boolean {

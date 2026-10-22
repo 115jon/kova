@@ -42,9 +42,9 @@
     "registry": "https://npm.pkg.github.com"
   },
   "dependencies": {
-    "better-auth": "~1.6.33",
-    "@better-auth/api-key": "~1.6.33",
-    "@better-auth/passkey": "~1.6.33"
+    "better-auth": "~1.7.12",
+    "@better-auth/api-key": "~1.7.12",
+    "@better-auth/passkey": "~1.7.12"
   },
   "peerDependencies": {
     "react": ">=18.0.0",

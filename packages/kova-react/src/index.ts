@@ -90,6 +90,10 @@ export type {
 } from "./device";
 
 
+// ── Device sign-in (RFC 8628, vanilla, no React) ──────────────────────────────
+export { startDeviceSignIn } from "./device-sign-in";
+export type { DeviceSignIn, DeviceSignInOptions, DeviceSignInState } from "./device-sign-in";
+
 // ── Key utilities ─────────────────────────────────────────────────────────────
 export { KOVA_HOSTED_AUTH_URL, decodePublishableKey, encodePublishableKey } from "./key";
 export type { DecodedKey } from "./key";

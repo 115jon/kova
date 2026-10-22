@@ -245,6 +245,34 @@ const { data: session } = await authClient.getSession();
 
 ---
 
+## Device Sign-In
+
+For desktop apps, CLIs and TVs (RFC 8628). No React; also exported from `@115jon/kova-react/device`.
+
+```ts
+import { startDeviceSignIn } from "@115jon/kova-react";
+
+const signIn = startDeviceSignIn({
+  authUrl: "https://auth.115jon.site",
+  publishableKey: "pk_live_...",
+  device: { hostname: "ada-laptop", platform: "Windows" },
+  onChange(state) {
+    // state.status: starting | pending | approved | denied | expired | cancelled | error
+    if (state.status === "pending") showCode(state.userCode, state.verificationUriComplete);
+  },
+});
+window.addEventListener("focus", () => signIn.nudge());
+
+const result = await signIn.done;
+if (result.status === "approved") useBearer(result.sessionToken); // app-scoped session token
+```
+
+`expiresAt` is epoch milliseconds and `interval` is seconds. `cancel()` stops polling and drops
+the code on the server. Network and 5xx failures while polling are retried quietly until the code
+expires; only a failed start surfaces `{ status: "error", retryable: true }`.
+
+---
+
 ## Plugin Configuration
 
 All plugins from the kova-auth server are enabled by default. Opt out selectively:

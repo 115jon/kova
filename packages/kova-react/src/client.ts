@@ -23,7 +23,6 @@ import { passkeyClient } from "@better-auth/passkey/client";
 import type { BetterAuthClientPlugin } from "better-auth/client";
 import {
   adminClient,
-  genericOAuthClient,
   magicLinkClient,
   multiSessionClient,
   organizationClient,
@@ -189,10 +188,8 @@ function buildPluginList(cfg: PluginConfig) {
     plugins.push(usernameClient());
   }
 
-  // ── genericOAuth (custom OIDC / OAuth2 providers) ──────────────
-  if (enabled("genericOAuth")) {
-    plugins.push(genericOAuthClient());
-  }
+  // genericOAuth needs no client plugin since Better Auth 1.7: custom OIDC /
+  // OAuth2 providers are social providers, signed in with signIn.social().
 
   return plugins;
 }

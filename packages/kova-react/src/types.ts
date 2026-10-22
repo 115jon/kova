@@ -198,6 +198,10 @@ export interface PluginConfig {
    * Generic OAuth / OIDC plugin — enables custom identity providers
    * (Keycloak, Auth0, Okta, any OIDC-compatible IdP).
    * Requires the `genericOAuth()` plugin to be configured on the server.
+   *
+   * @deprecated No effect since Better Auth 1.7. Generic providers register
+   * as social providers, so `signIn.social({ provider })` reaches them
+   * without a client plugin.
    */
   genericOAuth?: boolean;
   /**
