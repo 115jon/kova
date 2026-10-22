@@ -9,7 +9,7 @@ import {
   useAppStats,
   useBanMember, useBillingCheckout, useBillingPortal,
   useChangeMemberRole, useDeleteApplication, useDeleteFavicon,
-  useDeleteLogo, useRemoveMember, useRotateSecret,
+  useDeleteLogo, usePromoteApplication, useRemoveMember, useRetireLegacyKey, useRotateSecret,
   useSetOAuthProviders,
   useSuspendApp, useUnbanMember, useUnsuspendApp,
   useUpdateApplication, useUploadFavicon, useUploadLogo,
@@ -26,7 +26,7 @@ import {
   ChevronLeft, ChevronRight,
   Copy, CreditCard, Eye, EyeOff, Globe, ImageIcon,
   Key, Layers, Lock,
-  Mail, Palette, RefreshCw, Search, Settings,
+  Mail, Palette, RefreshCw, Rocket, Search, Settings,
   ShieldAlert, ShieldOff, SlidersHorizontal,
   Trash2, TrendingUp, Users, X
 } from "lucide-react";
@@ -140,6 +140,7 @@ function OverviewTab({ app }: { app: Application }) {
       <section className="card card-flush" aria-labelledby="app-keys">
         <div className="panel-header"><h2 className="panel-title" id="app-keys"><Key /> API keys</h2></div>
         <KeyRow label="Publishable key" value={app.publishable_key} mono />
+        {app.legacy_publishable_key && <KeyRow label="Legacy publishable key" value={app.legacy_publishable_key} mono />}
         <KeyRow label="Environment" value={sentenceCase(app.environment)} />
         <KeyRow label="Plan" value={<PlanBadge plan={app.plan} />} />
         {app.suspended_at && (
@@ -982,20 +983,27 @@ function SettingsTab({ app }: { app: Application }) {
   const suspend = useSuspendApp();
   const unsuspend = useUnsuspendApp();
   const rotateSecret = useRotateSecret();
+  const promote = usePromoteApplication();
+  const retireLegacy = useRetireLegacyKey();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState({ name: app.name, allowed_origins: app.allowed_origins.join("\n"), redirect_uris: app.redirect_uris.join("\n") });
+  const [form, setForm] = useState({ name: app.name, allowed_origins: app.allowed_origins.join("\n"), redirect_uris: app.redirect_uris.join("\n"), device_verification_uri: app.device_verification_uri ?? "" });
   const [ok, setOk] = useState("");
   const [err, setErr] = useState("");
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [rawSecret, setRawSecret] = useState("");
   const [showSecret, setShowSecret] = useState(false);
+  const [promoteModal, setPromoteModal] = useState(false);
+  const [retireModal, setRetireModal] = useState(false);
+  const [promoted, setPromoted] = useState<{ publishableKey: string; legacyKey: string | null; rawSecretKey: string } | null>(null);
+  const [showPromotedSecret, setShowPromotedSecret] = useState(false);
+  const [envErr, setEnvErr] = useState("");
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setOk(""); setErr("");
     try {
-      await update.mutateAsync({ id: app.id, name: form.name, allowed_origins: form.allowed_origins.split("\n").map(s => s.trim()).filter(Boolean), redirect_uris: form.redirect_uris.split("\n").map(s => s.trim()).filter(Boolean) });
+      await update.mutateAsync({ id: app.id, name: form.name, allowed_origins: form.allowed_origins.split("\n").map(s => s.trim()).filter(Boolean), redirect_uris: form.redirect_uris.split("\n").map(s => s.trim()).filter(Boolean), device_verification_uri: form.device_verification_uri.trim() || null });
       setOk("Settings saved.");
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Failed"); }
   };
@@ -1013,6 +1021,25 @@ function SettingsTab({ app }: { app: Application }) {
       const { rawSecretKey } = await rotateSecret.mutateAsync({ id: app.id });
       setRawSecret(rawSecretKey);
     } catch (e: unknown) { setErr(e instanceof Error ? e.message : "Rotate failed"); }
+  };
+
+  const handlePromote = async () => {
+    setEnvErr("");
+    try {
+      const { app: next, rawSecretKey } = await promote.mutateAsync({ id: app.id });
+      setPromoted({ publishableKey: next.publishable_key, legacyKey: next.legacy_publishable_key, rawSecretKey });
+      setRawSecret("");
+    } catch (e: unknown) { setEnvErr(e instanceof Error ? e.message : "Promotion failed"); }
+    setPromoteModal(false);
+  };
+
+  const handleRetireLegacy = async () => {
+    setEnvErr("");
+    try {
+      await retireLegacy.mutateAsync({ id: app.id });
+      setPromoted(null);
+    } catch (e: unknown) { setEnvErr(e instanceof Error ? e.message : "Retire failed"); }
+    setRetireModal(false);
   };
 
   return (
@@ -1034,6 +1061,11 @@ function SettingsTab({ app }: { app: Application }) {
             <label className="form-label" htmlFor="settings-redirects">Redirect URIs</label>
             <textarea id="settings-redirects" className="input input-mono" value={form.redirect_uris} onChange={e => setForm(f => ({ ...f, redirect_uris: e.target.value }))} placeholder="https://yourapp.com/auth/callback" />
             <p className="form-hint">One per line.</p>
+          </div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="settings-device-uri">Device activation URL</label>
+            <input id="settings-device-uri" type="url" className="input input-mono" value={form.device_verification_uri} onChange={e => setForm(f => ({ ...f, device_verification_uri: e.target.value }))} placeholder="https://yourapp.com/activate" />
+            <p className="form-hint">Where device sign-in sends people to approve a code. Must be on one of the allowed origins. Leave empty to use the hosted page.</p>
           </div>
           {ok && <OkBanner msg={ok} />}
           {err && <ErrBanner msg={err} />}
@@ -1070,6 +1102,96 @@ function SettingsTab({ app }: { app: Application }) {
           )}
         </div>
       </section>
+
+      {/* Environment */}
+      <section className="card card-flush" aria-labelledby="settings-environment">
+        <div className="panel-header"><h2 className="panel-title" id="settings-environment"><Rocket /> Environment</h2></div>
+        <div className="panel-body stack">
+          {promoted ? (
+            <>
+              <p className="alert alert-warning" role="status"><AlertTriangle /> Copy the new secret key now. It will not be shown again.</p>
+              <div className="form-group">
+                <span className="form-label">Live publishable key</span>
+                <div className="code-block row">
+                  <span className="text-mono" style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{promoted.publishableKey}</span>
+                  <CopyBtn value={promoted.publishableKey} />
+                </div>
+              </div>
+              <div className="form-group">
+                <span className="form-label">Live secret key</span>
+                <div className="code-block row">
+                  <span className="text-mono" style={{ flex: 1 }}>
+                    {showPromotedSecret ? promoted.rawSecretKey : promoted.rawSecretKey.slice(0, 10) + "•".repeat(24)}
+                  </span>
+                  <button type="button" className="btn btn-subtle btn-sm btn-icon" aria-label={showPromotedSecret ? "Hide secret" : "Show secret"} onClick={() => setShowPromotedSecret(s => !s)}>
+                    {showPromotedSecret ? <EyeOff /> : <Eye />}
+                  </button>
+                  <CopyBtn value={promoted.rawSecretKey} />
+                </div>
+              </div>
+              <p className="text-sm text-secondary">
+                The old publishable key keeps working as a legacy alias, so installed builds and the sessions they hold are unaffected. Ship the live key in your next release, then retire the alias below.
+              </p>
+            </>
+          ) : app.environment === "production" ? (
+            <p className="text-sm text-secondary">This application is in production. Its hosted pages run in live mode.</p>
+          ) : (
+            <>
+              <p className="text-sm text-secondary">
+                Promoting issues a live publishable key and rotates the secret key. The current publishable key keeps working as a legacy alias, so installed clients and their sessions keep working. The current secret key stops working immediately.
+              </p>
+              <button type="button" className="btn btn-secondary" style={{ alignSelf: "flex-start" }} onClick={() => { setEnvErr(""); setPromoteModal(true); }} disabled={promote.isPending}>
+                <Rocket /> {promote.isPending ? "Promoting…" : "Promote to production"}
+              </button>
+            </>
+          )}
+          {app.legacy_publishable_key && (
+            <>
+              <KeyRow label="Legacy publishable key" value={app.legacy_publishable_key} mono />
+              <p className="text-sm text-secondary">Retire the legacy key once no installed client still sends it. Requests that use it will fail from then on.</p>
+              <button type="button" className="btn btn-secondary" style={{ alignSelf: "flex-start" }} onClick={() => { setEnvErr(""); setRetireModal(true); }} disabled={retireLegacy.isPending}>
+                <Ban /> {retireLegacy.isPending ? "Retiring…" : "Retire legacy key"}
+              </button>
+            </>
+          )}
+          {envErr && <ErrBanner msg={envErr} />}
+        </div>
+      </section>
+
+      {/* Promote Modal */}
+      {promoteModal && (
+        <Modal onClose={() => setPromoteModal(false)} maxWidth={460}>
+          <ModalHeader
+            title="Promote to production"
+            icon={<span className="icon-tile tone-warning" aria-hidden="true"><Rocket /></span>}
+          />
+          <div className="modal-body stack">
+            <p className="text-secondary">
+              <strong className="text-strong">{app.name}</strong> gets a new <span className="text-mono">pk_live_</span> publishable key and a new <span className="text-mono">sk_live_</span> secret key. Hosted pages switch to live mode.
+            </p>
+            <p className="text-secondary">
+              The current publishable key keeps working as a legacy alias until you retire it. The current secret key stops working now. Production apps need https origins and redirect URIs.
+            </p>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={() => setPromoteModal(false)} disabled={promote.isPending}>Cancel</button>
+            <button type="button" className="btn btn-primary" onClick={handlePromote} disabled={promote.isPending}>
+              <Rocket /> {promote.isPending ? "Promoting…" : "Promote"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {retireModal && (
+        <ConfirmModal
+          title="Retire legacy key?"
+          body="Clients that still send the old publishable key stop working, including installed builds that have it baked in."
+          confirmLabel="Retire key"
+          loading={retireLegacy.isPending}
+          onConfirm={() => void handleRetireLegacy()}
+          onClose={() => setRetireModal(false)}
+        />
+      )}
 
       {/* Suspend */}
       <section className="card card-flush" aria-labelledby="settings-suspend">

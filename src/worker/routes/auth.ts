@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { KVNamespace } from "@cloudflare/workers-types";
-import { getApplicationByPublishableKey, isApplicationSuspended, isOriginAllowed, isRedirectUriAllowed } from "../applications";
+import { getApplicationByPublishableKey, isApplicationSuspended, isDesktopShellOrigin, isOriginAllowed, isRedirectUriAllowed } from "../applications";
 import { createAuth } from "../auth";
 import {
   buildOidcContinueLocation,
@@ -59,7 +59,7 @@ authRouter.all("/*", async (c) => {
   // /api/pub/apps/:pk/device/* and approved on the app's own hosted host, so
   // the platform host serves none of the plugin's endpoints.
   if (isDeviceAuthPath(req.path)) {
-    return withHeaders(Response.json({ error: "not_found" }, { status: 404 }), request, db, env.KV);
+    return withHeaders(Response.json({ error: "not_found" }, { status: 404 }), request, db, env.KV, env);
   }
 
   if (req.method === "GET" && req.path.endsWith("/oauth2/authorize")) {
@@ -103,7 +103,8 @@ authRouter.all("/*", async (c) => {
           ),
           request,
           db,
-          env.KV
+          env.KV,
+          env
         );
       }
 
@@ -119,7 +120,7 @@ authRouter.all("/*", async (c) => {
         .catch(() => null);
 
       if (!sessionRow?.["userId"] || !isSessionUnexpired(sessionRow["expiresAt"])) {
-        return withHeaders(Response.json(null), request, db, env.KV);
+        return withHeaders(Response.json(null), request, db, env.KV, env);
       }
 
       const userRow = await db
@@ -129,7 +130,7 @@ authRouter.all("/*", async (c) => {
         .catch(() => null);
 
       if (!userRow?.["id"] || sqliteBool(userRow["banned"])) {
-        return withHeaders(Response.json(null), request, db, env.KV);
+        return withHeaders(Response.json(null), request, db, env.KV, env);
       }
 
       return withHeaders(
@@ -144,7 +145,8 @@ authRouter.all("/*", async (c) => {
         }),
         request,
         db,
-        env.KV
+        env.KV,
+        env
       );
     }
 
@@ -152,7 +154,7 @@ authRouter.all("/*", async (c) => {
     const sessionData = await auth.api.getSession({ headers: req.raw.headers }).catch(() => null);
 
     if (!sessionData?.session?.id) {
-      return withHeaders(Response.json(null), request, db, env.KV);
+      return withHeaders(Response.json(null), request, db, env.KV, env);
     }
 
     const row = await db
@@ -163,7 +165,7 @@ authRouter.all("/*", async (c) => {
 
     if (pk) {
       if (!app || isApplicationSuspended(app)) {
-        return withHeaders(Response.json(null), request, db, env.KV);
+        return withHeaders(Response.json(null), request, db, env.KV, env);
       }
 
       const origin = req.header("Origin") ?? "";
@@ -178,12 +180,22 @@ authRouter.all("/*", async (c) => {
           ),
           request,
           db,
-          env.KV
+          env.KV,
+          env
         );
       }
 
       if (!sdkCookieProvesIdentity(row?.app_id) || !sessionData.user?.id) {
-        return withHeaders(Response.json(null), request, db, env.KV);
+        return withHeaders(Response.json(null), request, db, env.KV, env);
+      }
+
+      // A cookie never mints an app token for the desktop shell's origin.
+      // Browsers resolve *.localhost to loopback, so any local process on :80
+      // could serve tauri.localhost in the user's normal browser and turn the
+      // SameSite=None auth cookie into a bearer. The real shell always sends
+      // its bearer (handled above), so nothing legitimate lands here.
+      if (!bearerToken && isDesktopShellOrigin(origin)) {
+        return withHeaders(Response.json(null), request, db, env.KV, env);
       }
 
       const appSession = await resolveAppScopedSession(db, {
@@ -199,7 +211,8 @@ authRouter.all("/*", async (c) => {
         }),
         request,
         db,
-        env.KV
+        env.KV,
+        env
       );
     }
 
@@ -211,7 +224,8 @@ authRouter.all("/*", async (c) => {
       Response.json(body),
       request,
       db,
-      env.KV
+      env.KV,
+      env
     );
   }
 
@@ -225,7 +239,8 @@ authRouter.all("/*", async (c) => {
           ),
           request,
           db,
-          env.KV
+          env.KV,
+          env
         );
       }
 
@@ -242,7 +257,8 @@ authRouter.all("/*", async (c) => {
           ),
           request,
           db,
-          env.KV
+          env.KV,
+          env
         );
       }
 
@@ -277,7 +293,8 @@ authRouter.all("/*", async (c) => {
               ),
               request,
               db,
-              env.KV
+              env.KV,
+              env
             );
           }
         } catch {
@@ -298,7 +315,7 @@ authRouter.all("/*", async (c) => {
 
   if (isPlatformOnlyAuthPath(new URL(req.url).pathname)) {
     const rejection = await rejectAppScopedSession(db, request.headers);
-    if (rejection) return withHeaders(rejection, request, db, env.KV);
+    if (rejection) return withHeaders(rejection, request, db, env.KV, env);
   }
 
   const auth = createAuth(env, req.raw.cf as IncomingRequestCfProperties | undefined);
@@ -336,7 +353,7 @@ authRouter.all("/*", async (c) => {
   // the CORS access-control and security (X-Frame-Options, etc.) headers are
   // added on top. Without this, cross-origin clients receive a CORS failure
   // on every 429, preventing the JS from reading Retry-After.
-  return withHeaders(await auth.handler(authRequest), request, db, env.KV);
+  return withHeaders(await auth.handler(authRequest), request, db, env.KV, env);
 });
 
 export { authRouter };

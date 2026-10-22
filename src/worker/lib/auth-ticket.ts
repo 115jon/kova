@@ -257,14 +257,16 @@ export async function createSessionTransferCode(
  *
  * @param kv             KV namespace binding
  * @param code           The transfer code from the consumer app's URL (`?kova_auth_code=xxx`)
- * @param publishableKey The requesting app's pk — must match what was stored
+ * @param publishableKey The requesting app's pk — must match what was stored.
+ *                       Pass every key of the resolved app (current and
+ *                       legacy) so a promoted app's codes survive the key change.
  * @param origin         Browser Origin header from the exchange request
  * @returns The session token, or null if the code is invalid/expired/mismatched
  */
 export async function exchangeSessionTransferCode(
   kv: KVNamespace,
   code: string,
-  publishableKey: string,
+  publishableKey: string | readonly string[],
   origin: string | null,
 ): Promise<ExchangeTransferResult | null> {
   const key = `${TRANSFER_KEY_PREFIX}${code}`;
@@ -283,7 +285,8 @@ export async function exchangeSessionTransferCode(
   }
 
   // pk binding check
-  if (payload.publishableKey !== publishableKey) return null;
+  const keys: readonly string[] = typeof publishableKey === "string" ? [publishableKey] : publishableKey;
+  if (!keys.includes(payload.publishableKey)) return null;
   if (!originMatches(payload.expectedOrigin, origin)) return null;
 
   // Belt-and-suspenders age check (KV TTL is primary guard)

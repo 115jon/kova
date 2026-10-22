@@ -26,6 +26,8 @@ const application: Application = {
   from_name: null, from_email: null, support_email: null, smtp_host: null, smtp_port: 587,
   smtp_user: null, smtp_secure: false, stripe_customer_id: null, stripe_subscription_id: null,
   plan: "free", plan_expires_at: null, suspended_at: null, auth_slug: "test-app", custom_domain: null,
+  legacy_publishable_key: null,
+  device_verification_uri: null,
 };
 
 let providerRows: Array<{ provider: string; enabled: number }> = [];

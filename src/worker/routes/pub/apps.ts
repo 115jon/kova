@@ -16,6 +16,9 @@
  *   POST /api/pub/apps/:publishableKey/device/{start,poll,cancel}
  *     → Device-code sign-in for desktop/CLI clients (see the section below).
  *
+ *   POST /api/pub/apps/:publishableKey/device/{lookup,approve,deny}
+ *     → Approval from the app's own page with an app-scoped bearer session.
+ *
  *   GET /api/pub/apps/:publishableKey/plan
  *     → Returns plan name + allowed features for operator-side feature gating.
  *     → Requires X-Secret-Key header matching the application's secret key.
@@ -24,7 +27,7 @@
 
 import { Hono } from "hono";
 import type { KVNamespace } from "@cloudflare/workers-types";
-import { getApplicationByPublishableKey, isRedirectUriAllowed } from "../../applications";
+import { deviceVerificationUris, getApplicationByPublishableKey, isRedirectUriAllowed, publishableKeysOf } from "../../applications";
 import { createAuth } from "../../auth";
 import { rejectDisallowedOrigin } from "../../lib/app-origin";
 import { resolveAppScopedSession, sessionMayActForApp } from "../../lib/app-session";
@@ -33,6 +36,7 @@ import { DEVICE_CODE_INTERVAL_SECONDS, formatUserCode, hostedVerificationUri } f
 import { consumeRateLimit, requestIp } from "../../lib/rate-limit";
 import { hostedProviders } from "../../lib/hosted-providers";
 import { jsonForHtmlScript } from "../../lib/html";
+import { approveDeviceRequest, denyDeviceRequest, lookupDeviceRequest } from "./device-approval";
 
 const pubAppsRouter = new Hono<{ Bindings: Env }>();
 const DEFAULT_ENABLED_PROVIDERS = ["google", "github", "discord", "microsoft"] as const;
@@ -439,7 +443,8 @@ pubAppsRouter.post("/:pk/exchange-code", async (c) => {
   const result = await exchangeSessionTransferCode(
     c.env.KV,
     code,
-    pk,
+    // Either key of the app: the code may have been minted under the other one.
+    publishableKeysOf(app),
     c.req.header("Origin") ?? null,
   );
 
@@ -489,7 +494,8 @@ pubAppsRouter.post("/:pk/device/start", async (c) => {
   const app = await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null);
   if (!app) return c.json({ error: "Application not found" }, 404);
   if (app.suspended_at) return c.json({ error: "Application suspended" }, 403);
-  const verificationUri = hostedVerificationUri(c.env.AUTH_URL, app.auth_slug);
+  // The app's own approval page when it has one, else the hosted /device page.
+  const verificationUri = app.device_verification_uri ?? hostedVerificationUri(c.env.AUTH_URL, app.auth_slug);
   if (!verificationUri) return c.json({ error: "device_flow_unavailable" }, 409);
 
   const ip = requestIp(c.req.raw);
@@ -537,8 +543,7 @@ pubAppsRouter.post("/:pk/device/start", async (c) => {
     return c.json({
       deviceCode: issued.device_code,
       userCode,
-      verificationUri,
-      verificationUriComplete: `${verificationUri}?code=${userCode}`,
+      ...deviceVerificationUris(verificationUri, userCode),
       interval: issued.interval,
       expiresIn: issued.expires_in,
     }, 201);
@@ -567,7 +572,9 @@ pubAppsRouter.post("/:pk/device/poll", async (c) => {
     const { sessionToken } = await auth.api.kovaRedeemDeviceCode({
       body: {
         deviceCode: body.deviceCode.trim(),
-        publishableKey: app.publishable_key,
+        // By app, not key: a code started under a promoted app's legacy key
+        // still redeems with the new key, and the reverse.
+        appId: app.id,
         ipAddress: requestIp(c.req.raw),
         userAgent: c.req.header("User-Agent") ?? null,
       },
@@ -600,16 +607,25 @@ pubAppsRouter.post("/:pk/device/cancel", async (c) => {
   c.header("Cache-Control", "no-store");
   const body = jsonObject(await c.req.json().catch(() => null));
   const deviceCode = typeof body?.deviceCode === "string" ? body.deviceCode.trim() : "";
-  if (deviceCode) {
-    // Only codes this key issued and nobody redeemed yet; a redeemed code is
+  const app = deviceCode ? await getApplicationByPublishableKey(c.env.DB, pk).catch(() => null) : null;
+  if (deviceCode && app) {
+    // Only this app's codes that nobody redeemed yet; a redeemed code is
     // already gone. Denied/expired rows go too, they are dead either way.
+    // Matched by app id so either of a promoted app's keys can cancel.
     await c.env.DB
-      .prepare(`DELETE FROM "deviceCode" WHERE "deviceCode" = ? AND "clientId" = ?`)
-      .bind(deviceCode, pk)
+      .prepare(`DELETE FROM "deviceCode" WHERE "deviceCode" = ? AND "appId" = ?`)
+      .bind(deviceCode, app.id)
       .run()
       .catch(() => { /* best effort */ });
   }
   return c.body(null, 204);
 });
+
+// ── Device approval from the app's own page (device_verification_uri) ─────────
+// App-scoped bearer session, the app's own web origin; see ./device-approval.ts.
+
+pubAppsRouter.post("/:pk/device/lookup", lookupDeviceRequest);
+pubAppsRouter.post("/:pk/device/approve", approveDeviceRequest);
+pubAppsRouter.post("/:pk/device/deny", denyDeviceRequest);
 
 export { pubAppsRouter };

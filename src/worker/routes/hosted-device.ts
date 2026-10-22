@@ -64,7 +64,7 @@ type DeviceVerifyResponse = {
 
 export function devicePageApp(app: Application): DevicePageApp {
   // Same inputs and resolver as buildHostedPage, so /device matches sign-in.
-  const appearance = resolveHostedAppearance(app.publishable_key, {
+  const appearance = resolveHostedAppearance(app, {
     primaryColor: app.primary_color ?? "#3b82f6",
     backgroundColor: app.background_color ?? "#0a0a0a",
     theme: app.theme ?? "dark",

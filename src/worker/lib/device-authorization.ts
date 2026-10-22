@@ -7,6 +7,9 @@
  *
  *   - client_id is the app's publishable key. `authorizeRequest` resolves the
  *     app and stores its id plus display-only device context on the code.
+ *     The app id is what owns the code: a promoted app answers to its current
+ *     and its legacy key, and clientId records whichever key was current at
+ *     issue, so ownership is never compared by key.
  *   - Codes are only issued through POST /api/pub/apps/:pk/device/start, which
  *     calls the plugin from the server. A direct /api/auth/device/code call
  *     (one that carries an HTTP request) is refused.
@@ -91,7 +94,8 @@ export function kovaDeviceGrant(env: Pick<Env, "DB">): DeviceAuthorizationGrant<
       const app = request.client_id
         ? await getApplicationByPublishableKey(env.DB, request.client_id).catch(() => null)
         : null;
-      if (!app || app.suspended_at || !app.auth_slug) {
+      // Somewhere to approve the code: the app's own page or its hosted host.
+      if (!app || app.suspended_at || (!app.auth_slug && !app.device_verification_uri)) {
         throw new APIError("BAD_REQUEST", { error: "invalid_client", error_description: "Device sign-in is not available for this application" });
       }
       return {
@@ -155,25 +159,24 @@ export function kovaDeviceRedemption(env: Pick<Env, "DB">) {
           method: "POST",
           body: z.object({
             deviceCode: z.string().min(1),
-            publishableKey: z.string().min(1),
+            /** The app resolved from the poll's publishable key (current or legacy). */
+            appId: z.string().min(1),
             ipAddress: z.string().nullable().optional(),
             userAgent: z.string().nullable().optional(),
           }),
           metadata: { SERVER_ONLY: true },
         },
         async (ctx) => {
-          const { deviceCode, publishableKey } = ctx.body;
-          let appId = "";
+          const { deviceCode, appId } = ctx.body;
           const { user } = await redeemDeviceCode<KovaDeviceCodeFields, undefined, undefined>({
             ctx,
             deviceCode,
             authorizeRedemption(record) {
               // Another app's code is indistinguishable from an unknown one.
-              if (record.clientId !== publishableKey || !record.appId) {
+              if (!record.appId || record.appId !== appId) {
                 throw new APIError("BAD_REQUEST", { error: "invalid_grant", error_description: "Invalid device code" });
               }
-              appId = record.appId;
-              return { ownershipWhere: { field: "clientId", value: publishableKey }, context: undefined };
+              return { ownershipWhere: { field: "appId", value: appId }, context: undefined };
             },
             async prepareRedemption(record) {
               // Same gate the session-create hook applies to every other sign-in.

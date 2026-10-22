@@ -84,13 +84,37 @@ export const STATIC_ORIGINS = new Set<string>([
   "https://auth.lvh.me",
   // Dev — Caddy reverse proxy (auth.localhost fallback for non-OAuth testing)
   "https://auth.localhost",
-  // Production — combined auth+dashboard worker
-  "https://auth.115jon.site",
+  // Production — the auth+dashboard host comes from AUTH_URL / DASHBOARD_URL
+  // (staticOrigins below), so moving domains is a config change.
   "https://kova-auth-server.jontitor.workers.dev",
   "https://oci-a1.tail91a4f4.ts.net",
   "https://joi.tail91a4f4.ts.net:5174",
   "https://git.115jon.com",
 ]);
+
+/** The env values that name Kova's own hosts. */
+export type FirstPartyHosts = { AUTH_URL?: string; DASHBOARD_URL?: string };
+
+function originOf(value: string | undefined): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * STATIC_ORIGINS plus the auth server's and dashboard's own origins, taken
+ * from AUTH_URL and DASHBOARD_URL rather than a hardcoded host.
+ */
+export function staticOrigins(env?: FirstPartyHosts): Set<string> {
+  const origins = new Set(STATIC_ORIGINS);
+  for (const origin of [originOf(env?.AUTH_URL), originOf(env?.DASHBOARD_URL)]) {
+    if (origin) origins.add(origin);
+  }
+  return origins;
+}
 
 // ── Security headers (non-CORS) ───────────────────────────────────────────────
 
@@ -181,7 +205,8 @@ function kvPutPublishableKeyOrigin(
 export async function resolveOrigin(
   request: Request,
   db: D1Database,
-  kv: KVNamespace
+  kv: KVNamespace,
+  env?: FirstPartyHosts
 ): Promise<string> {
   const origin = request.headers.get("Origin") ?? "";
   if (!origin) return "";
@@ -216,7 +241,7 @@ export async function resolveOrigin(
   }
 
   // ── Tier 2: static first-party origins ───────────────────────────────────
-  if (STATIC_ORIGINS.has(origin)) {
+  if (staticOrigins(env).has(origin)) {
     kvPutOrigin(kv, origin, true);
     return origin;
   }
@@ -262,9 +287,10 @@ export async function resolveOrigin(
 export async function buildCorsHeaders(
   request: Request,
   db: D1Database,
-  kv: KVNamespace
+  kv: KVNamespace,
+  env?: FirstPartyHosts
 ): Promise<Record<string, string>> {
-  const origin = await resolveOrigin(request, db, kv);
+  const origin = await resolveOrigin(request, db, kv, env);
   return {
     "Access-Control-Allow-Origin": origin || "null",
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
@@ -284,11 +310,12 @@ export async function withHeaders(
   response: Response,
   request: Request,
   db: D1Database,
-  kv: KVNamespace
+  kv: KVNamespace,
+  env?: FirstPartyHosts
 ): Promise<Response> {
   const headers = new Headers(response.headers);
   const overlay: Record<string, string> = {
-    ...(await buildCorsHeaders(request, db, kv)),
+    ...(await buildCorsHeaders(request, db, kv, env)),
     ...SECURITY_HEADERS,
   };
   for (const [key, value] of Object.entries(overlay)) {
@@ -316,13 +343,13 @@ export function corsMiddleware(): MiddlewareHandler<{ Bindings: Env }> {
 
     // Fast-path: OPTIONS preflight — resolve origin, respond, done.
     if (c.req.method === "OPTIONS") {
-      const headers = await buildCorsHeaders(c.req.raw, db, kv);
+      const headers = await buildCorsHeaders(c.req.raw, db, kv, c.env);
       return new Response(null, { status: 204, headers });
     }
 
     await next();
 
     // Overlay CORS + security headers on the worker response.
-    c.res = await withHeaders(c.res, c.req.raw, db, kv);
+    c.res = await withHeaders(c.res, c.req.raw, db, kv, c.env);
   };
 }

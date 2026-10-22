@@ -1,0 +1,26 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- APPLY THIS MIGRATION BEFORE DEPLOYING THE WORKER.
+-- The new code selects this column on every app lookup; a worker deployed
+-- first fails every request that resolves an application.
+--   pnpm migrate:prod   (then)   pnpm deploy
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Migration 0029: per-app device verification URL
+--
+-- Device sign-in (RFC 8628) sends the user to a page where they approve the
+-- code. Today that is always the app's hosted /device page on
+-- {slug}.auth…. When device_verification_uri is set (e.g.
+-- https://meet.example.com/activate), /api/pub/apps/:pk/device/start returns
+-- it as verificationUri, plus verificationUriComplete with ?code=XXXX-XXXX,
+-- and the app's own page approves the code through
+-- /api/pub/apps/:pk/device/{lookup,approve,deny} with an app-scoped session.
+--
+-- Rules (applications.ts validateApplicationPolicy): https, or
+-- http://localhost[:port] for development apps; its origin must be one of the
+-- app's allowed origins. NULL keeps the hosted /device page.
+--
+-- ROLLBACK (with the pre-0029 worker build):
+--   ALTER TABLE application DROP COLUMN device_verification_uri;
+--   DELETE FROM d1_migrations WHERE name = '0029_application_device_verification_uri.sql';
+
+ALTER TABLE application ADD COLUMN device_verification_uri TEXT;

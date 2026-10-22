@@ -14,12 +14,15 @@ import { hasAdminRole, isAllowlistedAdminEmail } from "../lib/roles";
 
 const deviceChallengesRouter = new Hono<{ Bindings: Env }>();
 
+/** Where /approve/:id lives: DASHBOARD_URL, else AUTH_URL. Never a hardcoded host. */
 function dashboardOrigin(env: Env): string {
-  try {
-    return new URL(env.DASHBOARD_URL || env.AUTH_URL).origin;
-  } catch {
-    return "https://auth.115jon.site";
+  for (const value of [env.DASHBOARD_URL, env.AUTH_URL]) {
+    if (!value) continue;
+    try {
+      return new URL(value).origin;
+    } catch { /* try the next one */ }
   }
+  throw new Error("[kova-auth] DASHBOARD_URL and AUTH_URL are both missing or invalid");
 }
 
 function approveUrl(env: Env, id: string): string {

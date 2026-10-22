@@ -30,7 +30,7 @@ import {
   OIDC_SCOPES,
 } from "./lib/oidc-provider";
 import { hasAdminRole, isAllowlistedAdminEmail, parseEmailAllowlist } from "./lib/roles";
-import { resolveOrigin, STATIC_ORIGINS } from "./middleware/cors";
+import { resolveOrigin, staticOrigins } from "./middleware/cors";
 import {
   findAutoJoinDomainForEmail,
   findMFAEnforcedOrgBlockingUser,
@@ -56,7 +56,7 @@ import { deliverEvent } from "./webhook";
 export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Request, baseURLOverride?: string) {
   const capture = devEmailCaptureEnabled(env);
   const send = (mail: { to: string; subject: string; html: string }) =>
-    sendEmail({ ...mail, apiKey: env.RESEND_API_KEY, capture });
+    sendEmail({ ...mail, apiKey: env.RESEND_API_KEY, capture, from: env.EMAIL_FROM });
 
   return betterAuth(
     withCloudflare(
@@ -748,20 +748,21 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
         // denied we return only STATIC_ORIGINS so Better Auth's own guard
         // still protects first-party routes.
         trustedOrigins: async (request?: Request) => {
-          if (!request) return [...STATIC_ORIGINS];
+          const firstParty = [...staticOrigins(env)];
+          if (!request) return firstParty;
 
-          const resolved = await resolveOrigin(request, env.DB, env.KV).catch(
+          const resolved = await resolveOrigin(request, env.DB, env.KV, env).catch(
             () => ""
           );
 
           if (resolved) {
             // The origin is allowed — include it so Better Auth's internal
             // CORS logic also accepts it for /api/auth/* responses.
-            return [resolved, ...STATIC_ORIGINS];
+            return [resolved, ...firstParty];
           }
 
           // Origin not allowed — restrict to first-party origins only.
-          return [...STATIC_ORIGINS];
+          return firstParty;
         },
       }
     )

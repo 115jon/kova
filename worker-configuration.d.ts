@@ -44,6 +44,8 @@ interface Env {
   // ── Email ────────────────────────────────────────────────────
   DASHBOARD_ADMIN_EMAIL: string;
   RESEND_API_KEY: string;
+  /** Optional `Name <address>` sender for auth emails. Default: kova-auth <noreply@115jon.site>. */
+  EMAIL_FROM?: string;
   /** Local-only (.dev.vars): log emails instead of sending. Ignored unless AUTH_URL is loopback or lvh.me. */
   KOVA_DEV_EMAIL_CAPTURE?: string;
 

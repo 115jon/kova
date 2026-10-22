@@ -30,6 +30,11 @@ export interface Application {
   name: string;
   environment: "development" | "production";
   publishable_key: string;
+  /**
+   * The key this app had before it was promoted to production. Still accepted
+   * everywhere a publishable key is, until an admin retires it.
+   */
+  legacy_publishable_key: string | null;
   /** The raw secret — only present immediately after creation, never persisted. */
   secret_key?: string;
   allowed_origins: string[];
@@ -70,6 +75,12 @@ export interface Application {
   auth_slug: string | null;
   /** Optional custom domain alias (e.g. login.mycompany.com) */
   custom_domain: string | null;
+  // ── Device sign-in (migration 0029)
+  /**
+   * The app's own page for approving device codes (e.g.
+   * https://meet.example.com/activate). Null: the hosted /device page.
+   */
+  device_verification_uri: string | null;
 }
 
 /** DB row as stored in D1 (origins/uris are newline-delimited strings). */
@@ -78,6 +89,7 @@ export interface AppRow {
   name: string;
   environment: string;
   publishable_key: string;
+  legacy_publishable_key: string | null;
   secret_key_hash: string;
   allowed_origins: string;
   redirect_uris: string;
@@ -114,6 +126,7 @@ export interface AppRow {
   // Auth subdomain (migration 0018)
   auth_slug: string | null;
   custom_domain: string | null;
+  device_verification_uri: string | null;
 }
 
 // ── Key generation ─────────────────────────────────────────────────────────────
@@ -169,6 +182,7 @@ export function rowToApp(row: AppRow): Application {
     name: row.name,
     environment: row.environment as "development" | "production",
     publishable_key: row.publishable_key,
+    legacy_publishable_key: row.legacy_publishable_key ?? null,
     allowed_origins: row.allowed_origins
       ? row.allowed_origins.split("\n").map(s => s.trim()).filter(Boolean)
       : [],
@@ -208,6 +222,7 @@ export function rowToApp(row: AppRow): Application {
     // Auth subdomain
     auth_slug: row.auth_slug ?? null,
     custom_domain: row.custom_domain ?? null,
+    device_verification_uri: row.device_verification_uri ?? null,
   };
 }
 
@@ -223,13 +238,19 @@ export async function listApplications(db: D1Database): Promise<Application[]> {
               from_name, from_email, support_email,
               smtp_host, smtp_port, smtp_user, smtp_secure,
               stripe_customer_id, stripe_subscription_id, plan, plan_expires_at,
-              suspended_at, auth_slug, custom_domain
+              suspended_at, auth_slug, custom_domain, legacy_publishable_key,
+              device_verification_uri
        FROM application ORDER BY createdAt DESC`
     )
     .all<AppRow>();
   return (result.results ?? []).map(rowToApp);
 }
 
+/**
+ * Resolves an app from its publishable key. A promoted app's pre-promotion key
+ * (legacy_publishable_key) resolves to the same app until it is retired, so
+ * installed clients keep working. Compare apps by `id`, never by key.
+ */
 export async function getApplicationByPublishableKey(
   db: D1Database,
   publishableKey: string
@@ -243,10 +264,11 @@ export async function getApplicationByPublishableKey(
               from_name, from_email, support_email,
               smtp_host, smtp_port, smtp_user, smtp_secure,
               stripe_customer_id, stripe_subscription_id, plan, plan_expires_at,
-              suspended_at, auth_slug, custom_domain
-       FROM application WHERE publishable_key = ? LIMIT 1`
+              suspended_at, auth_slug, custom_domain, legacy_publishable_key,
+              device_verification_uri
+       FROM application WHERE publishable_key = ? OR legacy_publishable_key = ? LIMIT 1`
     )
-    .bind(publishableKey)
+    .bind(publishableKey, publishableKey)
     .first<AppRow>();
   return row ? rowToApp(row) : null;
 }
@@ -264,7 +286,8 @@ export async function getApplicationById(
               from_name, from_email, support_email,
               smtp_host, smtp_port, smtp_user, smtp_secure,
               stripe_customer_id, stripe_subscription_id, plan, plan_expires_at,
-              suspended_at, auth_slug, custom_domain
+              suspended_at, auth_slug, custom_domain, legacy_publishable_key,
+              device_verification_uri
        FROM application WHERE id = ? LIMIT 1`
     )
     .bind(id)
@@ -277,6 +300,8 @@ export interface CreateApplicationInput {
   environment: "development" | "production";
   allowed_origins: string[];
   redirect_uris: string[];
+  /** Validated by the caller (validateApplicationPolicy). */
+  device_verification_uri?: string | null;
   createdBy: string;
   signingSecret: string; // BETTER_AUTH_SECRET from env — used to HMAC the sk
 }
@@ -303,8 +328,9 @@ export async function createApplication(
     .prepare(
       `INSERT INTO application
          (id, name, environment, publishable_key, secret_key_hash,
-          allowed_origins, redirect_uris, createdBy, createdAt, updatedAt, auth_slug)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          allowed_origins, redirect_uris, createdBy, createdAt, updatedAt, auth_slug,
+          device_verification_uri)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       id, input.name, input.environment,
@@ -313,7 +339,8 @@ export async function createApplication(
       input.redirect_uris.join("\n"),
       input.createdBy,
       now, now,
-      authSlug
+      authSlug,
+      input.device_verification_uri ?? null
     )
     .run();
 
@@ -348,13 +375,30 @@ export interface UpdateApplicationInput {
   smtp_secure?: boolean;
   // Auth subdomain — only custom_domain is mutable; auth_slug is immutable
   custom_domain?: string | null;
+  // Device sign-in — validated by the caller (validateApplicationPolicy)
+  device_verification_uri?: string | null;
 }
 
+/** Thrown when the row's environment changed after the caller validated against it. */
+export class ApplicationConflictError extends Error {
+  constructor() {
+    super("The application changed environment while saving (it was promoted). Reload and try again.");
+    this.name = "ApplicationConflictError";
+  }
+}
+
+/**
+ * `expectedEnvironment`: the environment the caller validated `input`
+ * against. The UPDATE only applies while the row still has it; a promotion in
+ * between throws ApplicationConflictError instead of saving settings that
+ * were checked under development rules onto a production app.
+ */
 export async function updateApplication(
   db: D1Database,
   id: string,
   input: UpdateApplicationInput,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  expectedEnvironment?: Application["environment"]
 ): Promise<Application | null> {
   const now = Date.now();
   const sets: string[] = ["updatedAt = ?"];
@@ -387,6 +431,7 @@ export async function updateApplication(
   addField("smtp_pass_enc", input.smtp_pass_enc);
   addField("smtp_secure", input.smtp_secure);
   addField("custom_domain", input.custom_domain);
+  addField("device_verification_uri", input.device_verification_uri);
 
   if (input.allowed_origins !== undefined) {
     sets.push("allowed_origins = ?");
@@ -397,10 +442,16 @@ export async function updateApplication(
     bindings.push(input.redirect_uris.join("\n"));
   }
 
-  await db
-    .prepare(`UPDATE application SET ${sets.join(", ")} WHERE id = ?`)
-    .bind(...bindings, id)
+  const where = expectedEnvironment ? "id = ? AND environment = ?" : "id = ?";
+  const result = await db
+    .prepare(`UPDATE application SET ${sets.join(", ")} WHERE ${where}`)
+    .bind(...bindings, id, ...(expectedEnvironment ? [expectedEnvironment] : []))
     .run();
+  if (expectedEnvironment && !result.meta?.changes) {
+    const exists = await db.prepare(`SELECT 1 AS found FROM application WHERE id = ? LIMIT 1`).bind(id).first();
+    if (exists) throw new ApplicationConflictError();
+    return null;
+  }
 
   const updated = await getApplicationById(db, id);
 
@@ -451,6 +502,94 @@ export async function rotateSecretKey(
     .run();
 
   return newRawKey;
+}
+
+export type PromoteApplicationResult =
+  | { ok: true; app: Application; rawSecretKey: string }
+  | { ok: false; reason: "not_found" | "already_production" | "legacy_key_in_use" | "invalid_policy"; error: string };
+
+/**
+ * Promotes a development app to production: a new pk_live_* publishable key,
+ * the old key kept as `legacy_publishable_key` so installed clients keep
+ * working, and a new sk_live_* secret. Returns the raw secret once, like
+ * rotateSecretKey; the old secret stops working immediately.
+ *
+ * Refuses an app that is already production, one that still has an
+ * unretired legacy key (promoting again would drop it), and one whose
+ * origins/redirects a production app may not have.
+ */
+export async function promoteApplication(
+  db: D1Database,
+  id: string,
+  signingSecret: string
+): Promise<PromoteApplicationResult> {
+  const app = await getApplicationById(db, id);
+  if (!app) return { ok: false, reason: "not_found", error: "Application not found" };
+  if (app.environment === "production") {
+    return { ok: false, reason: "already_production", error: "Application is already in production" };
+  }
+  if (app.legacy_publishable_key) {
+    return { ok: false, reason: "legacy_key_in_use", error: "Retire the legacy publishable key before promoting again" };
+  }
+  const policyError = validateApplicationPolicy({
+    environment: "production",
+    allowed_origins: app.allowed_origins,
+    redirect_uris: app.redirect_uris,
+    device_verification_uri: app.device_verification_uri,
+  });
+  if (policyError) {
+    return { ok: false, reason: "invalid_policy", error: `Cannot promote: ${policyError}` };
+  }
+
+  const publishableKey = generateKey("pk_live");
+  const rawSecretKey = generateKey("sk_live");
+  const secretHash = await hashSecret(rawSecretKey, signingSecret);
+
+  // Conditional on the state read above, so two concurrent promotions cannot
+  // both succeed (the loser would otherwise overwrite the legacy key).
+  const result = await db
+    .prepare(
+      `UPDATE application
+         SET environment = 'production',
+             legacy_publishable_key = publishable_key,
+             publishable_key = ?,
+             secret_key_hash = ?,
+             updatedAt = ?
+       WHERE id = ? AND environment != 'production' AND legacy_publishable_key IS NULL`
+    )
+    .bind(publishableKey, secretHash, Date.now(), id)
+    .run();
+  if (!result.meta?.changes) {
+    return { ok: false, reason: "already_production", error: "Application is already in production" };
+  }
+
+  const promoted = await getApplicationById(db, id);
+  return { ok: true, app: promoted!, rawSecretKey };
+}
+
+/**
+ * Stops accepting a promoted app's pre-promotion publishable key. Returns the
+ * retired key (for cache invalidation), or null when there was none.
+ */
+export async function retireLegacyPublishableKey(
+  db: D1Database,
+  id: string
+): Promise<string | null> {
+  const row = await db
+    .prepare(`SELECT legacy_publishable_key FROM application WHERE id = ? LIMIT 1`)
+    .bind(id)
+    .first<{ legacy_publishable_key: string | null }>();
+  if (!row?.legacy_publishable_key) return null;
+  await db
+    .prepare(`UPDATE application SET legacy_publishable_key = NULL, updatedAt = ? WHERE id = ?`)
+    .bind(Date.now(), id)
+    .run();
+  return row.legacy_publishable_key;
+}
+
+/** Every publishable key that currently resolves to this app. */
+export function publishableKeysOf(app: Pick<Application, "publishable_key" | "legacy_publishable_key">): string[] {
+  return app.legacy_publishable_key ? [app.publishable_key, app.legacy_publishable_key] : [app.publishable_key];
 }
 
 /**
@@ -508,10 +647,45 @@ export function isApplicationSuspended(app: Pick<Application, "suspended_at">): 
   return app.suspended_at !== null && app.suspended_at !== undefined;
 }
 
+/**
+ * Tauri's Windows webview serves a desktop build from http://tauri.localhost
+ * (unless the app opts into https). It never leaves the machine, so a
+ * production desktop app may list it as an origin. It is not a valid
+ * production redirect URI; desktop builds use device sign-in or a custom scheme.
+ */
+const DESKTOP_WEBVIEW_ORIGIN = "http://tauri.localhost";
+
+/** Tauri's webview host, on either scheme. */
+export function isDesktopShellHost(hostname: string): boolean {
+  return hostname.toLowerCase() === "tauri.localhost";
+}
+
+/**
+ * True when `origin` is the desktop shell's (http or https tauri.localhost).
+ * Browsers resolve *.localhost to loopback, so any local process can serve
+ * this origin in the user's normal browser: it identifies nothing, and must
+ * never be enough on its own to mint or use a session.
+ */
+export function isDesktopShellOrigin(origin: string | null | undefined): boolean {
+  if (!origin) return false;
+  try {
+    return isDesktopShellHost(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** localhost, *.localhost, 127.0.0.0/8 and [::1]. */
+function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return host === "localhost" || host.endsWith(".localhost") || host === "[::1]" || /^127(\.\d{1,3}){3}$/.test(host);
+}
+
 export function isValidOrigin(value: string, environment: Application["environment"]): boolean {
   try {
     const u = new URL(value);
     if (u.origin !== value) return false;
+    if (value === DESKTOP_WEBVIEW_ORIGIN) return true;
     return u.protocol === "https:" || (environment === "development" && isDevelopmentHttpUrl(value));
   } catch {
     return false;
@@ -528,10 +702,42 @@ export function isValidRedirectUri(value: string, environment: Application["envi
   }
 }
 
+/**
+ * The app's own device approval page: https, or http://localhost[:port] for
+ * development apps. No credentials or fragment. Its origin must also be one
+ * of the app's allowed origins (validateApplicationPolicy checks that).
+ */
+export function isValidDeviceVerificationUri(value: string, environment: Application["environment"]): boolean {
+  let u: URL;
+  try {
+    u = new URL(value);
+  } catch {
+    return false;
+  }
+  if (u.username || u.password || u.hash) return false;
+  // Never the desktop shell: the page that approves must not be the device asking.
+  if (isDesktopShellHost(u.hostname)) return false;
+  // A production approval page must be a real site, not this machine.
+  if (environment === "production" && isLoopbackHost(u.hostname)) return false;
+  if (u.protocol === "https:") return !!u.hostname;
+  return environment === "development" && u.protocol === "http:" && u.hostname === "localhost";
+}
+
+/**
+ * verificationUri and verificationUriComplete for a device code. The app's
+ * own page keeps its query string; `code` is set (replacing any existing one).
+ */
+export function deviceVerificationUris(base: string, displayCode: string): { verificationUri: string; verificationUriComplete: string } {
+  const complete = new URL(base);
+  complete.searchParams.set("code", displayCode);
+  return { verificationUri: base, verificationUriComplete: complete.toString() };
+}
+
 export function validateApplicationPolicy(input: {
   environment: Application["environment"];
   allowed_origins: string[];
   redirect_uris: string[];
+  device_verification_uri?: string | null;
 }): string | null {
   if (input.environment === "production") {
     if (input.allowed_origins.length === 0) return "production apps require at least one allowed origin";
@@ -544,7 +750,34 @@ export function validateApplicationPolicy(input: {
   const invalidRedirect = input.redirect_uris.find((uri) => !isValidRedirectUri(uri, input.environment));
   if (invalidRedirect) return `invalid redirect URI: ${invalidRedirect}`;
 
+  const deviceUri = input.device_verification_uri;
+  if (deviceUri) {
+    if (!isValidDeviceVerificationUri(deviceUri, input.environment)) {
+      return input.environment === "production"
+        ? `invalid device verification URL: ${deviceUri} (production apps need https)`
+        : `invalid device verification URL: ${deviceUri} (use https, or http://localhost)`;
+    }
+    const origin = new URL(deviceUri).origin;
+    if (!input.allowed_origins.includes(origin)) {
+      return `device verification URL origin ${origin} must be one of the allowed origins`;
+    }
+  }
+
   return null;
+}
+
+/**
+ * Parses `device_verification_uri` from an admin body: undefined when absent,
+ * null to clear (null or blank), otherwise the trimmed string, or an error
+ * for a non-string. validateApplicationPolicy checks the value itself.
+ */
+export function parseDeviceVerificationUri(body: Record<string, unknown>): { value: string | null | undefined } | { error: string } {
+  const raw = body.device_verification_uri;
+  if (raw === undefined) return { value: undefined };
+  if (raw === null) return { value: null };
+  if (typeof raw !== "string") return { error: "device_verification_uri must be a string" };
+  const trimmed = raw.trim();
+  return { value: trimmed || null };
 }
 
 const BRANDING_URL_FIELDS = ["home_url", "terms_url", "privacy_url"] as const;

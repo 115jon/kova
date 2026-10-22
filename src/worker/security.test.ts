@@ -46,6 +46,8 @@ function app(overrides: Partial<Application>): Application {
     suspended_at: null,
     auth_slug: "app",
     custom_domain: null,
+    legacy_publishable_key: null,
+    device_verification_uri: null,
     ...overrides,
   };
 }

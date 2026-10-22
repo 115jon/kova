@@ -6,7 +6,8 @@
  */
 
 const RESEND_API = "https://api.resend.com/emails";
-const FROM = "kova-auth <noreply@115jon.site>";
+/** Sender when the EMAIL_FROM var is unset. */
+export const DEFAULT_EMAIL_FROM = "kova-auth <noreply@115jon.site>";
 
 // ── Design tokens (inlined — email clients strip <style> tags) ────────────────
 const T = {
@@ -119,6 +120,8 @@ interface SendEmailOptions {
   apiKey: string;
   /** Log the message and its links instead of sending it. See devEmailCaptureEnabled. */
   capture?: boolean;
+  /** `Name <address>`; the EMAIL_FROM var. Defaults to DEFAULT_EMAIL_FROM. */
+  from?: string;
 }
 
 const LOCAL_AUTH_HOST = /^(localhost|127\.0\.0\.1|\[::1\]|(.+\.)?lvh\.me)$/;
@@ -145,7 +148,7 @@ function captureEmail(to: string, subject: string, html: string) {
   return { captured: true };
 }
 
-export async function sendEmail({ to, subject, html, apiKey, capture }: SendEmailOptions) {
+export async function sendEmail({ to, subject, html, apiKey, capture, from }: SendEmailOptions) {
   if (capture) return captureEmail(to, subject, html);
 
   const res = await fetch(RESEND_API, {
@@ -154,7 +157,7 @@ export async function sendEmail({ to, subject, html, apiKey, capture }: SendEmai
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ from: FROM, to, subject, html }),
+    body: JSON.stringify({ from: from?.trim() || DEFAULT_EMAIL_FROM, to, subject, html }),
   });
 
   if (!res.ok) {

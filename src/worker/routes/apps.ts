@@ -1,10 +1,16 @@
 import { Hono } from "hono";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import {
+  type Application,
+  ApplicationConflictError,
   createApplication,
   getApplicationById,
   listApplications,
   parseBrandingFields,
+  parseDeviceVerificationUri,
+  promoteApplication,
+  publishableKeysOf,
+  retireLegacyPublishableKey,
   rotateSecretKey,
   updateApplication,
   validateApplicationPolicy,
@@ -29,6 +35,8 @@ const appsRouter = new Hono<{ Bindings: Env }>();
 // PATCH  /:id                      → update settings (name, origins, branding, email, smtp)
 // DELETE /:id                      → hard-delete with typed-name confirmation + Queue cleanup
 // POST   /:id/rotate-secret        → rotate secret key
+// POST   /:id/promote              → development → production (new pk_live_*, old pk kept as legacy alias, new sk_live_* ONCE)
+// POST   /:id/retire-legacy-key    → stop accepting the pre-promotion publishable key
 // POST   /:id/suspend              → platform-level suspend
 // POST   /:id/unsuspend            → remove suspension
 // GET    /:id/stats                → user/org/login counts (AppCounter DO + D1 fallback)
@@ -54,9 +62,24 @@ async function requireAdmin(c: { req: { raw: Request }; env: Env }) {
 
 // ── KV cache invalidation helpers ─────────────────────────────────────────────
 
-function invalidateAppKv(kv: KVNamespace, publishableKey: string, appId: string): void {
-  kv.delete(`appearance:${publishableKey}`).catch(() => { });
-  kv.delete(`plan:${appId}`).catch(() => { });
+/**
+ * Deletes the per-key CORS decisions (`cors:pk-origin:<key>:<origin>`, see
+ * middleware/cors.ts) for every key the app answers to and every origin it
+ * allows. Origin-only decisions (`cors:origin:<origin>`) are shared across
+ * apps and expire on their own (60s).
+ */
+function invalidateAppCorsKv(kv: KVNamespace, app: Pick<Application, "publishable_key" | "legacy_publishable_key" | "allowed_origins">): void {
+  for (const key of publishableKeysOf(app)) {
+    for (const origin of app.allowed_origins) {
+      kv.delete(`cors:pk-origin:${key}:${origin}`).catch(() => { });
+    }
+  }
+}
+
+/** Clears the app's KV caches under every key it answers to (current and legacy). */
+function invalidateAppKv(kv: KVNamespace, app: Pick<Application, "id" | "publishable_key" | "legacy_publishable_key">): void {
+  for (const key of publishableKeysOf(app)) kv.delete(`appearance:${key}`).catch(() => { });
+  kv.delete(`plan:${app.id}`).catch(() => { });
 }
 
 const APP_LOGO_MAX_BYTES = 2 * 1024 * 1024;
@@ -93,6 +116,7 @@ appsRouter.post("/", async (c) => {
     environment: "development" | "production";
     allowed_origins: string[];
     redirect_uris: string[];
+    device_verification_uri?: unknown;
   };
   if (!body.name) {
     return Response.json({ error: "name is required" }, { status: 400 });
@@ -100,10 +124,15 @@ appsRouter.post("/", async (c) => {
   const environment = body.environment ?? "development";
   const allowedOrigins = body.allowed_origins ?? [];
   const redirectUris = body.redirect_uris ?? [];
+  const deviceUri = parseDeviceVerificationUri(body);
+  if ("error" in deviceUri) {
+    return Response.json({ error: deviceUri.error }, { status: 400 });
+  }
   const policyError = validateApplicationPolicy({
     environment,
     allowed_origins: allowedOrigins,
     redirect_uris: redirectUris,
+    device_verification_uri: deviceUri.value,
   });
   if (policyError) {
     return Response.json({ error: policyError }, { status: 400 });
@@ -113,6 +142,7 @@ appsRouter.post("/", async (c) => {
     environment,
     allowed_origins: allowedOrigins,
     redirect_uris: redirectUris,
+    device_verification_uri: deviceUri.value ?? null,
     createdBy: session.user.id,
     signingSecret: c.env.BETTER_AUTH_SECRET,
   });
@@ -142,10 +172,17 @@ appsRouter.patch("/:id", async (c) => {
   const body = (await c.req.raw.json()) as Record<string, unknown>;
   const nextAllowedOrigins = (body.allowed_origins as string[] | undefined) ?? existing.allowed_origins;
   const nextRedirectUris = (body.redirect_uris as string[] | undefined) ?? existing.redirect_uris;
+  const deviceUri = parseDeviceVerificationUri(body);
+  if ("error" in deviceUri) {
+    return Response.json({ error: deviceUri.error }, { status: 400 });
+  }
+  // Checked with the next origins too: dropping the origin the device page
+  // lives on must not leave a URL that no longer matches.
   const policyError = validateApplicationPolicy({
     environment: existing.environment,
     allowed_origins: nextAllowedOrigins,
     redirect_uris: nextRedirectUris,
+    device_verification_uri: deviceUri.value === undefined ? existing.device_verification_uri : deviceUri.value,
   });
   if (policyError) {
     return Response.json({ error: policyError }, { status: 400 });
@@ -154,30 +191,40 @@ appsRouter.patch("/:id", async (c) => {
   if ("error" in branding) {
     return Response.json({ error: branding.error }, { status: 400 });
   }
-  const app = await updateApplication(c.env.DB, id, {
-    name: body.name as string | undefined,
-    allowed_origins: body.allowed_origins as string[] | undefined,
-    redirect_uris: body.redirect_uris as string[] | undefined,
-    display_name: body.display_name as string | null | undefined,
-    primary_color: branding.values.primary_color,
-    background_color: branding.values.background_color,
-    theme: body.theme as "dark" | "light" | "auto" | undefined,
-    hide_branding: body.hide_branding as boolean | undefined,
-    home_url: branding.values.home_url,
-    terms_url: branding.values.terms_url,
-    privacy_url: branding.values.privacy_url,
-    from_name: body.from_name as string | null | undefined,
-    from_email: body.from_email as string | null | undefined,
-    support_email: body.support_email as string | null | undefined,
-    smtp_host: body.smtp_host as string | null | undefined,
-    smtp_port: body.smtp_port as number | undefined,
-    smtp_user: body.smtp_user as string | null | undefined,
-    smtp_secure: body.smtp_secure as boolean | undefined,
-  });
+  let app: Application | null;
+  try {
+    app = await updateApplication(c.env.DB, id, {
+      name: body.name as string | undefined,
+      allowed_origins: body.allowed_origins as string[] | undefined,
+      redirect_uris: body.redirect_uris as string[] | undefined,
+      display_name: body.display_name as string | null | undefined,
+      primary_color: branding.values.primary_color,
+      background_color: branding.values.background_color,
+      theme: body.theme as "dark" | "light" | "auto" | undefined,
+      hide_branding: body.hide_branding as boolean | undefined,
+      home_url: branding.values.home_url,
+      terms_url: branding.values.terms_url,
+      privacy_url: branding.values.privacy_url,
+      from_name: body.from_name as string | null | undefined,
+      from_email: body.from_email as string | null | undefined,
+      support_email: body.support_email as string | null | undefined,
+      smtp_host: body.smtp_host as string | null | undefined,
+      smtp_port: body.smtp_port as number | undefined,
+      smtp_user: body.smtp_user as string | null | undefined,
+      smtp_secure: body.smtp_secure as boolean | undefined,
+      device_verification_uri: deviceUri.value,
+    }, undefined, existing.environment);
+  } catch (error) {
+    // Validated under one environment, promoted before the write landed.
+    if (error instanceof ApplicationConflictError) {
+      return Response.json({ error: "conflict", message: error.message }, { status: 409 });
+    }
+    throw error;
+  }
   if (!app) return Response.json({ error: "Not found" }, { status: 404 });
 
   // Invalidate KV appearance cache
-  invalidateAppKv(c.env.KV, existing.publishable_key, id);
+  invalidateAppKv(c.env.KV, existing);
 
   return Response.json({ app });
 });
@@ -214,7 +261,7 @@ appsRouter.delete("/:id", async (c) => {
   await c.env.APP_EVENTS.send(msg).catch(() => { });
 
   // 2. Sync KV invalidation immediately (don't wait for queue consumer)
-  invalidateAppKv(c.env.KV, app.publishable_key, id);
+  invalidateAppKv(c.env.KV, app);
 
   // 3. Hard delete — ON DELETE CASCADE removes app_user, app_oauth_provider,
   //    app_email_template, app_plan_feature, and organization WHERE app_id = ?
@@ -232,6 +279,48 @@ appsRouter.post("/:id/rotate-secret", async (c) => {
   return Response.json({ rawSecretKey });
 });
 
+// ── PROMOTE TO PRODUCTION ─────────────────────────────────────────────────────
+//
+// New pk_live_* publishable key; the old key keeps resolving as
+// legacy_publishable_key so installed clients keep working (sessions are
+// app-scoped by app_id and are unaffected). The secret rotates to sk_live_*
+// and is returned once.
+
+appsRouter.post("/:id/promote", async (c) => {
+  const session = await requireAdmin(c);
+  if (!session) return Response.json({ error: "Forbidden" }, { status: 403 });
+
+  const id = c.req.param("id");
+  const result = await promoteApplication(c.env.DB, id, c.env.BETTER_AUTH_SECRET);
+  if (!result.ok) {
+    const status = result.reason === "not_found" ? 404 : result.reason === "invalid_policy" ? 400 : 409;
+    return Response.json({ error: result.error, code: result.reason }, { status });
+  }
+
+  invalidateAppKv(c.env.KV, result.app);
+  return Response.json({ app: result.app, rawSecretKey: result.rawSecretKey });
+});
+
+// ── RETIRE LEGACY PUBLISHABLE KEY ─────────────────────────────────────────────
+
+appsRouter.post("/:id/retire-legacy-key", async (c) => {
+  const session = await requireAdmin(c);
+  if (!session) return Response.json({ error: "Forbidden" }, { status: 403 });
+
+  const id = c.req.param("id");
+  const app = await getApplicationById(c.env.DB, id);
+  if (!app) return Response.json({ error: "Not found" }, { status: 404 });
+
+  const retired = await retireLegacyPublishableKey(c.env.DB, id);
+  if (!retired) return Response.json({ error: "No legacy publishable key to retire" }, { status: 409 });
+
+  // `app` was read before retiring, so this covers the retired key too.
+  invalidateAppKv(c.env.KV, app);
+  invalidateAppCorsKv(c.env.KV, app);
+  const updated = await getApplicationById(c.env.DB, id);
+  return Response.json({ app: updated });
+});
+
 // ── SUSPEND / UNSUSPEND ───────────────────────────────────────────────────────
 
 appsRouter.post("/:id/suspend", async (c) => {
@@ -247,9 +336,10 @@ appsRouter.post("/:id/suspend", async (c) => {
     .bind(Date.now(), Date.now(), id)
     .run();
 
-  // Invalidate CORS + appearance cache so SDK requests are blocked immediately
-  invalidateAppKv(c.env.KV, app.publishable_key, id);
-  c.env.KV.delete(`cors:origin:${app.publishable_key}`).catch(() => { });
+  // Invalidate appearance + per-key CORS decisions in KV. Each isolate's
+  // in-memory CORS cache still holds a decision for up to 60s.
+  invalidateAppKv(c.env.KV, app);
+  invalidateAppCorsKv(c.env.KV, app);
 
   return Response.json({ ok: true });
 });
@@ -267,7 +357,7 @@ appsRouter.post("/:id/unsuspend", async (c) => {
     .bind(Date.now(), id)
     .run();
 
-  invalidateAppKv(c.env.KV, app.publishable_key, id);
+  invalidateAppKv(c.env.KV, app);
 
   return Response.json({ ok: true });
 });
@@ -405,7 +495,7 @@ appsRouter.post("/:id/logo", async (c) => {
 
   // Persist URL + invalidate KV appearance cache
   await updateApplication(c.env.DB, id, { logo_url: logoUrl });
-  invalidateAppKv(c.env.KV, app.publishable_key, id);
+  invalidateAppKv(c.env.KV, app);
   c.executionCtx.waitUntil(deleteAppAsset(c.env, id, app.logo_url));
 
   return Response.json({ logoUrl });
@@ -420,7 +510,7 @@ appsRouter.delete("/:id/logo", async (c) => {
   if (!app) return Response.json({ error: "Not found" }, { status: 404 });
 
   await updateApplication(c.env.DB, id, { logo_url: null });
-  invalidateAppKv(c.env.KV, app.publishable_key, id);
+  invalidateAppKv(c.env.KV, app);
   c.executionCtx.waitUntil(deleteAppAsset(c.env, id, app.logo_url));
 
   return Response.json({ ok: true });
@@ -482,7 +572,7 @@ appsRouter.post("/:id/favicon", async (c) => {
   }
 
   await updateApplication(c.env.DB, id, { favicon_url: faviconUrl });
-  invalidateAppKv(c.env.KV, app.publishable_key, id);
+  invalidateAppKv(c.env.KV, app);
   c.executionCtx.waitUntil(deleteAppAsset(c.env, id, app.favicon_url));
 
   return Response.json({ faviconUrl });
@@ -497,7 +587,7 @@ appsRouter.delete("/:id/favicon", async (c) => {
   if (!app) return Response.json({ error: "Not found" }, { status: 404 });
 
   await updateApplication(c.env.DB, id, { favicon_url: null });
-  invalidateAppKv(c.env.KV, app.publishable_key, id);
+  invalidateAppKv(c.env.KV, app);
   c.executionCtx.waitUntil(deleteAppAsset(c.env, id, app.favicon_url));
 
   return Response.json({ ok: true });
@@ -721,7 +811,7 @@ appsRouter.put("/:id/oauth-providers", async (c) => {
   }
 
   // Invalidate appearance KV cache so SDK picks up new provider list
-  invalidateAppKv(c.env.KV, app.publishable_key, id);
+  invalidateAppKv(c.env.KV, app);
 
   return Response.json({ ok: true });
 });

@@ -16,6 +16,8 @@
  *  - useUpdateApplication       — patch any settable field (branding, email, smtp, origins)
  *  - useDeleteApplication       — hard delete with typed-name confirmation
  *  - useRotateSecret            — rotate secret key (returns new raw sk once)
+ *  - usePromoteApplication      — development → production (new pk_live_*, raw sk_live_* once)
+ *  - useRetireLegacyKey         — stop accepting the pre-promotion publishable key
  *  - useSuspendApp / useUnsuspendApp
  *  - useUploadLogo / useDeleteLogo
  *  - useUploadFavicon / useDeleteFavicon
@@ -34,6 +36,8 @@ export interface Application {
   name: string;
   environment: "development" | "production";
   publishable_key: string;
+  /** Pre-promotion key, still accepted until retired. */
+  legacy_publishable_key: string | null;
   allowed_origins: string[];
   redirect_uris: string[];
   createdBy: string | null;
@@ -69,6 +73,8 @@ export interface Application {
   // Auth subdomain (migration 0018)
   auth_slug: string | null;
   custom_domain: string | null;
+  /** The app's own device approval page; null uses the hosted /device page. */
+  device_verification_uri: string | null;
 }
 
 export interface AppStats {
@@ -104,6 +110,7 @@ export type UpdateApplicationInput = Partial<Pick<Application,
   | "home_url" | "terms_url" | "privacy_url"
   | "from_name" | "from_email" | "support_email"
   | "smtp_host" | "smtp_port" | "smtp_user" | "smtp_secure"
+  | "device_verification_uri"
 >>;
 
 // ── Fetchers ───────────────────────────────────────────────────────────────────
@@ -283,6 +290,46 @@ export function useRotateSecret() {
       const data = await res.json() as { rawSecretKey?: string; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed to rotate");
       return { rawSecretKey: data.rawSecretKey! };
+    },
+  });
+}
+
+// ── Mutation: promote to production / retire legacy key ───────────────────────
+
+export function usePromoteApplication() {
+  const qc = useQueryClient();
+  return useMutation<{ app: Application; rawSecretKey: string }, Error, { id: string }>({
+    mutationFn: async ({ id }) => {
+      const res = await fetch(`/api/admin/apps/${id}/promote`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await readJsonOrError<{ app?: Application; rawSecretKey?: string; error?: string }>(res, "Failed to promote");
+      if (!res.ok) throw new Error(data.error ?? "Failed to promote");
+      return { app: data.app!, rawSecretKey: data.rawSecretKey! };
+    },
+    onSuccess: ({ app }) => {
+      qc.setQueryData(appKeys.detail(app.id), app);
+      void qc.invalidateQueries({ queryKey: appKeys.all });
+    },
+  });
+}
+
+export function useRetireLegacyKey() {
+  const qc = useQueryClient();
+  return useMutation<Application, Error, { id: string }>({
+    mutationFn: async ({ id }) => {
+      const res = await fetch(`/api/admin/apps/${id}/retire-legacy-key`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await readJsonOrError<{ app?: Application; error?: string }>(res, "Failed to retire key");
+      if (!res.ok) throw new Error(data.error ?? "Failed to retire key");
+      return data.app!;
+    },
+    onSuccess: (app) => {
+      qc.setQueryData(appKeys.detail(app.id), app);
+      void qc.invalidateQueries({ queryKey: appKeys.all });
     },
   });
 }
