@@ -46,6 +46,8 @@ export type { UseSignInReturn } from "./hooks/use-sign-in";
 export { useSignUp } from "./hooks/use-sign-up";
 export type { UseSignUpReturn } from "./hooks/use-sign-up";
 export { useUser } from "./hooks/use-user";
+export { useDeviceApproval } from "./hooks/use-device-approval";
+export type { UseDeviceApprovalReturn } from "./hooks/use-device-approval";
 
 /**
  * Rate-limit countdown hook + utilities.
@@ -93,6 +95,17 @@ export type {
 // ── Device sign-in (RFC 8628, vanilla, no React) ──────────────────────────────
 export { startDeviceSignIn } from "./device-sign-in";
 export type { DeviceSignIn, DeviceSignInOptions, DeviceSignInState } from "./device-sign-in";
+
+// ── Device approval on your own /activate page (vanilla, no React) ────────────
+export { approveDeviceRequest, denyDeviceRequest, getDeviceRequest } from "./device-approval";
+export type {
+  DeviceApprovalError,
+  DeviceApprovalErrorCode,
+  DeviceApprovalOptions,
+  DeviceDecisionResult,
+  DeviceRequest,
+  DeviceRequestResult,
+} from "./device-approval";
 
 // ── Key utilities ─────────────────────────────────────────────────────────────
 export { KOVA_HOSTED_AUTH_URL, decodePublishableKey, encodePublishableKey } from "./key";

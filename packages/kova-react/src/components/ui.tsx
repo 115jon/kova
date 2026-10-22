@@ -384,11 +384,11 @@ export function Avatar({
 // Shown in card footer unless the app has a paid plan with hide_branding = true.
 
 function KovaAuthBranding() {
-  const { serverAppearance } = useKovaAuth();
+  const { serverAppearance, authUrl } = useKovaAuth();
   if (serverAppearance?.hideBranding) return null;
   return (
     <a
-      href="https://auth.115jon.site"
+      href={authUrl}
       target="_blank"
       rel="noopener noreferrer"
       data-ra-element="brandingBadge"

@@ -271,6 +271,63 @@ if (result.status === "approved") useBearer(result.sessionToken); // app-scoped 
 the code on the server. Network and 5xx failures while polling are retried quietly until the code
 expires; only a failed start surfaces `{ status: "error", retryable: true }`.
 
+### Approving codes on your own site
+
+By default the device shows a hosted Kova page. To use your own page instead (like
+`discord.com/activate`), set **Device activation URL** in the app's settings, for example
+`https://yourapp.com/activate`. It must be https (or `http://localhost` for a development app)
+and on one of the app's allowed origins. `verificationUriComplete` then becomes
+`https://yourapp.com/activate?code=XXXX-XXXX`.
+
+On that page, sign the user in with the provider as usual, then:
+
+```tsx
+import { useDeviceApproval } from "@115jon/kova-react";
+
+function Activate() {
+  const { isReady, getDeviceRequest, approveDeviceRequest, denyDeviceRequest } = useDeviceApproval();
+  const code = new URLSearchParams(location.search).get("code") ?? "";
+  // 1. getDeviceRequest(code): claims the code for this user and returns
+  //    { ok: true, request: { userCode, status, device, requester, expiresAt } }
+  // 2. Show the device and requester, then approveDeviceRequest(code) or denyDeviceRequest(code).
+}
+```
+
+Outside React, `getDeviceRequest`, `approveDeviceRequest` and `denyDeviceRequest` take
+`{ authUrl, publishableKey, sessionToken, userCode, fetch? }`. They are also exported from
+`@115jon/kova-react/device`. `sessionToken` is the user's app session token
+(`useKovaAuth().sessionToken`). These functions never throw. They resolve to `{ ok: true, … }` or
+`{ ok: false, error, status, message, retryAfterSeconds? }`.
+
+| `error` | Meaning |
+| --- | --- |
+| `invalid_session` | Not signed in to this app, or the session expired. Sign in again. |
+| `origin_not_allowed` | The page is not on an allowed origin, or it runs in a desktop webview. |
+| `invalid_code` / `invalid_request` | Unknown code, or one that is not `XXXX-XXXX`. |
+| `expired_token` | The code expired. Start again on the device. |
+| `access_denied` | Another account already looked this code up. |
+| `not_claimed` | Call `getDeviceRequest` before approving or denying. |
+| `already_processed` | The code was already approved or denied. |
+| `mfa_required` | An organization of this user requires two-factor authentication. |
+| `rate_limited` | Too many attempts. `retryAfterSeconds` says when to retry. |
+| `network_error`, `unexpected_response`, `server_error`, `temporarily_unavailable` | Retry later. |
+
+The server only accepts these calls from a browser page on one of the app's allowed origins,
+with the user's bearer token. Cookies are ignored, and a desktop webview origin
+(`tauri.localhost`) is refused, so a device cannot approve its own code.
+
+**Trust model.** The app session token is the credential for these calls. Anyone holding a user's
+token can approve device sign-ins for that same user and that same app, from a page on one of the
+app's allowed origins. Origin is a header a non-browser client can set to anything, so treat the
+token like the session itself: keep it in memory, never log it, and revoke the session if it leaks.
+A leaked token gives nothing beyond what it already gives (that user, that app).
+
+Every request goes to the `authUrl` you configure. The built-in `https://auth.115jon.site` is
+only a last resort when nothing is configured. Prefer `useDeviceApproval()` or the provider's
+`useKovaAuth().authUrl` over passing URLs by hand. The older device-challenge helper
+`resolveApproveUrl(challenge, kovaUrl)` needs `kovaUrl` passed explicitly. Without it, a challenge
+that has no server `approveUrl` falls back to the default host.
+
 ---
 
 ## Plugin Configuration

@@ -3,11 +3,23 @@
  * No React. No Better Auth. Safe from Electron main, a CLI, or a web app.
  */
 
+/** Last-resort Kova host. Every function here takes the configured URL first. */
 export const DEFAULT_KOVA_URL = "https://auth.115jon.site";
 
 // Per-app device sign-in for desktop/CLI apps; same entry, no React.
 export { startDeviceSignIn } from "./device-sign-in";
 export type { DeviceSignIn, DeviceSignInOptions, DeviceSignInState } from "./device-sign-in";
+
+// Approving a device code from the app's own /activate page; same entry, no React.
+export { approveDeviceRequest, denyDeviceRequest, getDeviceRequest } from "./device-approval";
+export type {
+  DeviceApprovalError,
+  DeviceApprovalErrorCode,
+  DeviceApprovalOptions,
+  DeviceDecisionResult,
+  DeviceRequest,
+  DeviceRequestResult,
+} from "./device-approval";
 
 const CHALLENGE_ID = /^dc_[A-Za-z0-9_-]{20,}$/;
 
@@ -48,8 +60,14 @@ export function approveUrl(kovaUrl: string, id: string): string {
   return `${trimBase(kovaUrl)}/approve/${id}`;
 }
 
-export function resolveApproveUrl(challenge: DeviceChallenge, kovaUrl = DEFAULT_KOVA_URL): string {
-  return challenge.approveUrl ?? approveUrl(kovaUrl, challenge.id);
+/**
+ * Where the user approves a challenge: the server's `approveUrl` (built from
+ * its own configured dashboard host), else `/approve/:id` on the configured
+ * `kovaUrl`. Pass your `authUrl`; the {@link DEFAULT_KOVA_URL} default is a
+ * last resort for callers that configure nothing.
+ */
+export function resolveApproveUrl(challenge: DeviceChallenge, kovaUrl?: string | null): string {
+  return challenge.approveUrl ?? approveUrl(kovaUrl || DEFAULT_KOVA_URL, challenge.id);
 }
 
 export async function createDeviceChallenge(
