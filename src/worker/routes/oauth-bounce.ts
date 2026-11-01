@@ -437,6 +437,10 @@ async function handleSdkBounce(
     userId: session.user.id,
     token: appSessionToken,
     appId: app.id,
+    // A web app lands in this browser, so the token belongs to this browser's
+    // session. A native client (mira://) holds it outside the browser: leave
+    // it standalone so signing this browser out does not sign the app out.
+    parentSessionId: oauthStartUsesSdkBounce(redirectUri) ? null : session.session.id,
     ipAddress: c.req.header("CF-Connecting-IP") ?? null,
     userAgent: c.req.header("User-Agent") ?? null,
   });

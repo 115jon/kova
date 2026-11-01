@@ -306,11 +306,13 @@ hostedAuthRouter.post("/api/hosted/create-ticket", async (c) => {
     const { generateId } = await import("better-auth");
     const appSessionToken = generateId(32);
     const appSessionId = generateId();
+    // Standalone: the native client holds this token, not this browser.
     await insertAppScopedSession(c.env.DB, {
       sessionId: appSessionId,
       userId: session.user.id,
       token: appSessionToken,
       appId: app.id,
+      parentSessionId: null,
       ipAddress: c.req.header("CF-Connecting-IP") ?? null,
       userAgent: c.req.header("User-Agent") ?? null,
     });
@@ -435,11 +437,14 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
     const { generateId } = await import("better-auth");
     const sessionId = generateId();
     const sessionToken = generateId(32);
+    // This row is the hosted subdomain's own cookie session, not a token
+    // minted from one, so it has no parent.
     await insertAppScopedSession(c.env.DB, {
       sessionId,
       userId: ticketResult.userId,
       token: sessionToken,
       appId: app.id,
+      parentSessionId: null,
       ipAddress: c.req.header("CF-Connecting-IP") ?? null,
       userAgent: c.req.header("User-Agent") ?? null,
     });
