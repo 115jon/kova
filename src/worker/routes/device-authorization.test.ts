@@ -171,6 +171,10 @@ describe("device sign-in", () => {
       expect(approved.status).toBe(200);
       expect(approved.body).toEqual({ status: "approved", sessionToken: expect.any(String) });
       expect(h.sqlite.prepare(`SELECT COUNT(*) AS n FROM session WHERE app_id = ?`).get(app.id)).toEqual({ n: 2 });
+      // The device holds this token, not the approving browser: it is
+      // standalone, so no browser's session-token call is ever handed it.
+      const redeemed = (approved.body as { sessionToken: string }).sessionToken;
+      expect(h.sqlite.prepare(`SELECT parent_session_id AS parent FROM session WHERE token = ?`).get(redeemed)).toEqual({ parent: null });
 
       later(5_000);
       expect(await poll(started.deviceCode).then((r) => [r.status, r.body])).toEqual([400, { error: "invalid_device_code" }]);

@@ -330,3 +330,35 @@ describe("SDK handoff platform session restore", () => {
     expect(response.headers.getSetCookie()).toEqual([]);
   });
 });
+
+describe("SDK handoff ties the app session to the right browser session", () => {
+  function handoff(redirectUri: string) {
+    const query = new URLSearchParams({ mode: "sdk", pk: "pk_test", redirect_uri: redirectUri, state: "nonce" });
+    return main.request(`/bounce?${query}`, { headers: { cookie: "better-auth.session_token=signed" } }, environment() as never);
+  }
+
+  it("parents a web app's token on this browser's session, so this browser can reuse it", async () => {
+    insertSession.mockClear();
+    const response = await handoff("https://consumer.example/callback");
+    expect(response.status).toBe(302);
+    expect(insertSession).toHaveBeenCalledOnce();
+    expect(insertSession.mock.calls[0]![1]).toMatchObject({ userId: "user-1", appId: "app-1", parentSessionId: "main-session" });
+  });
+
+  it("leaves a native client's token standalone", async () => {
+    insertSession.mockClear();
+    const response = await handoff("mira://auth");
+    expect(response.status).toBe(302);
+    expect(insertSession).toHaveBeenCalledOnce();
+    expect(insertSession.mock.calls[0]![1]).toMatchObject({ userId: "user-1", appId: "app-1", parentSessionId: null });
+  });
+
+  it("mints a new token on every handoff instead of handing out an existing one", async () => {
+    insertSession.mockClear();
+    await handoff("https://consumer.example/callback");
+    await handoff("https://consumer.example/callback");
+    const [first, second] = insertSession.mock.calls.map(([, input]) => (input as { token: string; sessionId: string }));
+    expect(first!.token).not.toBe(second!.token);
+    expect(first!.sessionId).not.toBe(second!.sessionId);
+  });
+});

@@ -337,12 +337,16 @@ pubAppsRouter.post("/:pk/session-token", async (c) => {
     .run()
     .catch(() => { /* best-effort */ });
 
+  // Keyed on this browser's session: another browser of the same user gets its
+  // own token, so revoking one never signs the others out.
   const appSession = await resolveAppScopedSession(c.env.DB, {
     userId: sessionData.user.id,
     appId: app.id,
+    parentSessionId: sessionData.session.id,
     ipAddress: c.req.header("CF-Connecting-IP") ?? null,
     userAgent: c.req.header("User-Agent") ?? null,
   });
+  if (!appSession) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
   return Response.json({ sessionToken: appSession.token });
 });

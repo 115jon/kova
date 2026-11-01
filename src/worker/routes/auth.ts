@@ -201,9 +201,13 @@ authRouter.all("/*", async (c) => {
       const appSession = await resolveAppScopedSession(db, {
         userId: sessionData.user.id,
         appId: app.id,
+        parentSessionId: sessionData.session.id,
         ipAddress: req.header("CF-Connecting-IP") ?? null,
         userAgent: req.header("User-Agent") ?? null,
       });
+      if (!appSession) {
+        return withHeaders(Response.json(null), request, db, env.KV);
+      }
       return withHeaders(
         Response.json({
           session: appSession,

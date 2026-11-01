@@ -93,24 +93,50 @@ export function pickActiveAppSession<T extends { expiresAt: unknown }>(
   return rows.find((row) => isSessionUnexpired(row.expiresAt, now)) ?? null;
 }
 
+const APP_SESSION_COLUMNS =
+  "id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, activeOrganizationId, app_id";
+
+/**
+ * The app session for this browser. `parentSessionId` is the caller's own
+ * session (normally the auth-domain cookie). Only a session minted for that
+ * parent is reused, so two browsers signed in as the same user get different
+ * tokens, and revoking one leaves the other alone. Rows with no parent (minted
+ * before parent tracking, or standalone device and native tokens) are never
+ * handed to a caller. A caller already holding this app's session gets it back.
+ *
+ * Returns null when the caller's session is gone from the database (a revoked
+ * session can still pass getSession for the life of its cookie cache), belongs
+ * to someone else, or has expired. Fails closed on a database error.
+ */
 export async function resolveAppScopedSession(
   db: D1Database,
   input: {
     userId: string;
     appId: string;
+    parentSessionId: string;
     ipAddress: string | null;
     userAgent: string | null;
   },
-): Promise<AppSessionRow> {
+): Promise<AppSessionRow | null> {
+  const caller = await db
+    .prepare(`SELECT ${APP_SESSION_COLUMNS} FROM session WHERE id = ? LIMIT 1`)
+    .bind(input.parentSessionId)
+    .first<Omit<AppSessionRow, "app_id"> & { app_id: string | null }>()
+    .catch(() => null);
+  if (!caller || caller.userId !== input.userId || !isSessionUnexpired(caller.expiresAt)) {
+    return null;
+  }
+  if (caller.app_id === input.appId) return caller as AppSessionRow;
+
   const existing = await db
     .prepare(
-      `SELECT id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, activeOrganizationId, app_id
+      `SELECT ${APP_SESSION_COLUMNS}
        FROM session
-       WHERE userId = ? AND app_id = ?
+       WHERE parent_session_id = ? AND userId = ? AND app_id = ?
        ORDER BY createdAt DESC
        LIMIT 20`,
     )
-    .bind(input.userId, input.appId)
+    .bind(input.parentSessionId, input.userId, input.appId)
     .all<AppSessionRow>()
     .then((r) => r.results)
     .catch(() => [] as AppSessionRow[]);
@@ -126,6 +152,7 @@ export async function resolveAppScopedSession(
     userId: input.userId,
     token,
     appId: input.appId,
+    parentSessionId: input.parentSessionId,
     ipAddress: input.ipAddress,
     userAgent: input.userAgent,
   });
@@ -144,6 +171,13 @@ export async function resolveAppScopedSession(
   };
 }
 
+/**
+ * `parentSessionId` is the browser session the token is for, so that browser
+ * can reuse it. Leave it null for a token that leaves the browser (device-code
+ * approval, native-app handoff): it is then standalone and never reused.
+ * Signing the parent out does not revoke its app sessions: sign-out is per app
+ * (POST /:pk/revoke-session deletes exactly the token presented).
+ */
 export async function insertAppScopedSession(
   db: D1Database,
   input: {
@@ -151,6 +185,7 @@ export async function insertAppScopedSession(
     userId: string;
     token: string;
     appId: string;
+    parentSessionId?: string | null;
     ipAddress: string | null;
     userAgent: string | null;
     now?: number;
@@ -159,8 +194,8 @@ export async function insertAppScopedSession(
   const stamps = appSessionTimestampValues(input.now);
   await db
     .prepare(
-      `INSERT INTO session (id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, app_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO session (id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, app_id, parent_session_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       input.sessionId,
@@ -172,6 +207,7 @@ export async function insertAppScopedSession(
       input.ipAddress,
       input.userAgent,
       input.appId,
+      input.parentSessionId ?? null,
     )
     .run();
 }

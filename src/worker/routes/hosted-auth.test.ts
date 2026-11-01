@@ -134,6 +134,8 @@ describe("hosted password create-ticket", () => {
         userId: "user_1",
         token: "app_session_token",
         appId: "app_mira",
+        // The native client holds the token, not the hosted page's browser.
+        parentSessionId: null,
       }),
     );
     expect(createSessionTransferCode).toHaveBeenCalledWith(
