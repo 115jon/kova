@@ -77,3 +77,26 @@ Kova derives most of its own host behaviour from `AUTH_URL`: slug hosts, subdoma
 5. Release new Tauri, mobile and native builds.
 6. Cut over Forgejo and re-enroll passkeys.
 7. Redirect the old hosts for a while, then remove the old callbacks, routes and zone.
+
+## Status (2026-11-03)
+
+Stage 1 is live (`e85b630`, worker version `d7d43f16`). Kova serves both hosts. `AUTH_URL` is still `https://auth.115jon.site`. `AUTH_ALT_URLS = "https://auth.115jon.com"` in `wrangler.toml`.
+
+- A request on `auth.115jon.com` or `{slug}.auth.115jon.com` sees `AUTH_URL` as that host (`src/worker/lib/auth-hosts.ts`). Cookies, slug hosts, passkey rpID, the OIDC issuer, email links and device URLs all follow the host that served the request. `.site` behaviour is unchanged.
+- Both hosts are first-party for CORS.
+- DNS: `auth.115jon.com` is a Workers custom domain. `*.auth.115jon.com` is a proxied `AAAA 100::` record. Both take precedence over the DevDoor `*.115jon.com` tunnel wildcard.
+- **Blocked:** `*.auth.115jon.com` has no TLS cert yet. It needs an advanced cert pack for `115jon.com, auth.115jon.com, *.auth.115jon.com` (Google, TXT, 90 days, like the `.site` one). The `cf` login doesn't have ACM permission on the `.com` zone, so order it in the dashboard. The root host is covered by the universal cert.
+- **Not yet on `.com`:** social sign-in. Each provider gets `redirect_uri=https://auth.115jon.com/api/auth/callback/<provider>`. That fails until the callback is registered.
+- Bearer sessions are D1 rows and work on either host. Cookie sessions and passkeys are per host.
+- OIDC issuer per host: `https://auth.115jon.com/api/auth` on `.com`. A consumer that checks `iss` must switch its expected issuer together with its auth URL.
+
+### Origins to add when a consumer moves (Kova app → allowed origins / redirect URIs)
+
+| App | Today | Add when it moves |
+|---|---|---|
+| Logbook `app_e077cc40e8e4` | `logs.115jon.site` | the `.com` origin + `/auth/callback` |
+| Loft `app_f1422bef8a51` | `cdn.115jon.site` | `cdn.115jon.com` + `/dashboard` |
+| Mira `app_c499767b63fa` | `mira-wulx5t.auth.115jon.site` as an origin | `https://mira-wulx5t.auth.115jon.com` |
+| Yap `app_2db95e2369dd` | device page `meet.115jon.site/activate` | Yap thread decides |
+
+House, Tether, Float, DevDoor, House of X, House Screens (dev) and Yap (dev) already use `.com` origins and need no app change. Only their auth URL changes.
