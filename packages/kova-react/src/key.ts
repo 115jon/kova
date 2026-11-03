@@ -14,7 +14,7 @@
  */
 
 /** Hosted Kova service used when neither `authUrl` nor a self-describing key names one. */
-export const KOVA_HOSTED_AUTH_URL = "https://auth.115jon.site";
+export const KOVA_HOSTED_AUTH_URL = "https://auth.115jon.com";
 
 const PREFIX_LIVE = "pk_live_";
 const PREFIX_TEST = "pk_test_";

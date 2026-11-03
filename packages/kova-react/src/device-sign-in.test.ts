@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startDeviceSignIn, type DeviceSignInState } from "./device-sign-in";
 
-const AUTH = "https://auth.115jon.site/";
+const AUTH = "https://auth.115jon.com/";
 const PK = "pk_live_ralph";
-const BASE = `https://auth.115jon.site/api/pub/apps/${PK}/device`;
+const BASE = `https://auth.115jon.com/api/pub/apps/${PK}/device`;
 const DEVICE_CODE = "dvc_secret_device_code_never_in_state_xxxxxxxxx";
 const T0 = new Date("2026-10-21T12:00:00.000Z").getTime();
 
 const STARTED = {
   deviceCode: DEVICE_CODE,
   userCode: "ABCD-EFGH",
-  verificationUri: "https://ralph.auth.115jon.site/device",
-  verificationUriComplete: "https://ralph.auth.115jon.site/device?code=ABCD-EFGH",
+  verificationUri: "https://ralph.auth.115jon.com/device",
+  verificationUriComplete: "https://ralph.auth.115jon.com/device?code=ABCD-EFGH",
   interval: 5,
   expiresIn: 600,
 };

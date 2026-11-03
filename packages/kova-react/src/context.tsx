@@ -131,7 +131,7 @@ export interface KovaAuthContextValue {
    *
    * Calling this signs the user out **of this SDK-powered app only** without
    * invalidating the Better Auth session on the auth server. The platform
-   * admin dashboard (auth.115jon.site) remains signed in. Use `client.signOut()`
+   * admin dashboard (auth.115jon.com) remains signed in. Use `client.signOut()`
    * when you also want to destroy the server-side session for everyone.
    */
   clearSessionToken: () => void;

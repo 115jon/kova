@@ -37,7 +37,7 @@ import type { PluginConfig } from "./types";
 export interface ClientOptions {
   /**
    * Auth server base URL (without trailing slash).
-   * @example "https://auth.115jon.site"
+   * @example "https://auth.115jon.com"
    */
   authUrl: string;
 

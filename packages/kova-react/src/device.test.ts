@@ -15,14 +15,14 @@ describe("kova device client", () => {
   });
 
   it("builds kova urls", () => {
-    expect(challengeCreateUrl("https://auth.115jon.site/")).toBe(
-      "https://auth.115jon.site/api/device-challenges",
+    expect(challengeCreateUrl("https://auth.115jon.com/")).toBe(
+      "https://auth.115jon.com/api/device-challenges",
     );
-    expect(challengePollUrl("https://auth.115jon.site", "dc_abc")).toBe(
-      "https://auth.115jon.site/api/device-challenges/dc_abc",
+    expect(challengePollUrl("https://auth.115jon.com", "dc_abc")).toBe(
+      "https://auth.115jon.com/api/device-challenges/dc_abc",
     );
-    expect(approveUrl("https://auth.115jon.site", "dc_abc")).toBe(
-      "https://auth.115jon.site/approve/dc_abc",
+    expect(approveUrl("https://auth.115jon.com", "dc_abc")).toBe(
+      "https://auth.115jon.com/approve/dc_abc",
     );
   });
 
@@ -32,6 +32,6 @@ describe("kova device client", () => {
         id: "dc_fTXm7tqnkU_rNIoNCB8IQbRVf6L26znK6Yj2OG8Ywyk",
         status: "pending",
       }),
-    ).toBe("https://auth.115jon.site/approve/dc_fTXm7tqnkU_rNIoNCB8IQbRVf6L26znK6Yj2OG8Ywyk");
+    ).toBe("https://auth.115jon.com/approve/dc_fTXm7tqnkU_rNIoNCB8IQbRVf6L26znK6Yj2OG8Ywyk");
   });
 });

@@ -225,8 +225,8 @@ export interface KovaAuthConfig {
 
   /**
    * Auth server base URL. Defaults to the hosted Kova service
-   * (`https://auth.115jon.site`); set it for a self-hosted or local Kova.
-   * @example "https://auth.115jon.site"
+   * (`https://auth.115jon.com`); set it for a self-hosted or local Kova.
+   * @example "https://auth.115jon.com"
    */
   authUrl?: string;
 

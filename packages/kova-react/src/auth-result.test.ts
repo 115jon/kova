@@ -54,13 +54,13 @@ describe("passkey helpers", () => {
   });
 
   it("only offers passkeys on the auth server's own origin", () => {
-    const auth = "https://auth.115jon.site";
-    expect(passkeyUsableHere(auth, { origin: "https://auth.115jon.site" }, true)).toBe(true);
+    const auth = "https://auth.115jon.com";
+    expect(passkeyUsableHere(auth, { origin: "https://auth.115jon.com" }, true)).toBe(true);
     expect(passkeyUsableHere(auth, { origin: "https://app.example.com" }, true)).toBe(false);
-    expect(passkeyUsableHere(auth, { origin: "https://slug.auth.115jon.site" }, true)).toBe(false);
-    expect(passkeyUsableHere(auth, { origin: "https://auth.115jon.site" }, false)).toBe(false);
+    expect(passkeyUsableHere(auth, { origin: "https://slug.auth.115jon.com" }, true)).toBe(false);
+    expect(passkeyUsableHere(auth, { origin: "https://auth.115jon.com" }, false)).toBe(false);
     expect(passkeyUsableHere(auth, undefined, true)).toBe(false);
-    expect(passkeyUsableHere("not a url", { origin: "https://auth.115jon.site" }, true)).toBe(false);
+    expect(passkeyUsableHere("not a url", { origin: "https://auth.115jon.com" }, true)).toBe(false);
   });
 });
 
@@ -76,7 +76,7 @@ describe("signUpNeedsVerification", () => {
 });
 
 describe("emailLinkCallbackUrl", () => {
-  const auth = "https://auth.115jon.site";
+  const auth = "https://auth.115jon.com";
 
   it("sends an app's emailed links back through the auth server's bounce", () => {
     const url = new URL(emailLinkCallbackUrl(auth, "pk_live_x", "https://app.example.com/home"));
@@ -97,19 +97,19 @@ describe("emailLinkCallbackUrl", () => {
   });
 
   it("leaves the callback alone when there is no publishable key", () => {
-    expect(emailLinkCallbackUrl(auth, undefined, "https://auth.115jon.site/sign-in")).toBe(
-      "https://auth.115jon.site/sign-in",
+    expect(emailLinkCallbackUrl(auth, undefined, "https://auth.115jon.com/sign-in")).toBe(
+      "https://auth.115jon.com/sign-in",
     );
   });
 });
 
 describe("buildSdkBounceUrl", () => {
   it("does not double the slash when authUrl ends with one", () => {
-    expect(buildSdkBounceUrl("https://auth.115jon.site/", "pk_x", "https://app.example.com/")).toBe(
-      "https://auth.115jon.site/api/hosted/oauth-complete?mode=sdk&pk=pk_x&redirect_uri=https%3A%2F%2Fapp.example.com%2F",
+    expect(buildSdkBounceUrl("https://auth.115jon.com/", "pk_x", "https://app.example.com/")).toBe(
+      "https://auth.115jon.com/api/hosted/oauth-complete?mode=sdk&pk=pk_x&redirect_uri=https%3A%2F%2Fapp.example.com%2F",
     );
-    expect(buildSdkBounceUrl("https://auth.115jon.site//", "pk_x", "https://app.example.com/")).toBe(
-      buildSdkBounceUrl("https://auth.115jon.site", "pk_x", "https://app.example.com/"),
+    expect(buildSdkBounceUrl("https://auth.115jon.com//", "pk_x", "https://app.example.com/")).toBe(
+      buildSdkBounceUrl("https://auth.115jon.com", "pk_x", "https://app.example.com/"),
     );
   });
 });
@@ -118,7 +118,7 @@ describe("buildSdkOAuthStartUrl", () => {
   it("forwards the state only when given", () => {
     const withState = new URL(
       buildSdkOAuthStartUrl(
-        "https://auth.115jon.site",
+        "https://auth.115jon.com",
         "pk_x",
         "github",
         "https://app.example.com/",
@@ -133,7 +133,7 @@ describe("buildSdkOAuthStartUrl", () => {
       error_callback_url: "https://app.example.com/e",
       state: "st_1",
     });
-    const without = new URL(buildSdkOAuthStartUrl("https://auth.115jon.site", "pk_x", "github", "https://a/", "https://a/e"));
+    const without = new URL(buildSdkOAuthStartUrl("https://auth.115jon.com", "pk_x", "github", "https://a/", "https://a/e"));
     expect(without.searchParams.has("state")).toBe(false);
   });
 });

@@ -4,7 +4,7 @@
  *
  * ```ts
  * const signIn = startDeviceSignIn({
- *   authUrl: "https://auth.115jon.site",
+ *   authUrl: "https://auth.115jon.com",
  *   publishableKey: "pk_live_…",
  *   device: { hostname: os.hostname(), platform: "Windows" },
  *   onChange(state) {

@@ -53,7 +53,7 @@ createRoot(document.getElementById("root")!).render(
 );
 ```
 
-The provider talks to the hosted Kova service (`https://auth.115jon.site`) by
+The provider talks to the hosted Kova service (`https://auth.115jon.com`) by
 default. For a self-hosted or local Kova, also pass `authUrl`:
 
 ```tsx
@@ -253,7 +253,7 @@ For desktop apps, CLIs and TVs (RFC 8628). No React; also exported from `@115jon
 import { startDeviceSignIn } from "@115jon/kova-react";
 
 const signIn = startDeviceSignIn({
-  authUrl: "https://auth.115jon.site",
+  authUrl: "https://auth.115jon.com",
   publishableKey: "pk_live_...",
   device: { hostname: "ada-laptop", platform: "Windows" },
   onChange(state) {
@@ -330,7 +330,7 @@ code; it cannot touch another account's claim or a decided code. Origin is a hea
 token like the session itself: keep it in memory, never log it, and revoke the session if it leaks.
 A leaked token gives nothing beyond what it already gives (that user, that app).
 
-Every request goes to the `authUrl` you configure. The built-in `https://auth.115jon.site` is
+Every request goes to the `authUrl` you configure. The built-in `https://auth.115jon.com` is
 only a last resort when nothing is configured. Prefer `useDeviceApproval()` or the provider's
 `useKovaAuth().authUrl` over passing URLs by hand. The older device-challenge helper
 `resolveApproveUrl(challenge, kovaUrl)` needs `kovaUrl` passed explicitly. Without it, a challenge

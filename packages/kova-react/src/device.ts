@@ -4,7 +4,7 @@
  */
 
 /** Last-resort Kova host. Every function here takes the configured URL first. */
-export const DEFAULT_KOVA_URL = "https://auth.115jon.site";
+export const DEFAULT_KOVA_URL = "https://auth.115jon.com";
 
 // Per-app device sign-in for desktop/CLI apps; same entry, no React.
 export { startDeviceSignIn } from "./device-sign-in";
