@@ -61,6 +61,6 @@ describe("email sender", () => {
     await sendEmail({ to: "a@example.com", subject: "s", html: "h", apiKey: "re_x" });
     await sendEmail({ to: "a@example.com", subject: "s", html: "h", apiKey: "re_x", from: "  " });
     expect(sent.map((m) => m.from)).toEqual(["Kova <noreply@115jon.com>", DEFAULT_EMAIL_FROM, DEFAULT_EMAIL_FROM]);
-    expect(DEFAULT_EMAIL_FROM).toBe("kova-auth <noreply@115jon.site>");
+    expect(DEFAULT_EMAIL_FROM).toBe("Kova <noreply@115jon.com>");
   });
 });

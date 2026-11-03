@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { devEmailCaptureEnabled, magicLinkEmail, sendEmail } from "./email";
+import { devEmailCaptureEnabled, invitationEmail, magicLinkEmail, resetPasswordEmail, sendEmail, twoFactorOtpEmail, verificationEmail } from "./email";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -55,5 +55,44 @@ describe("sendEmail", () => {
     await sendEmail({ to: "a@b.test", subject: "s", html: "<p>x</p>", apiKey: "re_test" });
 
     expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+});
+
+describe("templates", () => {
+  const url = "https://auth.115jon.com/api/auth/reset-password/abc?callbackURL=%2F";
+  const all = [
+    verificationEmail(url),
+    resetPasswordEmail(url),
+    twoFactorOtpEmail("482913"),
+    magicLinkEmail(url),
+    invitationEmail({ inviterName: "Jon", inviterEmail: "jon@example.com", orgName: "House", inviteLink: url, role: "admin" }),
+  ];
+
+  it("keep every style attribute intact and leak no template text", () => {
+    for (const { html } of all) {
+      // A double quote inside style="" closes the attribute and drops the rest.
+      for (const [, style] of html.matchAll(/style="([^"]*)"/g)) expect(style).not.toMatch(/font-family:\s*$/);
+      expect(html).not.toMatch(/font-family:"/);
+      expect(html).not.toContain("${");
+      expect(html).toContain("https://auth.115jon.com/email/kova-mark.png");
+    }
+  });
+
+  it("brand the subject as Kova and put the code first", () => {
+    expect(all.map((m) => m.subject)).toEqual([
+      "Verify your email for Kova",
+      "Reset your Kova password",
+      "482913 is your Kova sign-in code",
+      "Your Kova sign-in link",
+      "Jon invited you to House on Kova",
+    ]);
+  });
+
+  it("escape names that came from users", () => {
+    const { html } = invitationEmail({ inviterName: "<b>x</b>", inviterEmail: "a@b.c", orgName: "A & <i>B</i>", inviteLink: url, role: "member" });
+    expect(html).not.toContain("<b>x</b>");
+    expect(html).not.toContain("<i>B</i>");
+    expect(html).toContain("A &amp; &lt;i&gt;B&lt;/i&gt;");
+    expect(html).toContain("as a <strong");
   });
 });
