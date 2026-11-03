@@ -84,7 +84,7 @@ export function LandingPage() {
         <span className="shore-brand"><KovaLogo size={24} variant="full" /></span>
         <div className="shore-footer-links">
           <a href={SOURCE_URL} rel="noreferrer" target="_blank">Source</a>
-          <span>Secured by Kova · auth.115jon.site</span>
+          <span>Secured by Kova · auth.115jon.com</span>
         </div>
       </footer>
     </div>

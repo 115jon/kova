@@ -149,7 +149,7 @@ export function AccountChooser({ appearance, active, onContinue, onUseAnother }:
         <div data-ra-element="cardFooter">
           <div data-ra-footer-badges="">
             {/* Same badge as the SDK card footer, which this card stands in for. */}
-            <a href="https://auth.115jon.site" target="_blank" rel="noopener noreferrer" data-ra-element="brandingBadge">
+            <a href="https://auth.115jon.com" target="_blank" rel="noopener noreferrer" data-ra-element="brandingBadge">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <circle cx="12" cy="12" r="12" fill="#0283a7" />
                 <path d="M8.5 7v10M15.5 7.5 11 12l4.5 4.5" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
