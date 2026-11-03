@@ -4,7 +4,7 @@
  * the host it arrived on as AUTH_URL.
  */
 import { describe, expect, it } from "vitest";
-import { alternateAuthOrigins, envForHost, matchAlternateAuthOrigin } from "./lib/auth-hosts";
+import { alternateAuthOrigins, envForHost, legacyPageRedirect, matchAlternateAuthOrigin } from "./lib/auth-hosts";
 import { staticOrigins } from "./middleware/cors";
 import { createHarness } from "./test-support/auth-harness";
 
@@ -109,5 +109,33 @@ describe("worker on both hosts", () => {
       const body = (await response.json()) as { id: string; approveUrl: string };
       expect(body.approveUrl).toBe(`${host}/approve/${body.id}`);
     }
+  });
+});
+
+describe("legacy page redirect after cutover", () => {
+  const after = { AUTH_URL: COM, DASHBOARD_URL: COM, AUTH_ALT_URLS: SITE, AUTH_REDIRECT_ALT_PAGES: "true" };
+  const get = (url: string, method = "GET") => legacyPageRedirect(after, new Request(url, { method }));
+
+  it("sends old-host pages to the same path on the new host", () => {
+    const response = get(`${SITE}/sign-in?pk=pk_1&redirect_url=https%3A%2F%2Fyap.115jon.com`);
+    expect(response?.status).toBe(301);
+    expect(response?.headers.get("location")).toBe(`${COM}/sign-in?pk=pk_1&redirect_url=https%3A%2F%2Fyap.115jon.com`);
+  });
+
+  it("keeps API, discovery, health, slug hosts, POSTs and the new host untouched", () => {
+    expect(get(`${SITE}/api/auth/get-session`)).toBeNull();
+    expect(get(`${SITE}/.well-known/openid-configuration`)).toBeNull();
+    expect(get(`${SITE}/health`)).toBeNull();
+    expect(get("https://mira-wulx5t.auth.115jon.site/sign-in")).toBeNull();
+    expect(get(`${SITE}/sign-in`, "POST")).toBeNull();
+    expect(get(`${COM}/sign-in`)).toBeNull();
+    expect(legacyPageRedirect({ ...after, AUTH_REDIRECT_ALT_PAGES: undefined }, new Request(`${SITE}/`))).toBeNull();
+  });
+
+  it("is wired into the worker", async () => {
+    const h = createHarness({ env: after });
+    const response = await h.fetch(`${SITE}/applications`, { redirect: "manual" });
+    expect(response.status).toBe(301);
+    expect((await h.fetch(`${SITE}/health`)).status).toBe(200);
   });
 });

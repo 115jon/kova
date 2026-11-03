@@ -17,6 +17,8 @@ interface Env {
   DASHBOARD_URL: string;
   /** Other root auth origins served alongside AUTH_URL during a domain move, comma-separated. */
   AUTH_ALT_URLS?: string;
+  /** "true": 301 page requests on AUTH_ALT_URLS root hosts to AUTH_URL (API paths keep working). */
+  AUTH_REDIRECT_ALT_PAGES?: string;
   BETTER_AUTH_SECRET: string;
   FORGEJO_OIDC_CLIENT_ID?: string;
   FORGEJO_OIDC_CLIENT_SECRET?: string;

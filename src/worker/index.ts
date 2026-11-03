@@ -30,7 +30,7 @@
 import { Hono } from "hono";
 import startHandler from "@tanstack/react-start/server-entry";
 import { AppCounter } from "./do/app-counter";
-import { envForHost } from "./lib/auth-hosts";
+import { envForHost, legacyPageRedirect } from "./lib/auth-hosts";
 import { platformSessionOnly } from "./lib/platform-session";
 import { resolveAppByHost } from "./lib/subdomain";
 import { corsMiddleware } from "./middleware/cors";
@@ -240,6 +240,8 @@ export function createWorker(
     fetch(request: Request, baseEnv: Env, ctx: ExecutionContext) {
       // auth.115jon.com and auth.115jon.site can both be live during a domain
       // move; each request sees AUTH_URL as the host it arrived on.
+      const redirect = legacyPageRedirect(baseEnv, request);
+      if (redirect) return redirect;
       const env = envForHost(baseEnv, new URL(request.url).hostname);
       if (shouldUseHono(request, env.AUTH_URL)) {
         return apiFetch(request, env, ctx);

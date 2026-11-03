@@ -79,3 +79,27 @@ export function envForHost<E extends { AUTH_URL: string; DASHBOARD_URL?: string;
     ...(dashboard && dashboard === canonical ? { DASHBOARD_URL: alternate } : {}),
   };
 }
+
+/** Paths that keep answering on an old host while it redirects: API, discovery, health. */
+const LEGACY_API_PATH = /^\/(?:api\/|\.well-known\/|health$)/;
+
+/**
+ * With AUTH_REDIRECT_ALT_PAGES = "true", a page request (GET/HEAD) on an
+ * alternate root host is sent 301 to the same path on AUTH_URL. API,
+ * discovery and health paths, and {slug}.auth… hosts, keep working there for
+ * deployed clients that still call the old host.
+ */
+export function legacyPageRedirect(
+  env: { AUTH_URL?: string; AUTH_ALT_URLS?: string; AUTH_REDIRECT_ALT_PAGES?: string },
+  request: Request,
+): Response | null {
+  if (env.AUTH_REDIRECT_ALT_PAGES !== "true" || !env.AUTH_URL) return null;
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  const url = new URL(request.url);
+  const alternate = matchAlternateAuthOrigin(env, url.hostname);
+  if (!alternate || new URL(alternate).hostname !== url.hostname) return null;
+  if (LEGACY_API_PATH.test(url.pathname)) return null;
+  const canonical = originOf(env.AUTH_URL);
+  if (!canonical) return null;
+  return Response.redirect(`${canonical}${url.pathname}${url.search}`, 301);
+}
