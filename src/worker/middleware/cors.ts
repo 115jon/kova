@@ -38,6 +38,7 @@
  *   data is never written to KV.
  */
 
+import { alternateAuthOrigins } from "../lib/auth-hosts";
 import type { Context, MiddlewareHandler } from "hono";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import {
@@ -93,7 +94,7 @@ export const STATIC_ORIGINS = new Set<string>([
 ]);
 
 /** The env values that name Kova's own hosts. */
-export type FirstPartyHosts = { AUTH_URL?: string; DASHBOARD_URL?: string };
+export type FirstPartyHosts = { AUTH_URL?: string; DASHBOARD_URL?: string; AUTH_ALT_URLS?: string };
 
 function originOf(value: string | undefined): string | null {
   if (!value) return null;
@@ -106,13 +107,15 @@ function originOf(value: string | undefined): string | null {
 
 /**
  * STATIC_ORIGINS plus the auth server's and dashboard's own origins, taken
- * from AUTH_URL and DASHBOARD_URL rather than a hardcoded host.
+ * from AUTH_URL, DASHBOARD_URL and AUTH_ALT_URLS rather than a hardcoded host.
  */
 export function staticOrigins(env?: FirstPartyHosts): Set<string> {
   const origins = new Set(STATIC_ORIGINS);
   for (const origin of [originOf(env?.AUTH_URL), originOf(env?.DASHBOARD_URL)]) {
     if (origin) origins.add(origin);
   }
+  // Every other Kova auth host (a domain move runs both for a while).
+  if (env) for (const origin of alternateAuthOrigins(env)) origins.add(origin);
   return origins;
 }
 

@@ -17,6 +17,7 @@
 //   /health                     → Health check
 //   /.well-known/*              → OIDC discovery alias → /api/auth/.well-known/*
 //   {slug}.auth.115jon.site/*   → Hosted auth subdomain (per-app isolated sign-in)
+//   AUTH_ALT_URLS hosts         → same routes, with AUTH_URL set to that host (lib/auth-hosts)
 //   Dashboard documents/assets   → TanStack Start server entry
 //
 // Cloudflare primitives:
@@ -29,6 +30,7 @@
 import { Hono } from "hono";
 import startHandler from "@tanstack/react-start/server-entry";
 import { AppCounter } from "./do/app-counter";
+import { envForHost } from "./lib/auth-hosts";
 import { platformSessionOnly } from "./lib/platform-session";
 import { resolveAppByHost } from "./lib/subdomain";
 import { corsMiddleware } from "./middleware/cors";
@@ -235,7 +237,10 @@ export function createWorker(
   assetFetch: WorkerFetch = (request, env) => env.ASSETS.fetch(request),
 ) {
   return {
-    fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    fetch(request: Request, baseEnv: Env, ctx: ExecutionContext) {
+      // auth.115jon.com and auth.115jon.site can both be live during a domain
+      // move; each request sees AUTH_URL as the host it arrived on.
+      const env = envForHost(baseEnv, new URL(request.url).hostname);
       if (shouldUseHono(request, env.AUTH_URL)) {
         return apiFetch(request, env, ctx);
       }

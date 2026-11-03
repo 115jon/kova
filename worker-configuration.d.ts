@@ -15,6 +15,8 @@ interface Env {
   // ── Runtime vars (wrangler.toml [vars] + secrets) ────────────
   AUTH_URL: string;
   DASHBOARD_URL: string;
+  /** Other root auth origins served alongside AUTH_URL during a domain move, comma-separated. */
+  AUTH_ALT_URLS?: string;
   BETTER_AUTH_SECRET: string;
   FORGEJO_OIDC_CLIENT_ID?: string;
   FORGEJO_OIDC_CLIENT_SECRET?: string;

@@ -37,8 +37,27 @@ custom_domain = true
 pattern = "*.auth.115jon.site/*"
 zone_name = "115jon.site"
 
+# 115jon.com move: the same worker also answers on auth.115jon.com and
+# {slug}.auth.115jon.com. AUTH_URL (secret) stays the canonical host; requests
+# on a host in AUTH_ALT_URLS see AUTH_URL as that host (src/worker/lib/auth-hosts.ts).
+# *.auth.115jon.com needs its own proxied DNS record and an advanced cert: once
+# auth.115jon.com exists, the zone's *.115jon.com tunnel wildcard stops
+# answering below it, and the universal cert covers one label only.
+[[routes]]
+pattern = "auth.115jon.com"
+zone_name = "115jon.com"
+custom_domain = true
+
+[[routes]]
+pattern = "*.auth.115jon.com/*"
+zone_name = "115jon.com"
+
 [vars]
 CDN_URL = "https://cdn.115jon.site"
+# Extra root auth hosts served alongside AUTH_URL, comma-separated. Social
+# sign-in on an extra host needs its /api/auth/callback/<provider> URLs
+# registered with each provider. Local dev clears it in .dev.vars.
+AUTH_ALT_URLS = "https://auth.115jon.com"
 
 # ── D1 Database ──────────────────────────────────────────────────────────────
 [[d1_databases]]
