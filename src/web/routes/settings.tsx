@@ -710,7 +710,7 @@ function SettingsPage() {
     const img = localImage ?? (session?.user as any)?.image as string | null;
     // CDN URLs are absolute; OAuth pictures from Google/Discord are also absolute
     // but NOT routed through our CDN domain.
-    return !!img && img.includes("cdn.115jon.site") || !!img && img.includes("localhost:5173");
+    return !!img && /cdn\.115jon\.(com|site)|localhost:5173/.test(img);
   };
 
   const handleRemoveAvatar = async () => {
