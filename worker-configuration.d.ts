@@ -19,6 +19,8 @@ interface Env {
   AUTH_ALT_URLS?: string;
   /** "true": 301 page requests on AUTH_ALT_URLS root hosts to AUTH_URL (API paths keep working). */
   AUTH_REDIRECT_ALT_PAGES?: string;
+  /** WebAuthn rpID for auth hosts at or under this domain, e.g. "115jon.com". */
+  PASSKEY_RP_ID?: string;
   BETTER_AUTH_SECRET: string;
   FORGEJO_OIDC_CLIENT_ID?: string;
   FORGEJO_OIDC_CLIENT_SECRET?: string;

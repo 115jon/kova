@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { alternateAuthOrigins, envForHost, legacyPageRedirect, matchAlternateAuthOrigin } from "./lib/auth-hosts";
+import { passkeyRpId } from "./lib/passkey-origins";
 import { staticOrigins } from "./middleware/cors";
 import { createHarness } from "./test-support/auth-harness";
 
@@ -137,5 +138,17 @@ describe("legacy page redirect after cutover", () => {
     const response = await h.fetch(`${SITE}/applications`, { redirect: "manual" });
     expect(response.status).toBe(301);
     expect((await h.fetch(`${SITE}/health`)).status).toBe(200);
+  });
+});
+
+describe("passkey rpID", () => {
+  it("uses PASSKEY_RP_ID on hosts under it and the hostname elsewhere", () => {
+    const env = { ...base, PASSKEY_RP_ID: "115jon.com" };
+    expect(passkeyRpId(envForHost(env, "auth.115jon.com"))).toBe("115jon.com");
+    expect(passkeyRpId(env)).toBe("auth.115jon.site");
+    expect(passkeyRpId({ AUTH_URL: "https://auth.lvh.me", PASSKEY_RP_ID: "115jon.com" })).toBe("auth.lvh.me");
+    expect(passkeyRpId({ AUTH_URL: "https://auth.115jon.com" })).toBe("auth.115jon.com");
+    expect(passkeyRpId({ AUTH_URL: "not a url" })).toBe("localhost");
+    expect(passkeyRpId({ AUTH_URL: "https://evil115jon.com", PASSKEY_RP_ID: "115jon.com" })).toBe("evil115jon.com");
   });
 });

@@ -19,7 +19,7 @@ import {
 import { getAppId } from "./lib/app-context";
 import { kovaDeviceGrant, kovaDeviceRedemption } from "./lib/device-authorization";
 import { DEVICE_CODE_INTERVAL_SECONDS, DEVICE_CODE_TTL_SECONDS, generateDeviceCode } from "./lib/device-code";
-import { passkeyOrigins } from "./lib/passkey-origins";
+import { passkeyOrigins, passkeyRpId } from "./lib/passkey-origins";
 import {
   legacyIdTokenClaims,
   legacyUserInfoClaims,
@@ -617,13 +617,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
           // Passkey (WebAuthn) — biometric / hardware key sign-in.
           passkey({
             rpName: "kova-auth",
-            rpID: (() => {
-              try {
-                return new URL(env.AUTH_URL).hostname;
-              } catch {
-                return "localhost";
-              }
-            })(),
+            rpID: passkeyRpId(env),
             origin: passkeyOrigins(env),
           }),
 

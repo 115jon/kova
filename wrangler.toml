@@ -58,6 +58,8 @@ CDN_URL = "https://cdn.115jon.com"
 # sign-in on an extra host needs its /api/auth/callback/<provider> URLs
 # registered with each provider. Local dev clears it in .dev.vars.
 AUTH_ALT_URLS = "https://auth.115jon.com"
+# Passkeys on auth.115jon.com register for 115jon.com, so *.115jon.com apps can use them.
+PASSKEY_RP_ID = "115jon.com"
 
 # ── D1 Database ──────────────────────────────────────────────────────────────
 [[d1_databases]]
