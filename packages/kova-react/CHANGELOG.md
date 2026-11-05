@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.0](https://github.com/115jon/kova/compare/kova-react-v1.2.0...kova-react-v1.3.0) (2026-11-05)
+
+
+### Features
+
+* **sdk:** ✨ add a security panel and an in-app browser notice ([ece258a](https://github.com/115jon/kova/commit/ece258a5b33570e42854751c2e08f8b276dfa239))
+* **sdk:** ✨ default to https://auth.115jon.com ([72e1840](https://github.com/115jon/kova/commit/72e18409dca30ea2b252b1a87cdaf2e276565582))
+
+
+### Bug Fixes
+
+* **sdk:** 🐛 stop sign-out from minting a fresh app token ([8c8e0d7](https://github.com/115jon/kova/commit/8c8e0d78badf2853b329535fbeaed4c57a8060d3))
+
 ## [1.2.0](https://github.com/115jon/kova/compare/kova-react-v1.1.0...kova-react-v1.2.0) (2026-10-22)
 
 
