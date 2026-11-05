@@ -8,7 +8,7 @@ import React, { type CSSProperties, type ReactNode } from "react";
 import { useKovaAuth } from "../context";
 import type { AppearanceElements } from "../types";
 
-const visuallyHiddenStyle: CSSProperties = {
+export const visuallyHiddenStyle: CSSProperties = {
   position: "absolute",
   width: 1,
   height: 1,

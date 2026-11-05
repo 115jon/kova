@@ -490,6 +490,197 @@ ${declarations}
   text-align: left;
 }
 
+/* UserSecurity: sessions + activity. Quiet rows, one accent per state. */
+[data-ra-element="userSecurity"] {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  font-family: var(--ra-font);
+}
+[data-ra-security-list] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+[data-ra-element="userSecuritySessionItem"],
+[data-ra-element="userSecurityActivityItem"] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--ra-color-border);
+  outline: none;
+}
+[data-ra-security-list] > :first-child { border-top: none; }
+[data-ra-element="userSecurityActivityItem"] { align-items: flex-start; }
+[data-ra-security-title] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ra-color-text);
+  overflow-wrap: anywhere;
+}
+[data-ra-security-meta] {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--ra-color-text-tertiary);
+  overflow-wrap: anywhere;
+}
+[data-ra-security-action] { flex: 1; min-width: 0; }
+[data-ra-security-time] {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ra-color-text-tertiary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+[data-ra-security-dot] {
+  width: 6px;
+  height: 6px;
+  margin-top: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--ra-color-border-strong);
+}
+[data-ra-element="userSecurityActivityItem"][data-failed="true"] [data-ra-security-dot] {
+  background: color-mix(in srgb, var(--ra-color-error) 70%, transparent);
+}
+[data-ra-element="userSecurityActivityItem"][data-failed="true"] [data-ra-security-action] {
+  color: color-mix(in srgb, var(--ra-color-error) 70%, var(--ra-color-text));
+}
+[data-ra-element="userSecurityBadge"] {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border: 1px solid var(--ra-color-border);
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.6;
+  color: var(--ra-color-text-secondary);
+  white-space: nowrap;
+}
+[data-ra-element="userSecurityBadge"][data-tone="primary"] {
+  border-color: color-mix(in srgb, var(--ra-color-primary) 35%, transparent);
+  color: var(--ra-color-primary);
+}
+[data-ra-security-footer] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ra-color-border);
+}
+[data-ra-element="userSecurityButton"],
+[data-ra-in-app-copy] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 10px;
+  flex-shrink: 0;
+  border-radius: var(--ra-radius-sm, 5px);
+  border: 1px solid var(--ra-color-border-strong);
+  background: transparent;
+  color: var(--ra-color-text-secondary);
+  font-family: var(--ra-font);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 100ms ease, color 100ms ease, border-color 100ms ease, opacity 150ms ease;
+}
+[data-ra-element="userSecurityButton"][data-destructive="true"] { color: var(--ra-color-error); }
+[data-ra-element="userSecurityButton"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+[data-ra-element="userSecurityButton"][aria-busy="true"] { cursor: progress; }
+[data-ra-root] [data-ra-element="userSecurity"] h3:focus-visible,
+[data-ra-element="userSecurityActivityItem"]:focus-visible {
+  outline: 2px solid var(--ra-color-primary);
+  outline-offset: 2px;
+}
+
+/* In-app browser notice above the SignIn / SignUp form. */
+[data-ra-element="inAppBrowserNotice"] {
+  position: relative;
+  margin-bottom: 16px;
+  padding: 12px 40px 12px 14px;
+  border-radius: min(var(--ra-radius-sm), 12px);
+  border: 1px solid color-mix(in srgb, var(--ra-color-primary) 24%, transparent);
+  background: color-mix(in srgb, var(--ra-color-primary) 8%, transparent);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ra-color-text);
+  text-align: left;
+}
+[data-ra-element="inAppBrowserNotice"] p { margin: 0; text-wrap: pretty; }
+[data-ra-in-app-actions] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 10px;
+}
+[data-ra-in-app-status] {
+  font-size: 13px;
+  color: var(--ra-color-success);
+}
+[data-ra-in-app-dismiss] {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--ra-radius-sm, 5px);
+  background: transparent;
+  color: var(--ra-color-text-tertiary);
+  cursor: pointer;
+}
+[data-ra-in-app-url] {
+  width: 100%;
+  height: 36px;
+  margin-top: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--ra-color-border);
+  border-radius: var(--ra-radius-sm);
+  background: var(--ra-color-surface-raised);
+  font-family: var(--ra-font-mono, var(--ra-font));
+  font-size: 13px;
+  color: var(--ra-color-text);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-ra-element="userSecurityButton"]:hover:not(:disabled),
+  [data-ra-in-app-copy]:hover {
+    background: color-mix(in srgb, var(--ra-color-text) 6%, transparent);
+    color: var(--ra-color-text);
+  }
+  [data-ra-element="userSecurityButton"][data-destructive="true"]:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--ra-color-error) 10%, transparent);
+    color: var(--ra-color-error);
+  }
+  [data-ra-in-app-dismiss]:hover { color: var(--ra-color-text); }
+}
+@media (pointer: coarse) {
+  [data-ra-element="userSecurityButton"],
+  [data-ra-in-app-copy] { min-height: 40px; }
+  [data-ra-in-app-dismiss] { width: 40px; height: 40px; top: 2px; right: 2px; }
+}
+
 @media (hover: hover) and (pointer: fine) {
   [data-ra-element="tab"]:hover { color: var(--ra-color-text); }
   [data-ra-element="formSubmitButton"]:hover:not(:disabled) { background: var(--ra-color-primary-hover); }
@@ -535,7 +726,8 @@ ${declarations}
   [data-ra-element="cardBody"] { padding: 22px 20px; }
   [data-ra-element="cardFooter"] { padding: 0 20px 20px; }
   /* 16px stops iOS from zooming into the field. */
-  [data-ra-element="formFieldInput"] { font-size: 16px; }
+  [data-ra-element="formFieldInput"],
+  [data-ra-in-app-url] { font-size: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

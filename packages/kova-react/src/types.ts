@@ -108,6 +108,15 @@ export interface AppearanceElements {
   orgSwitcherTrigger?: React.CSSProperties;
   orgSwitcherMenu?: React.CSSProperties;
   orgSwitcherOrgItem?: React.CSSProperties;
+
+  // ── UserSecurity ─────────────────────────────────────────────────────
+  userSecurity?: React.CSSProperties;
+  userSecuritySessionItem?: React.CSSProperties;
+  userSecurityActivityItem?: React.CSSProperties;
+  userSecurityButton?: React.CSSProperties;
+
+  // ── In-app browser notice (SignIn / SignUp) ──────────────────────────
+  inAppBrowserNotice?: React.CSSProperties;
 }
 
 /**
@@ -442,6 +451,15 @@ export interface UserButtonProps {
   showName?: boolean;
   /** Avatar diameter in px. @default 32 */
   size?: number;
+  /** Show the "Security" item (sessions and recent activity). @default true */
+  showSecurity?: boolean;
+  appearance?: Appearance;
+  className?: string;
+}
+
+export interface UserSecurityProps {
+  /** Activity events fetched per "Load more". 1 to 50. @default 20 */
+  activityPageSize?: number;
   appearance?: Appearance;
   className?: string;
 }

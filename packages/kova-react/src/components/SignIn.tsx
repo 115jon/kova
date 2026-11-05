@@ -45,6 +45,7 @@ import type {
   SignInTab,
 } from "../types";
 import { FingerprintIcon, MailIcon } from "./icons";
+import { InAppBrowserNotice } from "./InAppBrowserNotice";
 import { resolveAbsoluteUrl, SocialButtons } from "./social-buttons";
 import {
   Alert,
@@ -452,6 +453,7 @@ export function SignIn({
       />
 
       <CardBody elements={el}>
+        <InAppBrowserNotice elements={el} />
         {authError && <Alert variant="error">{authErrorMessage(authError)}</Alert>}
         {/* OAuth social providers */}
         {oauthProviders.length > 0 && (

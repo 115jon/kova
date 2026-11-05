@@ -32,9 +32,11 @@ import {
   LinkIcon,
   LogOutIcon,
   SettingsIcon,
+  ShieldIcon,
   UserIcon,
 } from "./icons";
 import { Avatar, Spinner } from "./ui";
+import { UserSecurity } from "./UserSecurity";
 
 // ── Multi-session device sessions ─────────────────────────────────────────────
 
@@ -173,6 +175,7 @@ export function UserButton({
   afterSignOutUrl,
   showName = false,
   size = 32,
+  showSecurity = true,
   appearance: instanceAppearance,
   className,
 }: UserButtonProps) {
@@ -188,8 +191,27 @@ export function UserButton({
   const [signingOut, setSigningOut] = useState(false);
   const [showLinkedAccounts, setShowLinkedAccounts] = useState(false);
   const linkedAccountsId = useId();
+  const securityTitleId = useId();
+  // "security" swaps the menu for the <UserSecurity /> panel in place.
+  const [view, setView] = useState<"menu" | "security">("menu");
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const securityItemRef = useRef<HTMLButtonElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
+  const viewChanged = useRef(false);
+
+  // Move focus with the view so keyboard users are never left on a removed node.
+  useEffect(() => {
+    if (!viewChanged.current) return;
+    viewChanged.current = false;
+    if (view === "security") backRef.current?.focus();
+    else securityItemRef.current?.focus();
+  }, [view]);
+
+  const showView = (next: "menu" | "security") => {
+    viewChanged.current = true;
+    setView(next);
+  };
 
   // Close on outside click
   useEffect(() => {
@@ -210,7 +232,9 @@ export function UserButton({
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -254,7 +278,10 @@ export function UserButton({
         aria-label="User menu"
         aria-haspopup="true"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setView("menu");
+          setOpen((v) => !v);
+        }}
         style={el.userButtonTrigger}
         className={className}
       >
@@ -285,8 +312,62 @@ export function UserButton({
         />
       </button>
 
+      {/* Security panel: replaces the menu inside the same popover */}
+      {open && view === "security" && (
+        <div
+          ref={menuRef}
+          role="dialog"
+          aria-labelledby={securityTitleId}
+          data-ra-element="userButtonMenu"
+          style={{
+            ...menuStyle,
+            width: "min(380px, calc(100vw - 16px))",
+            maxHeight: "min(560px, calc(100vh - 96px))",
+            overflowY: "auto",
+            overscrollBehavior: "contain",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "4px 4px 8px",
+              borderBottom: "1px solid var(--ra-color-border)",
+            }}
+          >
+            <button
+              ref={backRef}
+              type="button"
+              data-ra-element="userButtonMenuItem"
+              aria-label="Back to menu"
+              onClick={() => showView("menu")}
+              style={{ width: 32, minHeight: 32, padding: 0, justifyContent: "center", flexShrink: 0 }}
+            >
+              <ChevronDownIcon size={12} style={{ transform: "rotate(90deg)" }} />
+            </button>
+            <h2
+              id={securityTitleId}
+              style={{
+                margin: 0,
+                fontFamily: "var(--ra-font)",
+                fontSize: "0.88rem",
+                fontWeight: 600,
+                letterSpacing: "-0.01em",
+                color: "var(--ra-color-text)",
+              }}
+            >
+              Security
+            </h2>
+          </div>
+          <div style={{ padding: "12px 10px 6px" }}>
+            <UserSecurity appearance={instanceAppearance} />
+          </div>
+        </div>
+      )}
+
       {/* Dropdown */}
-      {open && (
+      {open && view === "menu" && (
         <div
           ref={menuRef}
           role="menu"
@@ -398,6 +479,21 @@ export function UserButton({
                   elements={el}
                 />
               </div>
+            )}
+
+            {showSecurity && (
+              <button
+                ref={securityItemRef}
+                type="button"
+                role="menuitem"
+                aria-haspopup="dialog"
+                data-ra-element="userButtonMenuItem"
+                style={el.userButtonMenuItem}
+                onClick={() => showView("security")}
+              >
+                <ShieldIcon size={14} />
+                Security
+              </button>
             )}
 
             {/* Multi-session switcher */}

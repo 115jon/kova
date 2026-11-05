@@ -32,6 +32,7 @@ export { Protect } from "./components/Protect";
 export { SignIn } from "./components/SignIn";
 export { SignUp } from "./components/SignUp";
 export { UserButton } from "./components/UserButton";
+export { UserSecurity } from "./components/UserSecurity";
 
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 export { useAuth } from "./hooks/use-auth";
@@ -108,6 +109,25 @@ export type {
   DeviceRequestResult,
 } from "./device-approval";
 
+// ── Account sessions + activity (vanilla, no React) ───────────────────────────
+export {
+  AccountApiError,
+  getAccountActivity,
+  getAccountSessions,
+  revokeAccountSession,
+  revokeOtherAccountSessions,
+} from "./account";
+export type {
+  AccountActivityEvent,
+  AccountActivityPage,
+  AccountClientInfo,
+  AccountRequestOptions,
+  AccountSession,
+} from "./account";
+
+// ── In-app browser detection ──────────────────────────────────────────────────
+export { detectInAppBrowser, suggestedBrowser } from "./in-app-browser";
+
 // ── Key utilities ─────────────────────────────────────────────────────────────
 export { KOVA_HOSTED_AUTH_URL, decodePublishableKey, encodePublishableKey } from "./key";
 export type { DecodedKey } from "./key";
@@ -142,6 +162,7 @@ export type {
   UseLinkedAccountsReturn,
   UseOrganizationReturn,
   UserButtonProps,
+  UserSecurityProps,
   UseSessionReturn,
   UseUserReturn,
 } from "./types";

@@ -28,6 +28,7 @@ import { mergeAppearance, useKovaAuth } from "../context";
 import { useRateLimit } from "../hooks/use-rate-limit";
 import { useSignUp } from "../hooks/use-sign-up";
 import type { SignUpProps } from "../types";
+import { InAppBrowserNotice } from "./InAppBrowserNotice";
 import { SocialButtons } from "./social-buttons";
 import {
   Alert,
@@ -298,6 +299,7 @@ export function SignUp({
       />
 
       <CardBody elements={el}>
+        <InAppBrowserNotice elements={el} />
         {authError && <Alert variant="error">{authErrorMessage(authError)}</Alert>}
         {oauthProviders.length > 0 && (
           <SocialButtons
