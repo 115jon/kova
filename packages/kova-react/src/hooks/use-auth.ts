@@ -60,9 +60,10 @@ export function useAuth(): UseAuthReturn {
     async (callbackURL?: string) => {
       const dest = callbackURL ?? afterSignOutUrl;
       if (hasBearerSession) {
-        // Cross-origin Bearer flow: revoke this app-scoped session token, then
-        // clear it locally. Then sign out the auth-domain cookie session so the
-        // app cannot mint a fresh bearer token on the next load.
+        // Cross-origin Bearer flow: revoke this app-scoped session token, sign
+        // out the auth-domain cookie session, and only then clear the token
+        // locally. Clearing it first re-runs the provider's mint effect while
+        // the cookie session is still alive, which issues a fresh app token.
         if (sessionToken && publishableKey) {
           try {
             await fetch(
@@ -74,13 +75,13 @@ export function useAuth(): UseAuthReturn {
             );
           } catch {}
         }
-        clearSessionToken();
         try {
           await createKovaAuthClient({
             authUrl,
             publishableKey,
           }).signOut();
         } catch {}
+        clearSessionToken();
         if (typeof window !== "undefined") {
           window.location.href = dest;
         }
