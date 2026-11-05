@@ -67,9 +67,17 @@ export const orgKeys = {
 // ── Audit Logs ─────────────────────────────────────────────────────────────────
 
 export interface AuditLogFilters {
-  userId: string;
-  action: string;
   orgId: string;
+  /** Email, name or user id. */
+  q?: string;
+  userId?: string;
+  appId?: string;
+  action?: string;
+  country?: string;
+  outcome?: "failure";
+  /** Unix ms bounds. */
+  from?: number;
+  to?: number;
   // cursor is NOT a filter — it drives pagination outside the query key
 }
 
@@ -77,6 +85,7 @@ export const auditKeys = {
   all: ["audit-logs"] as const,
   lists: () => [...auditKeys.all, "list"] as const,
   list: (filters: AuditLogFilters) => [...auditKeys.lists(), filters] as const,
+  facets: () => [...auditKeys.all, "facets"] as const,
 } as const;
 
 // ── Webhooks ───────────────────────────────────────────────────────────────────

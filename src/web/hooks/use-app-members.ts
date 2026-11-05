@@ -55,6 +55,10 @@ export interface ActivityEntry {
   userAgent: string | null;
   metadata: Record<string, unknown> | null;
   createdAt: number;
+  appId?: string | null;
+  appName?: string | null;
+  country?: string | null;
+  city?: string | null;
 }
 
 export interface AppMemberDetailResponse {

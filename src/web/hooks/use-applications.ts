@@ -75,6 +75,8 @@ export interface Application {
   custom_domain: string | null;
   /** The app's own device approval page; null uses the hosted /device page. */
   device_verification_uri: string | null;
+  /** Email users on sign-in from a new device or country. Some workers send 0/1. */
+  sign_in_alerts?: boolean | number | null;
 }
 
 export interface AppStats {
@@ -111,7 +113,7 @@ export type UpdateApplicationInput = Partial<Pick<Application,
   | "from_name" | "from_email" | "support_email"
   | "smtp_host" | "smtp_port" | "smtp_user" | "smtp_secure"
   | "device_verification_uri"
->>;
+>> & { sign_in_alerts?: boolean };
 
 // ── Fetchers ───────────────────────────────────────────────────────────────────
 

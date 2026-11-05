@@ -25,7 +25,7 @@ import {
   AlertCircle, AlertTriangle, ArrowLeft, Ban, CheckCircle,
   ChevronLeft, ChevronRight,
   Copy, CreditCard, Eye, EyeOff, Globe, ImageIcon,
-  Key, Layers, Lock,
+  BellRing, Key, Layers, Lock,
   Mail, Palette, RefreshCw, Rocket, Search, Settings,
   ShieldAlert, ShieldOff, SlidersHorizontal,
   Trash2, TrendingUp, Users, X
@@ -975,6 +975,65 @@ function ProvidersTab({ app, onProvidersChange }: { app: Application; onProvider
   );
 }
 
+// ── Sign-in alerts ───────────────────────────────────────────────────────────
+
+/** Older workers return 0/1 or omit the column; alerts default to on. */
+function signInAlertsEnabled(app: Application): boolean {
+  const v = app.sign_in_alerts;
+  return v === undefined || v === null ? true : Boolean(v);
+}
+
+// Saves on toggle: one switch doesn't need a separate save button.
+function SignInAlertsCard({ app }: { app: Application }) {
+  const update = useUpdateApplication();
+  const saved = signInAlertsEnabled(app);
+  const [pending, setPending] = useState<boolean | null>(null);
+  const [status, setStatus] = useState("");
+  const [err, setErr] = useState("");
+  const checked = pending ?? saved;
+
+  const toggle = async () => {
+    const next = !checked;
+    setPending(next); setErr(""); setStatus("");
+    try {
+      await update.mutateAsync({ id: app.id, sign_in_alerts: next });
+      setStatus(next ? "Sign-in alerts on." : "Sign-in alerts off.");
+    } catch (e: unknown) {
+      setErr(e instanceof Error ? e.message : "Couldn't save sign-in alerts");
+    } finally {
+      setPending(null);
+    }
+  };
+
+  return (
+    <section className="card card-flush" aria-labelledby="settings-alerts">
+      <div className="panel-header"><h2 className="panel-title" id="settings-alerts"><BellRing /> Security notifications</h2></div>
+      <div className="list-row">
+        <div className="list-row-main">
+          <p className="list-row-title" id="settings-alerts-label">Sign-in alerts</p>
+          <p className="text-sm text-secondary" id="settings-alerts-hint">
+            Email users when their account signs in from a new device or country.
+          </p>
+        </div>
+        <div className="list-row-actions">
+          <button
+            type="button"
+            role="switch"
+            className="switch"
+            aria-checked={checked}
+            aria-labelledby="settings-alerts-label"
+            aria-describedby="settings-alerts-hint"
+            disabled={update.isPending}
+            onClick={() => void toggle()}
+          />
+        </div>
+      </div>
+      <p className="sr-only" role="status" aria-live="polite">{status}</p>
+      {err && <div className="panel-body" style={{ paddingTop: 0 }}><ErrBanner msg={err} /></div>}
+    </section>
+  );
+}
+
 // ── Settings Tab ──────────────────────────────────────────────────────────────
 
 function SettingsTab({ app }: { app: Application }) {
@@ -1074,6 +1133,8 @@ function SettingsTab({ app }: { app: Application }) {
           <button type="submit" className="btn btn-primary" disabled={update.isPending}>{update.isPending ? "Saving…" : "Save changes"}</button>
         </div>
       </form>
+
+      <SignInAlertsCard app={app} />
 
       {/* Secret key */}
       <section className="card card-flush" aria-labelledby="settings-secret">

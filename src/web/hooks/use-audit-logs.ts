@@ -8,75 +8,129 @@
  *
  * Queries:
  *  - useAuditLogs(filters)   — paginated audit log stream
+ *  - useAuditFacets()        — apps, countries and actions to filter by
  *
- * The component calls fetchNextPage() when the user clicks "Load more".
+ * exportAuditLogs(filters) walks every page for CSV export, up to a cap.
  * The flat list is reconstructed by flattening pages[*].logs.
  */
 
-import { GC_5M, STALE_30S } from "@/lib/query-client";
+import { type AuditLogRow, EXPORT_ROW_CAP, normalizeMetadata } from "@/lib/audit";
+import { GC_5M, STALE_2M, STALE_30S } from "@/lib/query-client";
 import { auditKeys, type AuditLogFilters } from "@/lib/query-keys";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+
+export type { AuditLogRow } from "@/lib/audit";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-
-export interface AuditLogRow {
-  id: string;
-  userId: string;
-  orgId: string | null;
-  actor: string;
-  actorName: string | null;
-  actorEmail: string | null;
-  actorImage?: string | null;
-  action: string;
-  targetType: string | null;
-  targetId: string | null;
-  targetLabel: string | null;
-  ipAddress: string | null;
-  userAgent: string | null;
-  metadata: Record<string, unknown> | null;
-  createdAt: number;
-}
 
 export interface AuditLogPage {
   logs: AuditLogRow[];
   nextCursor: string | null;
 }
 
-// ── Fetcher ────────────────────────────────────────────────────────────────────
-
-async function fetchAuditLogs(
-  filters: AuditLogFilters,
-  cursor: string | null,
-): Promise<AuditLogPage> {
-  const params = new URLSearchParams();
-  if (filters.userId) params.set("userId", filters.userId);
-  if (filters.action) params.set("action", filters.action);
-  if (filters.orgId) params.set("orgId", filters.orgId);
-  if (cursor) params.set("before", cursor);
-  params.set("limit", "50");
-
-  const res = await fetch(`/api/admin/audit/logs?${params}`, {
-    credentials: "include",
-  });
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({ error: res.statusText }))) as {
-      error?: string;
-    };
-    throw new Error(err.error ?? `Failed (${res.status})`);
-  }
-  return res.json() as Promise<AuditLogPage>;
+export interface AuditFacets {
+  apps: { id: string; name: string }[];
+  countries: string[];
+  actions: string[];
 }
 
-// ── Query hook ─────────────────────────────────────────────────────────────────
+// ── Fetchers ───────────────────────────────────────────────────────────────────
+
+async function readError(res: Response): Promise<Error> {
+  const err = (await res.json().catch(() => ({ error: res.statusText }))) as { error?: string };
+  return new Error(err.error ?? `Failed (${res.status})`);
+}
+
+export function auditLogParams(filters: AuditLogFilters, cursor: string | null, limit: number): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.orgId) params.set("orgId", filters.orgId);
+  if (filters.userId) params.set("userId", filters.userId);
+  if (filters.q) params.set("q", filters.q);
+  if (filters.appId) params.set("appId", filters.appId);
+  if (filters.action) params.set("action", filters.action);
+  if (filters.country) params.set("country", filters.country);
+  if (filters.outcome) params.set("outcome", filters.outcome);
+  if (filters.from !== undefined) params.set("from", String(filters.from));
+  if (filters.to !== undefined) params.set("to", String(filters.to));
+  if (cursor) params.set("before", cursor);
+  params.set("limit", String(limit));
+  return params;
+}
+
+export async function fetchAuditLogs(
+  filters: AuditLogFilters,
+  cursor: string | null,
+  limit = 50,
+  signal?: AbortSignal,
+): Promise<AuditLogPage> {
+  const res = await fetch(`/api/admin/audit/logs?${auditLogParams(filters, cursor, limit)}`, {
+    credentials: "include",
+    signal,
+  });
+  if (!res.ok) throw await readError(res);
+  const page = (await res.json()) as AuditLogPage;
+  return {
+    logs: (page.logs ?? []).map(row => ({ ...row, metadata: normalizeMetadata(row.metadata) })),
+    nextCursor: page.nextCursor ?? null,
+  };
+}
+
+/**
+ * Every row matching `filters`, newest first, stopping at `cap`.
+ * `capped` is true when more rows exist past the cap.
+ */
+export async function exportAuditLogs(
+  filters: AuditLogFilters,
+  { cap = EXPORT_ROW_CAP, signal, onProgress }: { cap?: number; signal?: AbortSignal; onProgress?: (count: number) => void } = {},
+): Promise<{ rows: AuditLogRow[]; capped: boolean }> {
+  const rows: AuditLogRow[] = [];
+  let cursor: string | null = null;
+  for (;;) {
+    const page = await fetchAuditLogs(filters, cursor, 100, signal);
+    rows.push(...page.logs);
+    onProgress?.(Math.min(rows.length, cap));
+    if (rows.length >= cap) {
+      return { rows: rows.slice(0, cap), capped: rows.length > cap || page.nextCursor !== null };
+    }
+    if (!page.nextCursor || page.logs.length === 0) return { rows, capped: false };
+    cursor = page.nextCursor;
+  }
+}
+
+const EMPTY_FACETS: AuditFacets = { apps: [], countries: [], actions: [] };
+
+async function fetchAuditFacets(): Promise<AuditFacets> {
+  const res = await fetch("/api/admin/audit/facets", { credentials: "include" });
+  // Older workers have no facets route; filters still work without suggestions.
+  if (res.status === 404) return EMPTY_FACETS;
+  if (!res.ok) throw await readError(res);
+  const body = (await res.json()) as Partial<AuditFacets>;
+  return {
+    apps: Array.isArray(body.apps) ? body.apps : [],
+    countries: Array.isArray(body.countries) ? body.countries : [],
+    actions: Array.isArray(body.actions) ? body.actions : [],
+  };
+}
+
+// ── Query hooks ────────────────────────────────────────────────────────────────
 
 export function useAuditLogs(filters: AuditLogFilters) {
   return useInfiniteQuery<AuditLogPage, Error>({
     queryKey: auditKeys.list(filters),
-    queryFn: ({ pageParam }) =>
-      fetchAuditLogs(filters, (pageParam as string | null) ?? null),
+    queryFn: ({ pageParam, signal }) =>
+      fetchAuditLogs(filters, (pageParam as string | null) ?? null, 50, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: STALE_30S,
+    gcTime: GC_5M,
+  });
+}
+
+export function useAuditFacets() {
+  return useQuery<AuditFacets, Error>({
+    queryKey: auditKeys.facets(),
+    queryFn: fetchAuditFacets,
+    staleTime: STALE_2M,
     gcTime: GC_5M,
   });
 }

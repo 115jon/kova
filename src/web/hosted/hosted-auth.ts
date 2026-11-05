@@ -18,33 +18,14 @@
  * ticket and never follows an external redirect.
  */
 
-import type { HostedAppearance, HostedProvider } from "../../shared/hosted-brand";
+import type { HostedProvider } from "../../shared/hosted-brand";
 import { HOSTED_PROVIDERS, PROVIDER_LABELS } from "../../shared/hosted-brand";
-import { artPanelHtml, hostedShellCss, hostedTheme, type HostedTheme } from "./hosted-theme";
+import { accountCss, renderAccount } from "./hosted-account";
+import { authEndpoint, el, ensurePage, injectStyle, monogram, postAuth, type HostedBootstrap, type HostedUser } from "./hosted-common";
+import { hostedShellCss, hostedTheme, type HostedTheme } from "./hosted-theme";
+import { detectInAppBrowser, suggestedBrowser } from "./in-app-browser";
 
-interface HostedAppInfo {
-  id: string;
-  name: string;
-  homeUrl: string | null;
-  termsUrl: string | null;
-  privacyUrl: string | null;
-}
-
-interface HostedBootstrap {
-  publishableKey: string;
-  authUrl: string;
-  mainAuthUrl: string;
-  redirectUri: string;
-  state: string;
-  mode: "live" | "test";
-  page: "sign-in" | "sign-up";
-  appearance: HostedAppearance;
-  app: HostedAppInfo;
-  hideBranding: boolean;
-  oauthCtx: string;
-  returnPath?: string;
-  enabledProviders?: string[];
-}
+export { monogram };
 
 interface AuthErrorBody {
   message?: string;
@@ -74,49 +55,43 @@ export function isSafeDeviceReturnPath(path: unknown): path is string {
   return code !== null && DEVICE_RETURN_CODE.test(code);
 }
 
+function readUser(value: unknown): HostedUser | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const user = value as Record<string, unknown>;
+  const text = (field: unknown) => (typeof field === "string" && field ? field : null);
+  return { name: text(user.name), email: text(user.email), image: text(user.image) };
+}
+
 function readBootstrap(): HostedBootstrap | null {
   const raw = (window as unknown as Record<string, unknown>)[BOOTSTRAP_KEY];
   if (!raw || typeof raw !== "object") return null;
   const value = raw as Partial<HostedBootstrap>;
+  // The account page never starts OAuth, so it needs no mainAuthUrl or oauthCtx.
+  const isAccount = value.page === "account";
   if (
     typeof value.publishableKey !== "string"
     || typeof value.authUrl !== "string"
-    || typeof value.mainAuthUrl !== "string"
     || typeof value.page !== "string"
-    || typeof value.oauthCtx !== "string"
+    || (!isAccount && (typeof value.mainAuthUrl !== "string" || typeof value.oauthCtx !== "string"))
     || !value.appearance
     || !value.app
   ) {
     return null;
   }
   const config = value as HostedBootstrap;
+  if (isAccount) {
+    config.mainAuthUrl = typeof value.mainAuthUrl === "string" ? value.mainAuthUrl : "";
+    config.oauthCtx = typeof value.oauthCtx === "string" ? value.oauthCtx : "";
+    // Same-origin path only: the account API rides the page's session cookie.
+    const base = value.accountApiBase;
+    config.accountApiBase = typeof base === "string" && base.startsWith("/") && !base.startsWith("//") ? base : "/api/account";
+    config.user = readUser(value.user);
+  }
   if (!Array.isArray(value.enabledProviders) || value.enabledProviders.some(provider => typeof provider !== "string")) {
     config.enabledProviders = [];
   }
   if (!isSafeDeviceReturnPath(value.returnPath)) config.returnPath = undefined;
   return config;
-}
-
-function authEndpoint(base: string, path: string): string {
-  return `${base.replace(/\/$/, "")}${path}`;
-}
-
-async function postAuth(
-  url: string,
-  body: Record<string, unknown>,
-  publishableKey: string,
-): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
-  const response = await fetch(url, {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "content-type": "application/json",
-      "x-publishable-key": publishableKey,
-    },
-    body: JSON.stringify(body),
-  });
-  const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  return { ok: response.ok, status: response.status, data };
 }
 
 function errorMessage(data: Record<string, unknown>, fallback: string): string {
@@ -167,20 +142,6 @@ function finishRedirect(config: HostedBootstrap, code: string, kovaAuthCode?: un
   window.location.assign(finishRedirectUrl(config, code, kovaAuthCode));
 }
 
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  attrs: Record<string, string> = {},
-  text?: string,
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(attrs)) {
-    if (key === "class") node.className = value;
-    else node.setAttribute(key, value);
-  }
-  if (text) node.textContent = text;
-  return node;
-}
-
 /** Brand marks, 24-unit viewBox. Mono marks use currentColor; the rest keep their brand colours. */
 export const PROVIDER_ICONS: Record<HostedProvider, string> = {
   google: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"/></svg>',
@@ -190,14 +151,6 @@ export const PROVIDER_ICONS: Record<HostedProvider, string> = {
   apple: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>',
   facebook: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="#1877F2" d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.43c0-3.025 1.792-4.697 4.533-4.697 1.313 0 2.686.236 2.686.236v2.971H15.83c-1.491 0-1.956.93-1.956 1.886v2.267h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>',
 };
-
-/** First letter of the first and last word, upper-cased. */
-export function monogram(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "?";
-  const picks = words.length > 1 ? [words[0]!, words[words.length - 1]!] : [words[0]!];
-  return picks.map((w) => Array.from(w)[0] ?? "").join("").toUpperCase();
-}
 
 /** Keep every provider the server enabled, in HOSTED_PROVIDERS order. */
 export function orderedProviders(enabled: readonly string[] | undefined): HostedProvider[] {
@@ -221,22 +174,24 @@ function render(config: HostedBootstrap): void {
   const isSignUp = config.page === "sign-up";
   const appName = config.app.name || "this app";
   const deviceReturn = isSafeDeviceReturnPath(config.returnPath);
+  const { page, built } = ensurePage(root, theme, appName);
 
-  // The shell may already carry the split page; only build it when loaded bare.
-  const column = root.closest(".kv-form-inner") ?? root;
-  const page = column.closest(".kv-page");
-  if (!page) {
-    const built = el("div", { class: "kv-page" });
-    built.innerHTML = artPanelHtml(theme, appName);
-    const form = el("main", { class: "kv-form" });
-    const inner = el("div", { class: "kv-form-inner" });
-    root.replaceWith(built);
-    inner.appendChild(root);
-    form.appendChild(inner);
-    built.appendChild(form);
+  if (config.page === "account") {
+    page.className = `${page.className} is-account`;
+    injectStyles(theme, built, accountCss(theme));
+    renderAccount(config, root);
+    return;
   }
 
   const card = el("div", { class: "ra-card" });
+
+  // Google refuses embedded webviews; say so before its button fails.
+  const ua = typeof navigator === "undefined" ? "" : navigator.userAgent ?? "";
+  const inApp = detectInAppBrowser(ua);
+  if (inApp && orderedProviders(config.enabledProviders).includes("google")) {
+    // Focus moves to the first field once the notice is gone.
+    card.appendChild(inAppNotice(inApp, suggestedBrowser(ua), () => email.focus()));
+  }
 
   // Header: logo, test-mode chip, title, context line.
   const head = el("header", { class: "ra-head kv-enter" });
@@ -374,14 +329,60 @@ function render(config: HostedBootstrap): void {
   card.appendChild(footer);
 
   root.appendChild(card);
-  injectStyles(theme, !page);
+  injectStyles(theme, built);
 }
 
-function injectStyles(theme: HostedTheme, includeShell: boolean): void {
-  if (document.getElementById("ra-hosted-styles")) return;
-  const style = document.createElement("style");
-  style.id = "ra-hosted-styles";
-  style.textContent = `${includeShell ? hostedShellCss(theme) : ""}
+/** Dismissible notice for in-app browsers, with a copy-link escape hatch. */
+function inAppNotice(app: string, browser: string, onDismiss: () => void): HTMLElement {
+  const notice = el("section", { class: "ra-inapp kv-enter", "aria-label": "Browser notice" });
+  const message = el("p", { class: "ra-inapp-text" });
+  message.appendChild(el("span", {}, "You're in the "));
+  message.appendChild(el("strong", {}, app));
+  message.appendChild(el("span", {}, ` browser. Google sign-in may not work here. Open this page in ${browser} for the best experience.`));
+  notice.appendChild(message);
+
+  const actions = el("div", { class: "ra-inapp-actions" });
+  const copy = el("button", { class: "kv-btn ra-inapp-copy", type: "button" }, "Copy link");
+  const status = el("p", { class: "ra-inapp-status", role: "status", "aria-live": "polite" });
+  actions.appendChild(copy);
+  actions.appendChild(status);
+  notice.appendChild(actions);
+
+  const url = el("input", { class: "kv-input ra-inapp-url", type: "text", readonly: "true", "aria-label": "Page link" });
+  url.hidden = true;
+  notice.appendChild(url);
+
+  const revealUrl = () => {
+    url.value = window.location.href;
+    url.hidden = false;
+    url.focus();
+    url.select();
+    status.textContent = "Copy the link above";
+  };
+  copy.addEventListener("click", () => {
+    const clipboard = typeof navigator === "undefined" ? undefined : navigator.clipboard;
+    if (!clipboard?.writeText) {
+      revealUrl();
+      return;
+    }
+    clipboard.writeText(window.location.href).then(
+      () => { status.textContent = "Link copied"; },
+      revealUrl,
+    );
+  });
+
+  const close = el("button", { class: "ra-inapp-close", type: "button", "aria-label": "Dismiss" });
+  close.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M4 4l8 8M12 4l-8 8"/></svg>';
+  close.addEventListener("click", () => {
+    notice.remove();
+    onDismiss();
+  });
+  notice.appendChild(close);
+  return notice;
+}
+
+function injectStyles(theme: HostedTheme, includeShell: boolean, extraCss = ""): void {
+  injectStyle("ra-hosted-styles", `${includeShell ? hostedShellCss(theme) : ""}
     .ra-card { color: var(--text); }
     .ra-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
     .ra-test { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 500;
@@ -412,12 +413,27 @@ function injectStyles(theme: HostedTheme, includeShell: boolean): void {
     @media (hover: hover) and (pointer: fine) {
       .ra-forgot:hover { color: var(--text); text-decoration-color: var(--primary); }
     }
+    .ra-inapp { position: relative; margin-bottom: 22px; padding: 12px 44px 12px 14px; border-radius: var(--radius);
+      background: var(--field); border: 1px solid var(--line-strong); font-size: 14px; line-height: 1.45; color: var(--secondary); }
+    .ra-inapp strong { color: var(--text); font-weight: 600; }
+    .ra-inapp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+    .kv-btn.ra-inapp-copy { width: auto; height: 34px; padding: 0 12px; font-size: 13px; }
+    .ra-inapp-status { font-size: 13px; color: var(--secondary); }
+    .ra-inapp-status:empty { display: none; }
+    .kv-input.ra-inapp-url { margin-top: 10px; height: 38px; font-size: 13px; font-family: var(--mono); }
+    .ra-inapp-url[hidden] { display: none; }
+    .ra-inapp-close { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0;
+      border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .ra-inapp-close svg { width: 16px; height: 16px; }
+    @media (hover: hover) and (pointer: fine) {
+      .ra-inapp-close:hover { color: var(--text); background: var(--raised); }
+    }
     @media (max-width: 767px) {
       .ra-head-row { margin-bottom: 14px; }
       .ra-title { font-size: 22px; }
+      .kv-input.ra-inapp-url { font-size: 16px; }
     }
-  `;
-  document.head.appendChild(style);
+  ${extraCss}`);
 }
 
 /**

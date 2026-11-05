@@ -14,6 +14,7 @@ import {
   useAppMemberUnlock,
 } from "@/hooks/use-app-members";
 import type { ProviderId } from "@/lib/providers";
+import { activityContext } from "@/lib/audit";
 import { relativeTime } from "@/lib/utils";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -51,6 +52,13 @@ const PROVIDER_LABELS: Record<string, string> = {
 };
 
 function actionLabel(action: string): { label: string; color: string } {
+  if (action === "user.signInFailed") return { label: "Failed sign-in", color: "var(--color-danger-text)" };
+  if (action === "twoFactor.challengeFailed") return { label: "Failed 2FA", color: "var(--color-danger-text)" };
+  if (action === "app.signIn") return { label: "Signed in to app", color: "var(--color-success-text)" };
+  if (action === "app.signOut") return { label: "Signed out of app", color: "var(--color-text-tertiary)" };
+  if (action === "session.ended") return { label: "Session ended", color: "var(--color-text-tertiary)" };
+  if (action === "security.signInAlertSent") return { label: "Sign-in alert sent", color: "var(--color-accent-text)" };
+  if (action === "security.signOutEverywhere") return { label: "Signed out everywhere", color: "var(--color-warning-text)" };
   if (action.startsWith("user.signIn")) return { label: "Signed in", color: "var(--color-success-text)" };
   if (action.startsWith("user.signOut")) return { label: "Signed out", color: "var(--color-text-tertiary)" };
   if (action.startsWith("user.signUp")) return { label: "Account created", color: "var(--color-accent-text)" };
@@ -364,6 +372,9 @@ function AppMemberDetailPage() {
                     />
                     <div className="list-row-main">
                       <p className="text-strong">{label}</p>
+                      {activityContext(entry) && (
+                        <p className="text-sm text-secondary">{activityContext(entry)}</p>
+                      )}
                       {entry.ipAddress && (
                         <p className="text-mono text-tertiary">{entry.ipAddress}</p>
                       )}

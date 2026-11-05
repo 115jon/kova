@@ -72,6 +72,10 @@ export interface AuditEntry {
   userAgent: string | null;
   createdAt: number;
   metadata: Record<string, unknown> | null;
+  appId?: string | null;
+  appName?: string | null;
+  country?: string | null;
+  city?: string | null;
 }
 
 export interface UserDetailResponse {
