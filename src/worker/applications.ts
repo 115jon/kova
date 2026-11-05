@@ -81,6 +81,9 @@ export interface Application {
    * https://meet.example.com/activate). Null: the hosted /device page.
    */
   device_verification_uri: string | null;
+  // ── Sign-in alerts (migration 0032)
+  /** Email users about sign-ins from a new device or country in this app. */
+  sign_in_alerts: boolean;
 }
 
 /** DB row as stored in D1 (origins/uris are newline-delimited strings). */
@@ -127,6 +130,7 @@ export interface AppRow {
   auth_slug: string | null;
   custom_domain: string | null;
   device_verification_uri: string | null;
+  sign_in_alerts?: number | null;
 }
 
 // ── Key generation ─────────────────────────────────────────────────────────────
@@ -223,6 +227,8 @@ export function rowToApp(row: AppRow): Application {
     auth_slug: row.auth_slug ?? null,
     custom_domain: row.custom_domain ?? null,
     device_verification_uri: row.device_verification_uri ?? null,
+    // Absent on rows cached before migration 0032: the column default is on.
+    sign_in_alerts: row.sign_in_alerts == null ? true : Boolean(row.sign_in_alerts),
   };
 }
 
@@ -239,7 +245,7 @@ export async function listApplications(db: D1Database): Promise<Application[]> {
               smtp_host, smtp_port, smtp_user, smtp_secure,
               stripe_customer_id, stripe_subscription_id, plan, plan_expires_at,
               suspended_at, auth_slug, custom_domain, legacy_publishable_key,
-              device_verification_uri
+              device_verification_uri, sign_in_alerts
        FROM application ORDER BY createdAt DESC`
     )
     .all<AppRow>();
@@ -265,7 +271,7 @@ export async function getApplicationByPublishableKey(
               smtp_host, smtp_port, smtp_user, smtp_secure,
               stripe_customer_id, stripe_subscription_id, plan, plan_expires_at,
               suspended_at, auth_slug, custom_domain, legacy_publishable_key,
-              device_verification_uri
+              device_verification_uri, sign_in_alerts
        FROM application WHERE publishable_key = ? OR legacy_publishable_key = ? LIMIT 1`
     )
     .bind(publishableKey, publishableKey)
@@ -287,7 +293,7 @@ export async function getApplicationById(
               smtp_host, smtp_port, smtp_user, smtp_secure,
               stripe_customer_id, stripe_subscription_id, plan, plan_expires_at,
               suspended_at, auth_slug, custom_domain, legacy_publishable_key,
-              device_verification_uri
+              device_verification_uri, sign_in_alerts
        FROM application WHERE id = ? LIMIT 1`
     )
     .bind(id)
@@ -377,6 +383,7 @@ export interface UpdateApplicationInput {
   custom_domain?: string | null;
   // Device sign-in — validated by the caller (validateApplicationPolicy)
   device_verification_uri?: string | null;
+  sign_in_alerts?: boolean;
 }
 
 /** Thrown when the row's environment changed after the caller validated against it. */
@@ -432,6 +439,7 @@ export async function updateApplication(
   addField("smtp_secure", input.smtp_secure);
   addField("custom_domain", input.custom_domain);
   addField("device_verification_uri", input.device_verification_uri);
+  addField("sign_in_alerts", input.sign_in_alerts);
 
   if (input.allowed_origins !== undefined) {
     sets.push("allowed_origins = ?");

@@ -82,7 +82,7 @@ function app(redirectUris: string[]): Application {
     auth_slug: "mira",
     custom_domain: null,
     legacy_publishable_key: null,
-    device_verification_uri: null,
+    device_verification_uri: null, sign_in_alerts: true,
   };
 }
 

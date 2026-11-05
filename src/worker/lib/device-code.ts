@@ -72,6 +72,17 @@ export function isSafeDeviceReturnPath(path: unknown): path is string {
   return code !== null && DISPLAY_CODE_RE.test(code);
 }
 
+/** The hosted account page; the only other same-host return a hosted sign-in accepts. */
+export const HOSTED_ACCOUNT_PATH = "/account";
+
+/**
+ * Where a sign-in on the hosted host may send the browser afterwards: a device
+ * approval (isSafeDeviceReturnPath) or exactly the account page.
+ */
+export function isSafeHostedReturnPath(path: unknown): path is string {
+  return path === HOSTED_ACCOUNT_PATH || isSafeDeviceReturnPath(path);
+}
+
 export function deviceReturnPath(userCode: unknown): string | null {
   const normalized = normalizeUserCode(userCode);
   if (!normalized) return null;

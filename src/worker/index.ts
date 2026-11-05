@@ -12,6 +12,7 @@
 //   /api/admin/apps/*           → Application registry + per-app sub-routes
 //   /api/pub/apps/*             → Public app metadata (appearance, plan)
 //   /api/webhooks/*             → Webhook endpoints
+//   /api/security/not-me        → "This wasn't me" from a sign-in alert email
 //   /api/device-challenges/*    → Bootstrap machine approval challenges
 //   /api/avatar/*               → Legacy avatar redirect
 //   /health                     → Health check
@@ -30,7 +31,9 @@
 import { Hono } from "hono";
 import startHandler from "@tanstack/react-start/server-entry";
 import { AppCounter } from "./do/app-counter";
+import { purgeExpiredAuditLogs } from "./lib/audit-retention";
 import { envForHost, legacyPageRedirect } from "./lib/auth-hosts";
+import { withExecutionContext } from "./lib/background";
 import { platformSessionOnly } from "./lib/platform-session";
 import { resolveAppByHost } from "./lib/subdomain";
 import { corsMiddleware } from "./middleware/cors";
@@ -43,6 +46,7 @@ import { hostedAuthRouter } from "./routes/hosted-auth";
 import { handleOAuthBounce, handleOAuthStart } from "./routes/oauth-bounce";
 import { orgRouter } from "./routes/org";
 import { pubAppsRouter } from "./routes/pub/apps";
+import { securityRouter } from "./routes/security";
 import { userRouter } from "./routes/user";
 import { deviceChallengesRouter } from "./routes/device-challenges";
 import { webhooksRouter } from "./routes/webhooks";
@@ -168,6 +172,7 @@ app.route("/api/admin/apps/:appId/users", appUsersRouter);
 app.route("/api/pub/apps", pubAppsRouter);
 app.route("/api/webhooks", webhooksRouter);
 app.route("/api/device-challenges", deviceChallengesRouter);
+app.route("/api/security", securityRouter);
 
 // ── Central OAuth bounce ──────────────────────────────────────────────────────
 // After a social sign-in on the main auth domain, Better Auth redirects here.
@@ -244,7 +249,8 @@ export function createWorker(
       if (redirect) return redirect;
       const env = envForHost(baseEnv, new URL(request.url).hostname);
       if (shouldUseHono(request, env.AUTH_URL)) {
-        return apiFetch(request, env, ctx);
+        // Lets Better Auth hooks hand work to ctx.waitUntil (lib/background).
+        return withExecutionContext(ctx, () => apiFetch(request, env, ctx));
       }
 
       if (isDashboardAsset(request)) {
@@ -254,7 +260,20 @@ export function createWorker(
       return startFetch(request, env, ctx);
     },
     queue: handleQueueBatch,
+    scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+      ctx.waitUntil(runScheduledMaintenance(env));
+    },
   };
+}
+
+/** Daily cron (wrangler.toml [triggers]): audit log retention. */
+export async function runScheduledMaintenance(env: Pick<Env, "DB">): Promise<void> {
+  try {
+    const result = await purgeExpiredAuditLogs(env.DB);
+    console.log(`[kova-auth] audit retention: deleted ${result.deleted} rows older than ${new Date(result.cutoff).toISOString()} in ${result.batches} batch(es)${result.complete ? "" : "; more remain for the next run"}`);
+  } catch (error) {
+    console.error("[kova-auth] audit retention failed", error);
+  }
 }
 
 const worker = createWorker((request) => startHandler.fetch(request));

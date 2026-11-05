@@ -52,7 +52,7 @@ import { createAuth } from "../auth";
 import { insertAppScopedSession } from "../lib/app-session";
 import { createAuthTicket, createSessionTransferCode } from "../lib/auth-ticket";
 import { escapeHtml, jsonForHtmlScript } from "../lib/html";
-import { isSafeDeviceReturnPath } from "../lib/device-code";
+import { isSafeHostedReturnPath } from "../lib/device-code";
 import { isFreshSignInSession, timestampMs } from "../lib/fresh-sign-in";
 import { hostedProviders } from "../lib/hosted-providers";
 
@@ -152,7 +152,7 @@ export async function decodeOAuthCtx(raw: string | null, secret: string): Promis
       || typeof parsed.appId !== "string" || !parsed.appId
       || typeof parsed.redirect_uri !== "string" || typeof parsed.state !== "string"
       || typeof parsed.exp !== "number" || !Number.isFinite(parsed.exp) || parsed.exp <= Date.now()) return null;
-    if (parsed.returnPath !== undefined && (!isSafeDeviceReturnPath(parsed.returnPath) || parsed.redirect_uri !== "")) return null;
+    if (parsed.returnPath !== undefined && (!isSafeHostedReturnPath(parsed.returnPath) || parsed.redirect_uri !== "")) return null;
     return parsed;
   } catch {
     return null;
@@ -443,6 +443,8 @@ async function handleSdkBounce(
     parentSessionId: oauthStartUsesSdkBounce(redirectUri) ? null : session.session.id,
     ipAddress: c.req.header("CF-Connecting-IP") ?? null,
     userAgent: c.req.header("User-Agent") ?? null,
+    cf: c.req.raw.cf as IncomingRequestCfProperties | undefined,
+    audit: { via: "sdk_bounce" },
   });
 
   // Create a 60-second single-use transfer code bound to this pk

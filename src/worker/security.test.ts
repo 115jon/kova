@@ -47,7 +47,7 @@ function app(overrides: Partial<Application>): Application {
     auth_slug: "app",
     custom_domain: null,
     legacy_publishable_key: null,
-    device_verification_uri: null,
+    device_verification_uri: null, sign_in_alerts: true,
     ...overrides,
   };
 }

@@ -2,7 +2,7 @@ import { apiKey } from "@better-auth/api-key";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth } from "better-auth";
 import { withCloudflare } from "better-auth-cloudflare";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { admin, bearer, genericOAuth, jwt, magicLink, multiSession, organization, twoFactor, username } from "better-auth/plugins";
 import { deviceAuthorization } from "better-auth/plugins/device-authorization";
@@ -17,9 +17,24 @@ import {
   verificationEmail,
 } from "./email";
 import { getAppId } from "./lib/app-context";
+import { sessionExpiryMs } from "./lib/app-session";
+import {
+  authFailureCode,
+  classifySessionEnd,
+  describeClient,
+  geoFromCf,
+  isDisposableEmailAddress,
+  requestMeta,
+  signInMethodFromPath,
+  type SignInMethod,
+} from "./lib/audit-context";
+import { inBackground } from "./lib/background";
+import { bearerToken } from "./lib/bearer-headers";
 import { kovaDeviceGrant, kovaDeviceRedemption } from "./lib/device-authorization";
 import { DEVICE_CODE_INTERVAL_SECONDS, DEVICE_CODE_TTL_SECONDS, generateDeviceCode } from "./lib/device-code";
 import { passkeyOrigins, passkeyRpId } from "./lib/passkey-origins";
+import { SESSION_EXPIRES_IN_SECONDS, SESSION_UPDATE_AGE_SECONDS } from "./lib/session-lifetime";
+import { maybeSendSignInAlert, type SignInAlertEvent } from "./lib/sign-in-alert";
 import {
   legacyIdTokenClaims,
   legacyUserInfoClaims,
@@ -40,6 +55,28 @@ import { deliverEvent } from "./webhook";
 
 
 /**
+ * The slice of Better Auth's endpoint context (GenericEndpointContext) the
+ * audit hooks read. `null` when the hook runs outside an endpoint.
+ */
+type HookContext = {
+  path?: string;
+  params?: Record<string, string | undefined>;
+  request?: Request;
+  headers?: Headers;
+} | null;
+
+const SIGN_IN_PATHS = new Set(["/sign-in/email", "/sign-in/username", "/passkey/verify-authentication", "/magic-link/verify"]);
+const TWO_FACTOR_VERIFY_PATHS = new Set(["/two-factor/verify-totp", "/two-factor/verify-otp", "/two-factor/verify-backup-code"]);
+/** Sign-ins the twoFactor plugin intercepts for users with 2FA on. */
+const TWO_FACTOR_GATED_PATHS = new Set(["/sign-in/email", "/sign-in/username", "/sign-in/phone-number"]);
+/** Sign-in methods that can trigger a sign-in alert: a person proving who they are. */
+const ALERTABLE_SIGN_IN_METHODS = new Set<SignInMethod>(["oauth", "password", "magic_link", "passkey", "two_factor", "email_otp"]);
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+/**
  * Factory — called once per request inside the fetch() handler.
  *
  * IMPORTANT: Do NOT call this at module level. Workers share module
@@ -57,6 +94,161 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
   const capture = devEmailCaptureEnabled(env);
   const send = (mail: { to: string; subject: string; html: string }) =>
     sendEmail({ ...mail, apiKey: env.RESEND_API_KEY, capture, from: env.EMAIL_FROM });
+
+  // Request context for audit rows. Better Auth hands every database hook the
+  // endpoint context (null outside an endpoint); fall back to the request that
+  // created this instance.
+  const geo = geoFromCf(cf);
+  const eventContext = (context: HookContext) => {
+    const { ipAddress, userAgent } = requestMeta(context?.request ?? context?.headers ?? req);
+    const appId = (req && getAppId(req)) || (context?.request && getAppId(context.request)) || null;
+    return {
+      ipAddress,
+      userAgent,
+      appId,
+      country: geo.country ?? null,
+      city: geo.city ?? null,
+      client: describeClient(userAgent),
+      geo: { region: geo.region, colo: geo.colo, timezone: geo.timezone },
+    };
+  };
+  const userSummary = (userId: string) =>
+    env.DB
+      .prepare('SELECT name, email FROM "user" WHERE id = ? LIMIT 1')
+      .bind(userId)
+      .first<{ name: string; email: string }>()
+      .catch(() => null);
+  const hasTwoFactor = (userId: string) =>
+    env.DB
+      .prepare('SELECT twoFactorEnabled FROM "user" WHERE id = ? LIMIT 1')
+      .bind(userId)
+      .first<{ twoFactorEnabled: number | boolean | null }>()
+      .then((row) => !!row?.twoFactorEnabled)
+      .catch(() => false);
+  // session.delete.before stashes the row's app_id (Better Auth's session
+  // schema does not declare it, so the deleted entity omits it) and the user's
+  // name and email, in one read, for .after.
+  // Gated sign-ins by 2FA users, by session id, until the endpoint's result
+  // says whether 2FA let the session stand (see kovaSignInCompletion).
+  const pendingTwoFactorSignIns = new Map<string, { auditId: string | null; alertEvent: SignInAlertEvent }>();
+  // Runs after the twoFactor plugin's own after hook (plugin hooks run in
+  // plugin order). A session that survived it is a completed sign-in, e.g. a
+  // trusted device: clear the pending mark and consider the alert. A discarded
+  // one (newSession null) stays pending; /two-factor/verify-* is the sign-in.
+  const kovaSignInCompletion = {
+    id: "kova-sign-in-completion",
+    hooks: {
+      after: [{
+        matcher: (context: { path?: string }) => TWO_FACTOR_GATED_PATHS.has(context.path ?? ""),
+        handler: createAuthMiddleware(async (ctx) => {
+          try {
+            const sessionId = ctx.context.newSession?.session.id;
+            if (!sessionId) return;
+            const pending = pendingTwoFactorSignIns.get(sessionId);
+            if (!pending) return;
+            pendingTwoFactorSignIns.delete(sessionId);
+            if (pending.auditId) {
+              await env.DB
+                .prepare("UPDATE audit_log SET metadata = json_remove(metadata, '$.twoFactorPending') WHERE id = ? AND json_valid(metadata)")
+                .bind(pending.auditId)
+                .run();
+            }
+            await inBackground(maybeSendSignInAlert(env, pending.alertEvent), "sign-in alert");
+          } catch {
+            // Never changes the sign-in's outcome.
+          }
+        }),
+      }],
+    },
+  };
+  const deletedSessionContext = new WeakMap<object, { appId: string | null; name: string | null; email: string | null }>();
+
+  // The user a failed sign-in was aimed at, from what the request names. Null
+  // when it can't be resolved (unknown email, consumed token): audit_log.userId
+  // is NOT NULL and a failure against nobody isn't attributable.
+  const firstId = async (sql: string, value: string): Promise<string | null> =>
+    (await env.DB.prepare(sql).bind(value).first<{ id: string | null }>())?.id ?? null;
+  const signInTargetUserId = async (path: string, body: Record<string, unknown>, query: Record<string, unknown>) => {
+    if (path === "/sign-in/email" && typeof body.email === "string") {
+      return firstId('SELECT id FROM "user" WHERE email = ? LIMIT 1', body.email.trim().toLowerCase());
+    }
+    if (path === "/sign-in/username" && typeof body.username === "string") {
+      return firstId('SELECT id FROM "user" WHERE username = ? LIMIT 1', body.username.trim().toLowerCase());
+    }
+    const credentialId = asRecord(body.response).id;
+    if (path === "/passkey/verify-authentication" && typeof credentialId === "string") {
+      return firstId('SELECT "userId" AS id FROM passkey WHERE "credentialID" = ? LIMIT 1', credentialId);
+    }
+    if (path === "/magic-link/verify" && typeof query.token === "string") {
+      // Only resolvable while the token row still exists (expired, not consumed).
+      const row = await env.DB
+        .prepare("SELECT value FROM verification WHERE identifier = ? LIMIT 1")
+        .bind(`magic-link:${query.token}`)
+        .first<{ value: string }>();
+      const email = row ? (JSON.parse(row.value) as { email?: unknown }).email : null;
+      return typeof email === "string" ? firstId('SELECT id FROM "user" WHERE email = ? LIMIT 1', email.toLowerCase()) : null;
+    }
+    return null;
+  };
+
+  // Failed sign-ins and failed 2FA challenges. Success is logged by the
+  // database hooks; failures never reach them, so they are caught here. Never
+  // throws and never touches the endpoint's result.
+  const auditAuthFailures = createAuthMiddleware(async (ctx) => {
+    try {
+      const path = ctx.path ?? "";
+      const isSignIn = SIGN_IN_PATHS.has(path);
+      if (!isSignIn && !TWO_FACTOR_VERIFY_PATHS.has(path)) return;
+      const code = authFailureCode(ctx.context.returned);
+      if (!code) return;
+
+      let userId: string | null = null;
+      if (isSignIn) {
+        userId = await signInTargetUserId(path, asRecord(ctx.body), asRecord(ctx.query));
+      } else {
+        userId = ctx.context.session?.user.id ?? null;
+        if (!userId) {
+          // Mid-sign-in: the pending user is behind the signed two_factor cookie.
+          const cookie = ctx.context.createAuthCookie("two_factor");
+          const key = await ctx.getSignedCookie(cookie.name, ctx.context.secret);
+          if (key) {
+            const row = await env.DB
+              .prepare("SELECT value FROM verification WHERE identifier = ? LIMIT 1")
+              .bind(key)
+              .first<{ value: string }>();
+            userId = row?.value ?? null;
+          }
+        }
+        if (!userId) {
+          // Signed in already (enabling 2FA, or a session the middleware did
+          // not load): the session cookie, or the bearer token in its place.
+          const token = (await ctx.getSignedCookie(ctx.context.authCookies.sessionToken.name, ctx.context.secret))
+            || (ctx.headers ? bearerToken(ctx.headers) : null);
+          if (token) userId = (await ctx.context.internalAdapter.findSession(token))?.session.userId ?? null;
+        }
+      }
+      if (!userId) return;
+
+      const user = await userSummary(userId);
+      const event = eventContext(ctx);
+      await logAudit(env.DB, {
+        userId,
+        actor: userId,
+        actorName: user?.name ?? null,
+        actorEmail: user?.email ?? null,
+        action: isSignIn ? "user.signInFailed" : "twoFactor.challengeFailed",
+        ipAddress: event.ipAddress,
+        userAgent: event.userAgent,
+        appId: event.appId,
+        country: event.country,
+        city: event.city,
+        // Error code only: never the password, token, or code that was submitted.
+        metadata: { endpoint: path, code, client: event.client, geo: event.geo },
+      });
+    } catch {
+      // Auditing must never change the outcome of an auth request.
+    }
+  });
 
   return betterAuth(
     withCloudflare(
@@ -242,14 +434,28 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
                   return { data: { ...user, role: "admin" } };
                 }
               },
-              after: async (user: { id: string; name?: string | null; email?: string }) => {
+              after: async (user: { id: string; name?: string | null; email?: string }, context: HookContext) => {
                 // ── 1. Audit + webhook fan-out ─────────────────────
+                const event = eventContext(context);
+                const { method, provider } = signInMethodFromPath(context?.path, context?.params);
                 await logAudit(env.DB, {
                   userId: user.id,
                   actor: user.id,
                   actorName: user.name ?? null,
                   actorEmail: user.email ?? null,
                   action: "user.signUp",
+                  ipAddress: event.ipAddress,
+                  userAgent: event.userAgent,
+                  appId: event.appId,
+                  country: event.country,
+                  city: event.city,
+                  metadata: {
+                    method,
+                    provider,
+                    client: event.client,
+                    geo: event.geo,
+                    disposableEmail: await isDisposableEmailAddress(user.email),
+                  },
                 }).catch(() => { }); // non-fatal
 
                 deliverEvent(env.DB, "user.signUp", {
@@ -358,24 +564,56 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
                 id: string;
                 ipAddress?: string | null;
                 userAgent?: string | null;
-              }) => {
+              }, context: HookContext) => {
                 // The session object only carries userId — look up name+email to
                 // populate the actor columns so the audit log shows a real name.
-                const user = await env.DB
-                  .prepare('SELECT name, email FROM "user" WHERE id = ? LIMIT 1')
-                  .bind(session.userId)
-                  .first<{ name: string; email: string }>()
-                  .catch(() => null);
+                const user = await userSummary(session.userId);
 
-                await logAudit(env.DB, {
+                const event = eventContext(context);
+                const { method, provider } = signInMethodFromPath(context?.path, context?.params);
+                // A password sign-in by a 2FA user creates a session the 2FA
+                // plugin either discards before the second factor (the real
+                // sign-in is the one /two-factor/verify-* creates next) or keeps
+                // for a trusted device. Which, only the endpoint's result says:
+                // the row starts pending and kovaSignInCompletion settles it.
+                const twoFactorPending = TWO_FACTOR_GATED_PATHS.has(context?.path ?? "") && await hasTwoFactor(session.userId);
+                const signedInAt = Date.now();
+                const alertEvent = {
+                  userId: session.userId,
+                  appId: event.appId,
+                  client: event.client,
+                  country: event.country,
+                  city: event.city,
+                  at: signedInAt,
+                };
+                const auditId = await logAudit(env.DB, {
                   userId: session.userId,
                   actor: session.userId,
                   actorName: user?.name ?? null,
                   actorEmail: user?.email ?? null,
                   action: "user.signIn",
-                  ipAddress: session.ipAddress ?? null,
-                  userAgent: session.userAgent ?? null,
-                }).catch(() => { }); // non-fatal — never block login
+                  ipAddress: session.ipAddress ?? event.ipAddress,
+                  userAgent: session.userAgent ?? event.userAgent,
+                  appId: event.appId,
+                  country: event.country,
+                  city: event.city,
+                  metadata: {
+                    method,
+                    provider,
+                    client: event.client,
+                    geo: event.geo,
+                    ...(twoFactorPending ? { twoFactorPending: true } : {}),
+                  },
+                  createdAt: signedInAt,
+                }).catch(() => null); // non-fatal — never block login
+
+                // New device or country: email the user (lib/sign-in-alert).
+                // Background, and never fails the sign-in.
+                if (twoFactorPending) {
+                  pendingTwoFactorSignIns.set(session.id, { auditId, alertEvent });
+                } else if (ALERTABLE_SIGN_IN_METHODS.has(method)) {
+                  await inBackground(maybeSendSignInAlert(env, alertEvent), "sign-in alert");
+                }
                 // Webhook fan-out
                 deliverEvent(env.DB, "user.signIn", {
                   userId: session.userId,
@@ -388,7 +626,7 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
                 // ── Per-app membership + counter tracking ─────────────────
                 // Resolve app_id from the request that triggered this session
                 // via the WeakMap set by the CORS middleware's PK lookup.
-                const appId = req ? getAppId(req) : undefined;
+                const appId = event.appId;
                 if (appId) {
                   const { generateId } = await import("better-auth");
 
@@ -415,39 +653,72 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
               },
             },
             delete: {
+              before: async (session: { id: string }) => {
+                try {
+                  const row = await env.DB
+                    .prepare('SELECT s.app_id, u.name, u.email FROM session s LEFT JOIN "user" u ON u.id = s.userId WHERE s.id = ? LIMIT 1')
+                    .bind(session.id)
+                    .first<{ app_id: string | null; name: string | null; email: string | null }>();
+                  if (row) deletedSessionContext.set(session, { appId: row.app_id, name: row.name, email: row.email });
+                } catch { /* best-effort context */ }
+              },
               after: async (session: {
+                id: string;
                 userId: string;
+                expiresAt?: unknown;
+                app_id?: string | null;
                 ipAddress?: string | null;
                 userAgent?: string | null;
-              }) => {
-                // Look up user — may still exist after session deletion
-                const user = await env.DB
-                  .prepare('SELECT name, email FROM "user" WHERE id = ? LIMIT 1')
-                  .bind(session.userId)
-                  .first<{ name: string; email: string }>()
-                  .catch(() => null);
+              }, context: HookContext) => {
+                // Better Auth deletes session rows from many endpoints (expired
+                // cleanup in get-session, multi-session replacement, 2FA, revoke-*,
+                // admin). Only a real sign-out is `user.signOut`; the rest are
+                // `session.ended` with the endpoint that did it.
+                const end = classifySessionEnd(context?.path, sessionExpiryMs(session.expiresAt));
+                const event = eventContext(context);
+                const stashed = deletedSessionContext.get(session);
+                const appId = session.app_id ?? stashed?.appId ?? null;
+                // Read in delete.before; looked up here only when that did not run.
+                const user = stashed ?? await userSummary(session.userId);
 
                 await logAudit(env.DB, {
                   userId: session.userId,
                   actor: session.userId,
                   actorName: user?.name ?? null,
                   actorEmail: user?.email ?? null,
-                  action: "user.signOut",
-                  ipAddress: session.ipAddress ?? null,
-                  userAgent: session.userAgent ?? null,
+                  action: end.action,
+                  targetType: "session",
+                  targetId: session.id,
+                  ipAddress: event.ipAddress ?? session.ipAddress ?? null,
+                  userAgent: event.userAgent ?? session.userAgent ?? null,
+                  appId,
+                  country: event.country,
+                  city: event.city,
+                  metadata: {
+                    endpoint: context?.path ?? null,
+                    sessionId: session.id,
+                    appId,
+                    reason: end.reason,
+                    client: event.client,
+                  },
                 }).catch(() => { }); // non-fatal
-                // Webhook fan-out
+
+                // Webhook fan-out: only for a real sign-out.
+                if (end.action !== "user.signOut") return;
                 deliverEvent(env.DB, "user.signOut", {
                   userId: session.userId,
                   actorName: user?.name ?? null,
                   actorEmail: user?.email ?? null,
-                  ipAddress: session.ipAddress ?? null,
-                  userAgent: session.userAgent ?? null,
+                  ipAddress: event.ipAddress ?? session.ipAddress ?? null,
+                  userAgent: event.userAgent ?? session.userAgent ?? null,
                 }).catch(() => { });
               },
             },
           },
         },
+
+        // ── Failure audit ─────────────────────────────────────────
+        hooks: { after: auditAuthFailures },
 
         // ── Social providers ──────────────────────────────────────
         //
@@ -683,7 +954,9 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
             generateDeviceCode,
             grant: kovaDeviceGrant(env),
           }),
-          kovaDeviceRedemption(env),
+          kovaDeviceRedemption(env, cf),
+          // Must stay after twoFactor(): see pendingTwoFactorSignIns.
+          kovaSignInCompletion,
         ],
 
         // ── Session ───────────────────────────────────────────────
@@ -709,8 +982,8 @@ export function createAuth(env: Env, cf?: IncomingRequestCfProperties, req?: Req
           // this on when a `cf` object is present; oauth-provider refuses to
           // start with KV secondary storage unless it is set explicitly.
           storeSessionInDatabase: true,
-          expiresIn: 60 * 60 * 24 * 30,  // 30-day cap; use slides it forward
-          updateAge: 60 * 60 * 24,       // refresh at most once a day when used
+          expiresIn: SESSION_EXPIRES_IN_SECONDS, // 30-day cap; use slides it forward
+          updateAge: SESSION_UPDATE_AGE_SECONDS, // refresh at most once a day when used
           disableSessionRefresh: false,  // keep the chosen Kova session alive
           freshAge: 60 * 10,              // re-auth required for sensitive ops within 10 min
 

@@ -96,3 +96,9 @@ port = 5174
 [observability.logs]
 enabled = true
 invocation_logs = true
+
+# ── Cron ──────────────────────────────────────────────────────────────────────
+# Daily maintenance (src/worker/index.ts scheduled): deletes audit_log rows
+# older than one year.
+[triggers]
+crons = ["17 3 * * *"]

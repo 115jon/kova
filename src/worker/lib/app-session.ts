@@ -7,7 +7,12 @@
  * (`get-session` without a publishable key rejects any scoped cookie).
  */
 
-export const APP_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+import { logAudit } from "../audit";
+import { describeClient, geoFromCf } from "./audit-context";
+import { SESSION_EXPIRES_IN_SECONDS, SESSION_UPDATE_AGE_SECONDS } from "./session-lifetime";
+
+/** Same lifetime as Better Auth's sessions (lib/session-lifetime.ts). */
+export const APP_SESSION_TTL_MS = SESSION_EXPIRES_IN_SECONDS * 1000;
 
 export function sessionExpiryMs(expiresAt: unknown): number | null {
   if (expiresAt instanceof Date) {
@@ -73,6 +78,36 @@ export function appSessionTimestampValues(now = Date.now()): {
   };
 }
 
+/**
+ * Sliding refresh for a session read with raw SQL (Better Auth refreshes the
+ * rows it reads itself). Returns the new expiresAt/updatedAt when the session
+ * was last refreshed at least SESSION_UPDATE_AGE_SECONDS ago, else null. The
+ * values keep the row's existing format: ISO text for rows written by
+ * insertAppScopedSession, epoch ms for rows Better Auth wrote.
+ */
+export function slidingRefreshValues(
+  row: { expiresAt: unknown; updatedAt: unknown },
+  now = Date.now(),
+): { expiresAt: string | number; updatedAt: string | number } | null {
+  const updatedAt = sessionExpiryMs(row.updatedAt);
+  if (updatedAt !== null && now - updatedAt < SESSION_UPDATE_AGE_SECONDS * 1000) return null;
+  const expiresAt = now + APP_SESSION_TTL_MS;
+  return typeof row.expiresAt === "number"
+    ? { expiresAt, updatedAt: now }
+    : { expiresAt: new Date(expiresAt).toISOString(), updatedAt: new Date(now).toISOString() };
+}
+
+export async function slideSessionExpiry(
+  db: D1Database,
+  sessionId: string,
+  values: { expiresAt: string | number; updatedAt: string | number },
+): Promise<void> {
+  await db
+    .prepare("UPDATE session SET expiresAt = ?, updatedAt = ? WHERE id = ?")
+    .bind(values.expiresAt, values.updatedAt, sessionId)
+    .run();
+}
+
 export type AppSessionRow = {
   id: string;
   userId: string;
@@ -116,6 +151,9 @@ export async function resolveAppScopedSession(
     parentSessionId: string;
     ipAddress: string | null;
     userAgent: string | null;
+    cf?: IncomingRequestCfProperties;
+    /** Which flow is asking. Defaults to "session_token". */
+    via?: AppSignInVia;
   },
 ): Promise<AppSessionRow | null> {
   const caller = await db
@@ -155,6 +193,8 @@ export async function resolveAppScopedSession(
     parentSessionId: input.parentSessionId,
     ipAddress: input.ipAddress,
     userAgent: input.userAgent,
+    cf: input.cf,
+    audit: { via: input.via ?? "session_token" },
   });
   const stamps = appSessionTimestampValues();
   return {
@@ -171,12 +211,19 @@ export async function resolveAppScopedSession(
   };
 }
 
+/** The flow that minted an app session; recorded on the `app.signIn` audit row. */
+export type AppSignInVia = "sdk_bounce" | "session_token" | "device" | "native" | "hosted";
+
 /**
  * `parentSessionId` is the browser session the token is for, so that browser
  * can reuse it. Leave it null for a token that leaves the browser (device-code
  * approval, native-app handoff): it is then standalone and never reused.
  * Signing the parent out does not revoke its app sessions: sign-out is per app
  * (POST /:pk/revoke-session deletes exactly the token presented).
+ *
+ * This is raw SQL, so Better Auth's session hooks never see the row. Pass
+ * `audit` to record the `app.signIn` event they would have produced, and `cf`
+ * to fill the session's geo columns. The audit write never fails the sign-in.
  */
 export async function insertAppScopedSession(
   db: D1Database,
@@ -189,13 +236,22 @@ export async function insertAppScopedSession(
     ipAddress: string | null;
     userAgent: string | null;
     now?: number;
+    cf?: IncomingRequestCfProperties;
+    audit?: { via: AppSignInVia; actorName?: string | null; actorEmail?: string | null };
   },
 ): Promise<void> {
   const stamps = appSessionTimestampValues(input.now);
+  const geo = geoFromCf(input.cf);
+  // Geo columns only when there is geo, so a plain insert is unchanged.
+  const geoColumns = [
+    ["timezone", geo.timezone], ["city", geo.city], ["country", geo.country], ["region", geo.region],
+    ["regionCode", geo.regionCode], ["colo", geo.colo], ["latitude", geo.latitude], ["longitude", geo.longitude],
+  ] as const;
+  const geoPresent = geoColumns.filter(([, value]) => value !== undefined);
   await db
     .prepare(
-      `INSERT INTO session (id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, app_id, parent_session_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO session (id, userId, token, expiresAt, createdAt, updatedAt, ipAddress, userAgent, app_id, parent_session_id${geoPresent.map(([name]) => `, ${name}`).join("")})
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?${", ?".repeat(geoPresent.length)})`,
     )
     .bind(
       input.sessionId,
@@ -208,8 +264,44 @@ export async function insertAppScopedSession(
       input.userAgent,
       input.appId,
       input.parentSessionId ?? null,
+      ...geoPresent.map(([, value]) => value),
     )
     .run();
+
+  if (!input.audit) return;
+  try {
+    let { actorName, actorEmail } = input.audit;
+    if (actorName === undefined && actorEmail === undefined) {
+      const user = await db
+        .prepare('SELECT name, email FROM "user" WHERE id = ? LIMIT 1')
+        .bind(input.userId)
+        .first<{ name: string; email: string }>();
+      actorName = user?.name ?? null;
+      actorEmail = user?.email ?? null;
+    }
+    await logAudit(db, {
+      userId: input.userId,
+      actor: input.userId,
+      actorName: actorName ?? null,
+      actorEmail: actorEmail ?? null,
+      action: "app.signIn",
+      appId: input.appId,
+      targetType: "session",
+      targetId: input.sessionId,
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+      country: geo.country ?? null,
+      city: geo.city ?? null,
+      metadata: {
+        via: input.audit.via,
+        parentSessionId: input.parentSessionId ?? null,
+        client: describeClient(input.userAgent),
+        geo: { region: geo.region, colo: geo.colo, timezone: geo.timezone },
+      },
+    });
+  } catch {
+    // Audit is best-effort; the session is already minted.
+  }
 }
 
 /**

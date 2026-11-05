@@ -263,16 +263,20 @@ appUsersRouter.get("/:userId/detail", async (c) => {
   // Recent audit activity (last 15 entries)
   const activityRows = await c.env.DB
     .prepare(`
-      SELECT id, action, actorName, actorEmail, ipAddress, userAgent, metadata, createdAt
+      SELECT audit_log.id, audit_log.action, audit_log.actorName, audit_log.actorEmail, audit_log.ipAddress,
+             audit_log.userAgent, audit_log.metadata, audit_log.createdAt,
+             audit_log.country, audit_log.city, application.name AS appName
       FROM audit_log
-      WHERE userId = ?
-      ORDER BY createdAt DESC
+      LEFT JOIN application ON application.id = audit_log.appId
+      WHERE audit_log.userId = ?
+      ORDER BY audit_log.createdAt DESC, audit_log.id DESC
       LIMIT 15
     `)
     .bind(userId)
     .all<{
       id: string; action: string; actorName: string | null; actorEmail: string | null;
       ipAddress: string | null; userAgent: string | null; metadata: string | null; createdAt: number;
+      country: string | null; city: string | null; appName: string | null;
     }>();
 
   // 365-day activity histogram: { "YYYY-MM-DD": count }

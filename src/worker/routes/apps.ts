@@ -191,6 +191,9 @@ appsRouter.patch("/:id", async (c) => {
   if ("error" in branding) {
     return Response.json({ error: branding.error }, { status: 400 });
   }
+  if (body.sign_in_alerts !== undefined && typeof body.sign_in_alerts !== "boolean") {
+    return Response.json({ error: "sign_in_alerts must be a boolean" }, { status: 400 });
+  }
   let app: Application | null;
   try {
     app = await updateApplication(c.env.DB, id, {
@@ -213,6 +216,7 @@ appsRouter.patch("/:id", async (c) => {
       smtp_user: body.smtp_user as string | null | undefined,
       smtp_secure: body.smtp_secure as boolean | undefined,
       device_verification_uri: deviceUri.value,
+      sign_in_alerts: body.sign_in_alerts as boolean | undefined,
     }, undefined, existing.environment);
   } catch (error) {
     // Validated under one environment, promoted before the write landed.

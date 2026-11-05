@@ -13,6 +13,8 @@
  *   ALL  /api/auth/*                       → Proxied to Better Auth (subdomain-scoped session)
  *   POST /api/hosted/create-ticket         → Issues short-lived auth code after sign-in
  *   POST /api/hosted/exchange-ticket       → Exchanges code for userId (requires sk_*)
+ *   GET  /account                          → Account page (activity, sessions); signs in first if needed
+ *   ALL  /api/account/*                    → Account API for that page (routes/account.ts)
  *   GET  /device                           → Device-code approval (manual entry or ?code=)
  *   ALL  /api/auth/device*                 → Better Auth verify/approve/deny, behind device-host-guard
  *   POST /api/hosted/device/release        → Drop this account's claim on a pending code
@@ -28,6 +30,7 @@
  */
 
 import { Context, Hono } from "hono";
+import { setAppId } from "../lib/app-context";
 import { generateCookie, generateSignedCookie } from "hono/cookie";
 import { parseCookies } from "better-auth/cookies";
 import type { KVNamespace } from "@cloudflare/workers-types";
@@ -36,7 +39,7 @@ import { createAuth } from "../auth";
 import { rejectDisallowedOrigin } from "../lib/app-origin";
 import { APP_SESSION_TTL_MS, insertAppScopedSession, sessionMayActForApp } from "../lib/app-session";
 import { createAuthTicket, createSessionTransferCode, exchangeAuthTicket } from "../lib/auth-ticket";
-import { isSafeDeviceReturnPath } from "../lib/device-code";
+import { HOSTED_ACCOUNT_PATH, isSafeHostedReturnPath } from "../lib/device-code";
 import { guardHostedDeviceRequest, isDeviceAuthPath } from "../lib/device-host-guard";
 import { escapeHtml, jsonForHtmlScript } from "../lib/html";
 import { hostedProviders } from "../lib/hosted-providers";
@@ -46,6 +49,7 @@ import { resolveHostedAppearance, type HostedProvider } from "../../shared/hoste
 import { artPanelHtml, hostedShellCss, hostedTheme } from "../../web/hosted/hosted-theme";
 import { findMFAEnforcedOrgBlockingUser } from "../org-settings";
 import { devicePageApp, devicePageResponse, loadDevicePage, NO_FRAMING_HEADERS, releaseDeviceClaim } from "./hosted-device";
+import { createAccountRouter } from "./account";
 import { encodeOAuthCtx, oauthStartUsesSdkBounce } from "./oauth-bounce";
 
 // ── Router ─────────────────────────────────────────────────────────────────────
@@ -76,7 +80,14 @@ const esc = escapeHtml;
 
 // ── HTML template ──────────────────────────────────────────────────────────────
 
-type HostedPageMode = "sign-in" | "sign-up";
+type HostedPageMode = "sign-in" | "sign-up" | "account";
+
+/** Signed-in user shown on the account page. */
+interface HostedPageUser {
+  name: string | null;
+  email: string;
+  image: string | null;
+}
 
 /**
  * Generates the branded hosted auth page HTML shell.
@@ -95,11 +106,15 @@ async function buildHostedPage(opts: {
   signingSecret: string;
   returnPath?: string;
   enabledProviders: HostedProvider[];
+  /** mode "account" only. */
+  user?: HostedPageUser;
 }): Promise<string> {
   const { app, mode, redirectUri, state, authUrl, mainAuthUrl } = opts;
   const title = mode === "sign-in"
     ? `Sign in to ${esc(app.display_name ?? app.name)}`
-    : `Create account — ${esc(app.display_name ?? app.name)}`;
+    : mode === "account"
+      ? `Account — ${esc(app.display_name ?? app.name)}`
+      : `Create account — ${esc(app.display_name ?? app.name)}`;
 
   const appearance = resolveHostedAppearance(app, {
     primaryColor: app.primary_color ?? "#3b82f6",
@@ -118,9 +133,10 @@ async function buildHostedPage(opts: {
     mainAuthUrl,
     redirectUri,
     state,
-    ...(isSafeDeviceReturnPath(opts.returnPath) ? { returnPath: opts.returnPath } : {}),
+    ...(isSafeHostedReturnPath(opts.returnPath) ? { returnPath: opts.returnPath } : {}),
     mode: app.environment === "production" ? "live" : "test",
     page: mode,
+    ...(mode === "account" && opts.user ? { accountApiBase: "/api/account", user: opts.user } : {}),
     appearance,
     enabledProviders: opts.enabledProviders,
     app: {
@@ -129,7 +145,8 @@ async function buildHostedPage(opts: {
       // Device sign-in has no ticket redirect. The current hosted bundle sends
       // an empty redirectUri to homeUrl, so that value is the same-origin
       // /device return. A rebuilt bundle prefers returnPath and skips the ticket.
-      homeUrl: isSafeDeviceReturnPath(opts.returnPath) ? opts.returnPath : (app.home_url ?? null),
+      // The account page links back to the app, never to itself.
+      homeUrl: mode !== "account" && isSafeHostedReturnPath(opts.returnPath) ? opts.returnPath : (app.home_url ?? null),
       termsUrl: app.terms_url ?? null,
       privacyUrl: app.privacy_url ?? null,
     },
@@ -142,7 +159,7 @@ async function buildHostedPage(opts: {
       appId: app.id,
       redirect_uri: redirectUri,
       state,
-      ...(isSafeDeviceReturnPath(opts.returnPath) ? { returnPath: opts.returnPath } : {}),
+      ...(isSafeHostedReturnPath(opts.returnPath) ? { returnPath: opts.returnPath } : {}),
     }, opts.signingSecret),
   });
 
@@ -180,7 +197,7 @@ async function buildHostedPage(opts: {
   <script>window.__KOVA_AUTH_HOSTED__ = ${bootstrap};</script>
   <script type="module" src="/assets/hosted-auth.js" onerror="
     document.getElementById('root').innerHTML =
-      '<div class=ra-skeleton style=color:#ff9b9b>Couldn’t load sign-in. Refresh to try again.</div>';
+      '<div class=ra-skeleton style=color:#ff9b9b>Couldn’t load ${mode === "account" ? "your account" : "sign-in"}. Refresh to try again.</div>';
   "></script>
 </body>
 </html>`;
@@ -194,12 +211,12 @@ async function buildHostedPage(opts: {
 // `state`. Device approval is the exception: its session cookie must be scoped
 // to this host, so a `device_return` sign-in still renders here.
 
-async function hostedSignIn(c: HC, mode: HostedPageMode): Promise<Response> {
+async function hostedSignIn(c: HC, mode: "sign-in" | "sign-up"): Promise<Response> {
   const app = getApp(c);
   if (app.suspended_at) return c.html(`<p style="font-family:monospace;color:#f87171;padding:32px">Application suspended.</p>`, 403);
 
   const deviceReturn = c.req.query("device_return");
-  if (isSafeDeviceReturnPath(deviceReturn)) {
+  if (isSafeHostedReturnPath(deviceReturn)) {
     const enabledProviders = await hostedProviders(c.env, app.id).catch(() => null);
     if (!enabledProviders) return c.html(hostedMessagePage(app, "Sign-in providers could not be loaded. Please try again."), 503);
     const host = getHost(c);
@@ -231,6 +248,63 @@ hostedAuthRouter.get("/", (c) => hostedSignIn(c, "sign-in"));
 hostedAuthRouter.get("/sign-in", (c) => hostedSignIn(c, "sign-in"));
 hostedAuthRouter.get("/sign-up", (c) => hostedSignIn(c, "sign-up"));
 
+// ── GET /account — the signed-in user's activity and sessions ──────────────────
+//
+// Needs this host's own session cookie; without one, sign in here first and
+// come back (the sign-in page carries `/account` as its return path). The page
+// is the hosted bundle in account mode, reading /api/account/* below.
+
+/** The subdomain session, if it may act for this app. */
+async function hostedSession(c: HC, app: Application) {
+  const auth = createAuth(
+    c.env,
+    c.req.raw.cf as IncomingRequestCfProperties | undefined,
+    c.req.raw,
+    `https://${getHost(c)}`,
+  );
+  const session = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+  if (!session?.user || !session.session) return null;
+  if (!(await sessionMayActForApp(c.env.DB, session.session.id, app.id))) return null;
+  return session;
+}
+
+hostedAuthRouter.get(HOSTED_ACCOUNT_PATH, async (c) => {
+  const app = getApp(c);
+  if (app.suspended_at) return c.html(`<p style="font-family:monospace;color:#f87171;padding:32px">Application suspended.</p>`, 403);
+  c.header("Cache-Control", "no-store");
+
+  const session = await hostedSession(c, app);
+  if (!session) return c.redirect(`/sign-in?device_return=${encodeURIComponent(HOSTED_ACCOUNT_PATH)}`, 302);
+
+  const enabledProviders = await hostedProviders(c.env, app.id).catch(() => [] as HostedProvider[]);
+  const host = getHost(c);
+  for (const [name, value] of Object.entries(NO_FRAMING_HEADERS)) c.header(name, value);
+  return c.html(await buildHostedPage({
+    app,
+    mode: "account",
+    redirectUri: "",
+    state: "",
+    returnPath: HOSTED_ACCOUNT_PATH,
+    enabledProviders,
+    authUrl: `https://${host}`,
+    mainAuthUrl: c.env.AUTH_URL,
+    signingSecret: c.env.BETTER_AUTH_SECRET,
+    user: { name: session.user.name ?? null, email: session.user.email, image: session.user.image ?? null },
+  }));
+});
+
+// ── /api/account/* — account API for the page above (routes/account.ts) ───────
+
+hostedAuthRouter.route("/api/account", createAccountRouter<HEnv>(async (c) => {
+  const app = getApp(c);
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+  const disallowed = rejectDisallowedOrigin(c.env, app, c.req.header("Origin"), `https://${getHost(c)}`);
+  if (disallowed) return disallowed;
+  const session = await hostedSession(c, app);
+  if (!session) return Response.json({ error: "Not authenticated" }, { status: 401 });
+  return { userId: session.user.id, sessionId: session.session.id };
+}));
+
 // ── ALL /api/auth/* — Better Auth proxy ────────────────────────────────────────
 //
 // Creates a Better Auth instance scoped to this subdomain (baseURL = subdomain URL).
@@ -250,6 +324,9 @@ hostedAuthRouter.all("/api/auth/*", async (c) => {
     const refused = await guardHostedDeviceRequest({ request: c.req.raw, db: c.env.DB, appId: app.id, hostOrigin: subdomainUrl });
     if (refused) return refused;
   }
+  // Sign-ins on this host belong to this app: audit events, sign-in alerts
+  // (branding and the app's toggle) and app membership read it from here.
+  setAppId(c.req.raw, app.id);
   const auth = createAuth(
     c.env,
     c.req.raw.cf as IncomingRequestCfProperties | undefined,
@@ -315,6 +392,8 @@ hostedAuthRouter.post("/api/hosted/create-ticket", async (c) => {
       parentSessionId: null,
       ipAddress: c.req.header("CF-Connecting-IP") ?? null,
       userAgent: c.req.header("User-Agent") ?? null,
+      cf: c.req.raw.cf as IncomingRequestCfProperties | undefined,
+      audit: { via: "native" },
     });
     const code = await createSessionTransferCode(
       c.env.KV,
@@ -386,7 +465,7 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
   const state = c.req.query("state") ?? "";
   const returnPath = c.req.query("returnPath");
 
-  if ((returnPath !== undefined && (!isSafeDeviceReturnPath(returnPath) || redirectUri !== ""))
+  if ((returnPath !== undefined && (!isSafeHostedReturnPath(returnPath) || redirectUri !== ""))
     || (redirectUri && !isRedirectUriAllowed(app, redirectUri))) {
     return c.html(hostedMessagePage(app, "OAuth complete failed: invalid destination."), 400);
   }
@@ -447,6 +526,8 @@ hostedAuthRouter.get("/oauth-complete", async (c) => {
       parentSessionId: null,
       ipAddress: c.req.header("CF-Connecting-IP") ?? null,
       userAgent: c.req.header("User-Agent") ?? null,
+      cf: c.req.raw.cf as IncomingRequestCfProperties | undefined,
+      audit: { via: "hosted" },
     });
 
     // Better Auth (1.6 and 1.7) uses token.base64(HMAC-SHA256(token)). Hono's signed

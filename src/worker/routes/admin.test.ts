@@ -26,8 +26,8 @@ const HOUR = 60 * 60 * 1000;
 function seededEnv() {
   const now = Date.now();
   const { sqlite, db } = memoryD1((sqlite) => {
-    sqlite.exec("CREATE TABLE application (id TEXT PRIMARY KEY)");
-    for (const name of ["0000_init.sql", "0006_add_audit_log.sql", "0007_add_plugins.sql", "0016_session_app_tracking.sql"]) {
+    sqlite.exec("CREATE TABLE application (id TEXT PRIMARY KEY, name TEXT)");
+    for (const name of ["0000_init.sql", "0006_add_audit_log.sql", "0007_add_plugins.sql", "0016_session_app_tracking.sql", "0031_audit_log_context.sql"]) {
       sqlite.exec(migrationSql(name));
     }
     sqlite.exec("INSERT INTO application (id) VALUES ('app_1')");
@@ -145,5 +145,85 @@ describe("GET /api/admin/users/:userId", () => {
     const response = await adminRouter.request("/users/user-2", {}, env);
     expect(response.status).toBe(200);
     expect((await response.json() as { sessionCount: number }).sessionCount).toBe(2);
+  });
+});
+
+describe("GET /api/admin/audit/logs filters", () => {
+  const T = Date.UTC(2026, 10, 1);
+  function auditEnv() {
+    const { sqlite, env } = seededEnv();
+    sqlite.exec("UPDATE application SET name = 'Ralph Meet' WHERE id = 'app_1'");
+    const insert = sqlite.prepare(
+      "INSERT INTO audit_log (id, userId, actor, actorName, actorEmail, action, targetLabel, metadata, appId, country, city, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    );
+    const row = (id: string, fields: { userId?: string; name?: string; email?: string; action?: string; target?: string | null; appId?: string | null; country?: string | null; at?: number }) =>
+      insert.run(
+        `${fields.at ?? T}_${id}`, fields.userId ?? "user-2", fields.userId ?? "user-2", fields.name ?? "Grace", fields.email ?? "grace@example.com",
+        fields.action ?? "user.signIn", fields.target ?? null, JSON.stringify({ client: { browser: "Safari" } }), fields.appId ?? null,
+        fields.country === undefined ? "US" : fields.country, "Austin", fields.at ?? T,
+      );
+    // Five rows in the same millisecond: the cursor must page through them exactly once.
+    for (const id of ["a", "b", "c", "d", "e"]) row(id, {});
+    row("fail", { action: "user.signInFailed", country: "BR", at: T - 1000 });
+    row("2fa", { action: "twoFactor.challengeFailed", country: "BR", at: T - 2000 });
+    row("app", { action: "app.signIn", appId: "app_1", country: "DE", at: T - 3000 });
+    row("admin", { userId: "admin-1", name: "Admin", email: "Admin@Example.com", action: "admin.userBanned", target: "Banned User", country: null, at: T - 4000 });
+    return env;
+  }
+  const get = async (env: Env, query: string) =>
+    (await (await adminRouter.request(`/audit/logs?${query}`, {}, env)).json()) as {
+      logs: Array<{ id: string; action: string; appName: string | null; country: string | null; city: string | null; metadata: unknown }>;
+      nextCursor: string | null;
+    };
+
+  it("pages through rows sharing a createdAt without skipping or repeating", async () => {
+    const env = auditEnv();
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page: Awaited<ReturnType<typeof get>> = await get(env, `limit=2${cursor ? `&before=${encodeURIComponent(cursor)}` : ""}`);
+      seen.push(...page.logs.map((log) => log.id));
+      cursor = page.nextCursor;
+    } while (cursor);
+    expect(seen).toHaveLength(9);
+    expect(new Set(seen).size).toBe(9);
+  });
+
+  it("matches q case-insensitively on actor email, name, userId and target label", async () => {
+    const env = auditEnv();
+    expect((await get(env, "q=ADMIN%40example")).logs.map((l) => l.action)).toEqual(["admin.userBanned"]);
+    expect((await get(env, "q=banned%20user")).logs.map((l) => l.action)).toEqual(["admin.userBanned"]);
+    expect((await get(env, "q=user-2")).logs).toHaveLength(8);
+    expect((await get(env, "q=%25")).logs).toHaveLength(0);
+  });
+
+  it("filters by country, outcome=failure, and a from/to window", async () => {
+    const env = auditEnv();
+    expect((await get(env, "country=br")).logs.map((l) => l.action).sort()).toEqual(["twoFactor.challengeFailed", "user.signInFailed"]);
+    expect((await get(env, "outcome=failure")).logs.map((l) => l.action).sort()).toEqual(["twoFactor.challengeFailed", "user.signInFailed"]);
+    expect((await get(env, `from=${T - 3000}&to=${T - 1000}`)).logs.map((l) => l.action)).toEqual(["twoFactor.challengeFailed", "app.signIn"]);
+    expect((await adminRouter.request("/audit/logs?country=USA", {}, env)).status).toBe(400);
+    expect((await adminRouter.request("/audit/logs?from=yesterday", {}, env)).status).toBe(400);
+  });
+
+  it("returns appName, country, city and parsed metadata", async () => {
+    const env = auditEnv();
+    const [log] = (await get(env, "action=app.signIn")).logs;
+    expect(log).toMatchObject({ appName: "Ralph Meet", country: "DE", city: "Austin", metadata: { client: { browser: "Safari" } } });
+  });
+
+  it("serves facets: all apps, and the countries and actions in the log", async () => {
+    const env = auditEnv();
+    const response = await adminRouter.request("/audit/facets", {}, env);
+    expect(response.status).toBe(200);
+    const facets = await response.json() as { apps: unknown[]; countries: string[]; actions: string[] };
+    expect(facets.apps).toEqual([{ id: "app_1", name: "Ralph Meet" }]);
+    expect(facets.countries).toEqual(["BR", "DE", "US"]);
+    expect(facets.actions).toEqual(["admin.userBanned", "app.signIn", "twoFactor.challengeFailed", "user.signIn", "user.signInFailed"]);
+  });
+
+  it("requires an admin for facets", async () => {
+    getSession.mockResolvedValueOnce({ ...admin, user: { ...admin.user, role: "user" } });
+    expect((await adminRouter.request("/audit/facets", {}, auditEnv())).status).toBe(403);
   });
 });

@@ -7,10 +7,11 @@ import {
   validatePatch,
 } from "../additional-fields";
 import type { AuditAction } from "../audit";
-import { logAudit, queryAuditLogs } from "../audit";
+import { logAudit, queryAuditFacets, queryAuditLogs } from "../audit";
 import { createAuth } from "../auth";
 import { parseDevice, parseGeo } from "../device";
 import { sessionExpiresAtMs } from "../lib/app-session";
+import { AUDIT_RETENTION_MS } from "../lib/audit-retention";
 import { ALLOWED_IMAGE_TYPES, isFileLike, scanUpload } from "../lib/cdn";
 import { hasAdminRole } from "../lib/roles";
 import {
@@ -32,10 +33,59 @@ const adminRouter = new Hono<{ Bindings: Env }>();
 // ── Audit log query ───────────────────────────────────────────────────────────
 //
 // GET /api/admin/audit/logs
-//   ?userId=  ?orgId=  ?action=  ?limit=  ?before=  (cursor)
+//   ?userId=  ?orgId=  ?appId=  ?action=  ?limit=  ?before=  (cursor)
+//   ?q=  (actor email/name, userId, target label)  ?country=  (ISO2)
+//   ?outcome=failure  ?from=  ?to=  (Unix ms; from inclusive, to exclusive)
 adminRouter.get("/audit/logs", async (c) => {
   const { env } = c;
-  const request = c.req.raw;
+  const denied = await requireAuditAdmin(env, c.req.raw);
+  if (denied) return denied;
+
+  const params = c.req.query();
+  const country = params.country?.trim().toUpperCase();
+  if (country && !/^[A-Z]{2}$/.test(country)) {
+    return Response.json({ error: "country must be an ISO 3166-1 alpha-2 code" }, { status: 400 });
+  }
+  const time = (value: string | undefined) => {
+    if (!value) return undefined;
+    const ms = Number(value);
+    return Number.isFinite(ms) ? ms : null;
+  };
+  const from = time(params.from);
+  const to = time(params.to);
+  if (from === null || to === null) {
+    return Response.json({ error: "from and to must be Unix milliseconds" }, { status: 400 });
+  }
+  const { logs, nextCursor } = await queryAuditLogs(env.DB, {
+    userId: params.userId ?? undefined,
+    orgId: params.orgId ?? undefined,
+    appId: params.appId ?? undefined,
+    action: params.action ?? undefined,
+    q: params.q?.slice(0, 200) || undefined,
+    country: country || undefined,
+    outcome: params.outcome === "failure" ? "failure" : undefined,
+    from,
+    to,
+    before: params.before ?? null,
+    limit: params.limit ? Number(params.limit) : 50,
+  });
+
+  const parsed = logs.map((row) => ({
+    ...row,
+    metadata: parseMetadata(row.metadata),
+  }));
+
+  return Response.json({ logs: parsed, nextCursor });
+});
+
+// GET /api/admin/audit/facets → { apps: {id, name}[], countries: string[], actions: string[] }
+adminRouter.get("/audit/facets", async (c) => {
+  const denied = await requireAuditAdmin(c.env, c.req.raw);
+  if (denied) return denied;
+  return Response.json(await queryAuditFacets(c.env.DB, Date.now() - AUDIT_RETENTION_MS));
+});
+
+async function requireAuditAdmin(env: Env, request: Request): Promise<Response | null> {
   const auth = createAuth(env, request.cf as IncomingRequestCfProperties | undefined);
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user) {
@@ -44,23 +94,17 @@ adminRouter.get("/audit/logs", async (c) => {
   if (!hasAdminRole((session.user as { role?: string }).role)) {
     return Response.json({ error: "Admin access required" }, { status: 403 });
   }
+  return null;
+}
 
-  const params = c.req.query();
-  const { logs, nextCursor } = await queryAuditLogs(env.DB, {
-    userId: params.userId ?? undefined,
-    orgId: params.orgId ?? undefined,
-    action: params.action ?? undefined,
-    before: params.before ?? null,
-    limit: params.limit ? Number(params.limit) : 50,
-  });
-
-  const parsed = logs.map((row) => ({
-    ...row,
-    metadata: row.metadata ? JSON.parse(row.metadata) : null,
-  }));
-
-  return Response.json({ logs: parsed, nextCursor });
-});
+function parseMetadata(text: string | null): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
 // ── User detail (aggregate) ───────────────────────────────────────────────────
 //

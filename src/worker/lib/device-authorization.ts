@@ -149,7 +149,7 @@ export function kovaDeviceGrant(env: Pick<Env, "DB">): DeviceAuthorizationGrant<
  * one-time claim, then mints the app-scoped session. Nothing is minted before
  * this point, so an approved code that is never polled leaves no session.
  */
-export function kovaDeviceRedemption(env: Pick<Env, "DB">) {
+export function kovaDeviceRedemption(env: Pick<Env, "DB">, cf?: IncomingRequestCfProperties) {
   return {
     id: "kova-device-redemption",
     endpoints: {
@@ -196,6 +196,8 @@ export function kovaDeviceRedemption(env: Pick<Env, "DB">) {
             appId,
             ipAddress: ctx.body.ipAddress ?? null,
             userAgent: ctx.body.userAgent ?? null,
+            cf,
+            audit: { via: "device" },
           });
           await env.DB
             .prepare("INSERT OR IGNORE INTO app_user (id, app_id, user_id, role) VALUES (?, ?, ?, 'member')")

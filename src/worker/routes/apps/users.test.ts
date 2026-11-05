@@ -19,8 +19,8 @@ const router = new Hono<{ Bindings: Env }>().route("/:appId/users", appUsersRout
 function seededEnv() {
   const now = Date.now();
   const { db } = memoryD1((sqlite) => {
-    sqlite.exec("CREATE TABLE application (id TEXT PRIMARY KEY)");
-    for (const name of ["0000_init.sql", "0006_add_audit_log.sql", "0007_add_plugins.sql", "0016_session_app_tracking.sql"]) {
+    sqlite.exec("CREATE TABLE application (id TEXT PRIMARY KEY, name TEXT)");
+    for (const name of ["0000_init.sql", "0006_add_audit_log.sql", "0007_add_plugins.sql", "0016_session_app_tracking.sql", "0031_audit_log_context.sql"]) {
       sqlite.exec(migrationSql(name));
     }
     sqlite.exec(`CREATE TABLE app_user (
@@ -65,6 +65,17 @@ describe("per-app member session counts", () => {
     const response = await router.request("/app_1/users/user-2/detail", {}, seededEnv());
     expect(response.status).toBe(200);
     expect((await response.json() as { activeSessionCount: number }).activeSessionCount).toBe(2);
+  });
+
+  it("rich detail returns appName, country and city on each activity row", async () => {
+    const env = seededEnv();
+    await env.DB.prepare("UPDATE application SET name = 'Ralph Meet' WHERE id = 'app_1'").run();
+    await env.DB.prepare(
+      "INSERT INTO audit_log (id, userId, actor, action, appId, country, city, createdAt) VALUES ('1_a', 'user-2', 'user-2', 'app.signIn', 'app_1', 'US', 'Austin', 1)",
+    ).run();
+    const response = await router.request("/app_1/users/user-2/detail", {}, env);
+    const body = await response.json() as { recentActivity: Array<Record<string, unknown>> };
+    expect(body.recentActivity).toEqual([expect.objectContaining({ action: "app.signIn", appName: "Ralph Meet", country: "US", city: "Austin" })]);
   });
 
   it("is admin only", async () => {

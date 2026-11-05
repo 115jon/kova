@@ -19,6 +19,10 @@
  *   POST /api/pub/apps/:publishableKey/device/{lookup,approve,deny,release}
  *     → Approval from the app's own page with an app-scoped bearer session.
  *
+ *   GET|POST /api/pub/apps/:publishableKey/account/*
+ *     → The signed-in user's own activity and sessions (routes/account.ts),
+ *       with the app bearer token or cookie.
+ *
  *   GET /api/pub/apps/:publishableKey/plan
  *     → Returns plan name + allowed features for operator-side feature gating.
  *     → Requires X-Secret-Key header matching the application's secret key.
@@ -28,14 +32,18 @@
 import { Hono } from "hono";
 import type { KVNamespace } from "@cloudflare/workers-types";
 import { deviceVerificationUris, getApplicationByPublishableKey, isRedirectUriAllowed, publishableKeysOf } from "../../applications";
+import { logAudit } from "../../audit";
 import { createAuth } from "../../auth";
 import { rejectDisallowedOrigin } from "../../lib/app-origin";
+import { describeClient, geoFromCf, requestMeta } from "../../lib/audit-context";
 import { resolveAppScopedSession, sessionMayActForApp } from "../../lib/app-session";
+import { withoutCookiesForBearer } from "../../lib/bearer-headers";
 import { deviceErrorCode } from "../../lib/device-authorization";
 import { DEVICE_CODE_INTERVAL_SECONDS, formatUserCode, hostedVerificationUri } from "../../lib/device-code";
 import { consumeRateLimit, requestIp } from "../../lib/rate-limit";
 import { hostedProviders } from "../../lib/hosted-providers";
 import { jsonForHtmlScript } from "../../lib/html";
+import { createAccountRouter } from "../account";
 import { approveDeviceRequest, denyDeviceRequest, lookupDeviceRequest, releaseDeviceRequest } from "./device-approval";
 
 const pubAppsRouter = new Hono<{ Bindings: Env }>();
@@ -263,7 +271,7 @@ pubAppsRouter.post("/:pk/me", async (c) => {
   // Resolve the current session using the same Better Auth instance as auth.ts.
   // This correctly reads HttpOnly session cookies regardless of name/prefix.
   const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
-  const sessionData = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+  const sessionData = await auth.api.getSession({ headers: withoutCookiesForBearer(c.req.raw.headers) }).catch(() => null);
 
   if (!sessionData?.user?.id) {
     return Response.json({ ok: false, reason: "no_session" });
@@ -303,6 +311,27 @@ pubAppsRouter.post("/:pk/me", async (c) => {
   return Response.json({ ok: true, userId });
 });
 
+// ── /:pk/account/* — the user's own activity and sessions ────────────────────
+//
+// Same checks as /me: the app exists and is live, the Origin is the app's, and
+// the session (bearer app token or auth-domain cookie) may act for this app.
+
+pubAppsRouter.route("/:pk/account", createAccountRouter<{ Bindings: Env }>(async (c) => {
+  const app = await getApplicationByPublishableKey(c.env.DB, c.req.param("pk") ?? "").catch(() => null);
+  if (!app) return Response.json({ error: "Application not found" }, { status: 404 });
+  if (app.suspended_at) return Response.json({ error: "Application suspended" }, { status: 403 });
+  const disallowed = rejectDisallowedOrigin(c.env, app, c.req.header("Origin"));
+  if (disallowed) return disallowed;
+
+  const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
+  const sessionData = await auth.api.getSession({ headers: withoutCookiesForBearer(c.req.raw.headers) }).catch(() => null);
+  const sessionId = sessionData?.session?.id;
+  if (!sessionData?.user?.id || !sessionId || !(await sessionMayActForApp(c.env.DB, sessionId, app.id))) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+  return { userId: sessionData.user.id, sessionId };
+}));
+
 // ── POST /:pk/session-token — mint bearer bootstrap for an existing session ──
 //
 // Direct visits to an SDK-powered app may arrive with only the auth-domain
@@ -322,7 +351,7 @@ pubAppsRouter.post("/:pk/session-token", async (c) => {
   if (disallowed) return disallowed;
 
   const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
-  const sessionData = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+  const sessionData = await auth.api.getSession({ headers: withoutCookiesForBearer(c.req.raw.headers) }).catch(() => null);
   if (!sessionData?.user?.id || !sessionData?.session) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
   }
@@ -345,6 +374,8 @@ pubAppsRouter.post("/:pk/session-token", async (c) => {
     parentSessionId: sessionData.session.id,
     ipAddress: c.req.header("CF-Connecting-IP") ?? null,
     userAgent: c.req.header("User-Agent") ?? null,
+    cf: c.req.raw.cf as IncomingRequestCfProperties | undefined,
+    via: "session_token",
   });
   if (!appSession) return Response.json({ error: "Not authenticated" }, { status: 401 });
 
@@ -365,17 +396,13 @@ pubAppsRouter.post("/:pk/revoke-session", async (c) => {
 
   const bearerToken = c.req.header("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
   if (bearerToken) {
-    await c.env.DB
-      .prepare("DELETE FROM session WHERE token = ? AND app_id = ?")
-      .bind(bearerToken, app.id)
-      .run()
-      .catch(() => { });
+    await revokeAppSession(c.env.DB, app.id, bearerToken, c.req.raw);
 
     return Response.json({ ok: true });
   }
 
   const auth = createAuth(c.env, c.req.raw.cf as IncomingRequestCfProperties | undefined);
-  const sessionData = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+  const sessionData = await auth.api.getSession({ headers: withoutCookiesForBearer(c.req.raw.headers) }).catch(() => null);
   const sessionId = (sessionData?.session as unknown as Record<string, unknown> | undefined)?.["id"];
   const sessionToken = (sessionData?.session as unknown as Record<string, unknown> | undefined)?.["token"];
 
@@ -393,14 +420,55 @@ pubAppsRouter.post("/:pk/revoke-session", async (c) => {
     return Response.json({ ok: true });
   }
 
-  await c.env.DB
-    .prepare("DELETE FROM session WHERE id = ? AND token = ? AND app_id = ?")
-    .bind(sessionId, sessionToken, app.id)
-    .run()
-    .catch(() => { });
+  await revokeAppSession(c.env.DB, app.id, sessionToken, c.req.raw);
 
   return Response.json({ ok: true });
 });
+
+/**
+ * Deletes the app's session for `token` and records `app.signOut`. Raw SQL
+ * bypasses Better Auth's session hooks, so the event is written here, only when
+ * a row was actually deleted. The audit write never fails the sign-out.
+ */
+async function revokeAppSession(db: D1Database, appId: string, token: string, request: Request): Promise<void> {
+  const row = await db
+    .prepare("SELECT id, userId FROM session WHERE token = ? AND app_id = ? LIMIT 1")
+    .bind(token, appId)
+    .first<{ id: string; userId: string }>()
+    .catch(() => null);
+  const deleted = await db
+    .prepare("DELETE FROM session WHERE token = ? AND app_id = ?")
+    .bind(token, appId)
+    .run()
+    .catch(() => null);
+  if (!row || !deleted?.meta?.changes) return;
+
+  try {
+    const user = await db
+      .prepare('SELECT name, email FROM "user" WHERE id = ? LIMIT 1')
+      .bind(row.userId)
+      .first<{ name: string; email: string }>();
+    const { ipAddress, userAgent } = requestMeta(request);
+    const geo = geoFromCf(request.cf as IncomingRequestCfProperties | undefined);
+    await logAudit(db, {
+      userId: row.userId,
+      actor: row.userId,
+      actorName: user?.name ?? null,
+      actorEmail: user?.email ?? null,
+      action: "app.signOut",
+      appId,
+      targetType: "session",
+      targetId: row.id,
+      ipAddress,
+      userAgent,
+      country: geo.country ?? null,
+      city: geo.city ?? null,
+      metadata: { via: "revoke_session", client: describeClient(userAgent) },
+    });
+  } catch {
+    // Audit is best-effort; the session is already revoked.
+  }
+}
 
 // ── POST /:pk/exchange-code — transfer code → session token ───────────────────
 //
