@@ -7,13 +7,22 @@ import {
   OIDC_ACCOUNT_SELECTED_PARAM,
   shouldOfferOidcAccountPicker,
 } from "../lib/oidc-account-picker";
-import { dashboardCanUseCookieSession, isSessionUnexpired, resolveAppScopedSession, sdkCookieProvesIdentity } from "../lib/app-session";
+import {
+  dashboardCanUseCookieSession,
+  isSessionUnexpired,
+  resolveAppScopedSession,
+  sdkCookieProvesIdentity,
+  slideSessionExpiry,
+  slidingRefreshValues,
+} from "../lib/app-session";
+import { inBackground } from "../lib/background";
 import {
   ensureTrustedOidcClients,
   legacyAuthorizeUrl,
   legacyTokenRequest,
   trustedOidcClients,
 } from "../lib/oidc-provider";
+import { requestWithoutCookiesForBearer, withoutCookiesForBearer } from "../lib/bearer-headers";
 import { isDeviceAuthPath } from "../lib/device-host-guard";
 import { isPlatformOnlyAuthPath, rejectAppScopedSession } from "../lib/platform-session";
 import { withHeaders } from "../middleware/cors";
@@ -133,6 +142,16 @@ authRouter.all("/*", async (c) => {
         return withHeaders(Response.json(null), request, db, env.KV, env);
       }
 
+      // This path skips Better Auth, so it slides the expiry itself, at most
+      // once per update age, the way Better Auth refreshes the rows it reads.
+      const slid = slidingRefreshValues({ expiresAt: sessionRow["expiresAt"], updatedAt: sessionRow["updatedAt"] });
+      if (slid) {
+        const sessionId = String(sessionRow["id"]);
+        await inBackground(slideSessionExpiry(db, sessionId, slid), "session refresh");
+        sessionRow["expiresAt"] = slid.expiresAt;
+        sessionRow["updatedAt"] = slid.updatedAt;
+      }
+
       return withHeaders(
         Response.json({
           session: sessionRow,
@@ -151,7 +170,7 @@ authRouter.all("/*", async (c) => {
     }
 
     const auth = createAuth(env, req.raw.cf as IncomingRequestCfProperties | undefined);
-    const sessionData = await auth.api.getSession({ headers: req.raw.headers }).catch(() => null);
+    const sessionData = await auth.api.getSession({ headers: withoutCookiesForBearer(req.raw.headers) }).catch(() => null);
 
     if (!sessionData?.session?.id) {
       return withHeaders(Response.json(null), request, db, env.KV, env);
@@ -204,6 +223,8 @@ authRouter.all("/*", async (c) => {
         parentSessionId: sessionData.session.id,
         ipAddress: req.header("CF-Connecting-IP") ?? null,
         userAgent: req.header("User-Agent") ?? null,
+        cf: req.raw.cf as IncomingRequestCfProperties | undefined,
+        via: "session_token",
       });
       if (!appSession) {
         return withHeaders(Response.json(null), request, db, env.KV);
@@ -323,7 +344,9 @@ authRouter.all("/*", async (c) => {
   }
 
   const auth = createAuth(env, req.raw.cf as IncomingRequestCfProperties | undefined);
-  let authRequest = request;
+  // Never hand Better Auth a bearer together with the browser's auth cookies
+  // (lib/bearer-headers.ts): it would delete this browser's SSO session.
+  let authRequest = requestWithoutCookiesForBearer(request);
 
   // -- OIDC issuer (1:15 Forgejo, LiteLLM) --
   // Seed the env-configured clients before the plugin looks them up, and keep
@@ -339,13 +362,13 @@ authRouter.all("/*", async (c) => {
     const url = new URL(req.url);
     if (req.method === "GET" && req.path.endsWith("/oauth2/authorize")) {
       const next = legacyAuthorizeUrl(url, trustedIds);
-      if (next) authRequest = new Request(next, request);
+      if (next) authRequest = new Request(next, authRequest);
     } else if (req.path.endsWith("/oauth2/token")) {
-      authRequest = (await legacyTokenRequest(request, trustedIds)) ?? request;
+      authRequest = (await legacyTokenRequest(authRequest, trustedIds)) ?? authRequest;
     } else if (req.path.endsWith("/oauth2/endsession")) {
       // Renamed in the new plugin; the old discovery doc advertised this path.
       url.pathname = url.pathname.replace(/\/oauth2\/endsession$/, "/oauth2/end-session");
-      authRequest = new Request(url, request);
+      authRequest = new Request(url, authRequest);
     }
   }
 
